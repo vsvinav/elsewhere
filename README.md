@@ -1,16 +1,64 @@
-# Timeline Insights
+<h1 align="center">Elsewhere</h1>
+<p align="center"><strong>Your Google Maps Timeline, printed as a world-tour poster.</strong><br>
+Every city you slept in, every flight, every drive — replayed on a map. Runs entirely in your browser.</p>
 
-Turn a Google Maps Timeline export into an interactive map of your life.
+<p align="center"><img src="docs/screenshots/home.png" width="800" alt="Tour page: a big WORLD TOUR headline, nights per city, and a dotted route map"></p>
 
-## Pipeline
+## What you get
+
+- **Tour** — your years in one poster: cities ranked by nights slept, places, countries, a route map.
+- **Flights** — a spinning globe with every route you've flown, airports labelled, miles totalled.
+- **Replay** — press play and watch yourself move through time. Planes, cars, trains and walks each get their own colour and marker; a speed slider goes from real-time to years-in-seconds.
+- **Stops, Dates, Numbers, Map** — the places you keep returning to, a calendar of where you were, the stats, and the full trail.
+- **Pick any range** — a year, the last 90 days, or any two dates. Everything updates.
+
+<p align="center">
+<img src="docs/screenshots/flights.png" width="400" alt="Flights: globe with red routes and labelled airports">
+<img src="docs/screenshots/replay.png" width="400" alt="Replay: a car marker leading its trail across a map">
+</p>
+<p align="center">
+<img src="docs/screenshots/stops.png" width="400" alt="Stops: the places you return to">
+<img src="docs/screenshots/map.png" width="400" alt="Map: every trail at once">
+</p>
+
+Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are Google's map tiles.
+
+## Run it
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-python -m pipeline build timeline.json          # → web/public/data/*.json
-GOOGLE_MAPS_API_KEY=... python -m pipeline enrich --top 2000  # place names via Places API (New)
-python -m pipeline build timeline.json          # re-run to merge names
-pytest -q
+git clone https://github.com/vsvinav/elsewhere && cd elsewhere/web
+npm install && npm run dev
 ```
 
-Design: `docs/superpowers/specs/2026-11-13-timeline-insights-design.md`.
+Open the local URL, scroll to **Your record** on the Tour page and:
+
+1. **Drop in your `Timeline.json`.**
+   Android: Settings → Location → Timeline → Export.
+   iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.
+2. **Paste a Google Maps key** (free tier is plenty) so the Map and Replay pages can draw tiles. Get one at [console.cloud.google.com](https://console.cloud.google.com/google/maps-apis), enable *Maps JavaScript API*, and restrict it to `localhost` / your domain. Optional: a Map ID gives smoother vector tiles.
+
+Both live in your browser's local storage. Nothing is committed, nothing is uploaded.
+
+## Deploy your own
+
+```bash
+npm run build          # → web/dist, a static site
+```
+
+Host `dist/` anywhere (GitHub Pages, Netlify, Vercel). To ship a default key for visitors, put `VITE_GOOGLE_MAPS_KEY=…` in `web/.env.local` (gitignored) before building — and restrict that key to your domain.
+
+## Optional: pre-bake a record with Python
+
+The browser import is all you need. If you'd rather build the data files once and serve them (or name places with the Places API), there's a pipeline:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+python -m pipeline build Timeline.json                       # → web/public/data/
+GOOGLE_MAPS_API_KEY=… python -m pipeline enrich --top 2000  # optional place names + photos
+```
+
+## Built with
+
+React 19 · Vite · deck.gl on Google Maps · d3-geo for the globe · Big Shoulders Display & Archivo.
+
+Design notes live in [`docs/superpowers/specs`](docs/superpowers/specs).
