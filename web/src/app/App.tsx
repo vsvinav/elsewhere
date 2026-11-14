@@ -5,6 +5,9 @@ import type { Data } from '../data/types'
 import { useStore } from '../store/useStore'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
+import { Stats } from '../tabs/Stats/Stats'
+import { Places } from '../tabs/Places/Places'
+import { Trips } from '../tabs/Trips/Trips'
 import { Pass, Field } from '../world'
 import { MapScreen } from '../map/MapScreen'
 
@@ -37,15 +40,10 @@ export function App() {
 function Screen() {
   const tab = useStore((s) => s.tab)
   if (tab === 'map' || tab === 'play') return <MapScreen />
-  if (tab === 'home') return <Home />
-  return (
-    <main className="strip">
-      <Pass stripe>
-        <div className="fields"><Field label="Section">{tab}</Field><Field label="Status" ghost /></div>
-        <div className="big"><span className="ghost">NOT YET PRINTED</span></div>
-      </Pass>
-    </main>
-  )
+  if (tab === 'stats') return <Stats />
+  if (tab === 'places') return <Places />
+  if (tab === 'trips') return <Trips />
+  return <Home />
 }
 
 function Printing() {

@@ -1,14 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { homeFacts } from '../../analytics/home'
-import { MODE_LABEL } from '../../analytics/format'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TrailMap } from '../../world/TrailMap'
-
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US')
-const date = (ts: number) => new Date(ts * 1000).toLocaleDateString('en-US', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
-const dateISO = (s: string) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
-const label = (mode: string) => MODE_LABEL[mode] ?? mode.replace(/^IN_/, '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+import { date, dateISO, label, n0 } from '../../world/fmt'
 
 export function Home() {
   const data = useData()

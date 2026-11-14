@@ -1,5 +1,6 @@
 import { wrappedFacts } from './wrapped'
 import { homeFacts } from './home'
+import { stats, dayType } from './stats'
 import { explorationScore, placeStatuses } from './explore'
 import { commuteStats } from './commute'
 import type { Data } from '../data/types'
@@ -35,7 +36,10 @@ const data = {
     museum: { lng: 0, lat: 0, semantic_type: 'UNKNOWN', city: 'Paris', country_code: 'FR', n_visits: 1, first_ts: FEB + 2 * H, last_ts: FEB + 2 * H, name: 'Louvre' },
     old: { lng: 0, lat: 0, semantic_type: 'UNKNOWN', city: 'Boston', country_code: 'US', n_visits: 5, first_ts: JAN - 200 * D, last_ts: JAN - 80 * D, name: 'Gym' },
   },
-  daily: [{ date: '2025-01-01', km_by_mode: { WALKING: 1 }, n_places: 3, cities: ['Boston'] }],
+  daily: [
+    { date: '2025-01-01', km_by_mode: { WALKING: 1 }, n_places: 3, cities: ['Boston'], hours_work: 8, hours_other: 1, max_dist_from_home_km: 5 },
+    { date: '2025-02-01', km_by_mode: { FLYING: 500 }, n_places: 2, cities: ['Paris'], hours_work: 0, hours_other: 2, max_dist_from_home_km: 5000 },
+  ],
   trips: [],
   profile: { home: { lng: 0, lat: 0 } },
   meta: { range: [JAN, MAR] },
@@ -88,4 +92,16 @@ test('homeFacts totals the export, excludes home/work from third places, and rol
   expect(f.thirdPlaces.map((p) => p.name)).toEqual(['Gym', 'Cafe', 'Louvre'])
   expect(f.records.busiestDay).toEqual({ date: '2025-01-01', places: 3 })
   expect(f.years).toEqual([{ year: 2025, km: 512, places: 4, trips: 0, flights: 1 }])
+})
+
+test('stats rolls km by month, classifies days, fills the rhythm grid and ranks cities', () => {
+  const s = stats(data)
+  expect(s.months.map((m) => [m.key, m.total])).toEqual([['2025-01', 1], ['2025-02', 500]])
+  expect(s.dayTypes).toEqual({ away: 1, work: 1, out: 0, home: 0 })
+  expect(dayType({ max_dist_from_home_km: 1, hours_work: 0, hours_other: 0.5 } as Data['daily'][number])).toBe('home')
+  // work visit 09:00–17:00 on Wed 2025-01-01 credits 8 full hours to Wednesday
+  expect(s.rhythm[2].slice(9, 17)).toEqual([1, 1, 1, 1, 1, 1, 1, 1])
+  expect(s.rhythm[2][8]).toBe(0)
+  expect(s.cities[0]).toMatchObject({ city: 'Boston', country: 'US', visits: 5, places: 3 })
+  expect(s.cities[1]).toMatchObject({ city: 'Paris', visits: 1, places: 1, hours: 1 })
 })

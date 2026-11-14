@@ -13,6 +13,7 @@ export interface Place {
   city: string | null; country_code: string | null; n_visits: number
   total_hours: number; first_ts: number; last_ts: number
   name: string | null; address?: string | null
+  types?: string[]; primary_type?: string | null; photo?: string | null
 }
 export interface Daily {
   date: string; km_by_mode: Record<string, number>; n_visits: number; n_places: number
