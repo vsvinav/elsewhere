@@ -16,12 +16,15 @@ MIN_PARSE_RATIO = 0.9
 
 
 def parse_home(spec: str) -> Home:
-    """lat,lng[,YYYY-MM] — the month this became home; omit it for the first home."""
+    """lat,lng[,YYYY-MM[,YYYY-MM]] — the month this became home (omit for the first home) and,
+    optionally, the month you left it."""
     parts = spec.split(",")
-    if len(parts) not in (2, 3):
-        raise argparse.ArgumentTypeError("expected lat,lng[,YYYY-MM]")
-    from_ts = int(datetime.strptime(parts[2], "%Y-%m").replace(tzinfo=timezone.utc).timestamp()) if len(parts) == 3 else 0
-    return Home(float(parts[0]), float(parts[1]), from_ts=from_ts)
+    if len(parts) not in (2, 3, 4):
+        raise argparse.ArgumentTypeError("expected lat,lng[,YYYY-MM[,YYYY-MM]]")
+    month = lambda m: int(datetime.strptime(m, "%Y-%m").replace(tzinfo=timezone.utc).timestamp())
+    from_ts = month(parts[2]) if len(parts) >= 3 and parts[2] else 0
+    to_ts = month(parts[3]) if len(parts) == 4 else None
+    return Home(float(parts[0]), float(parts[1]), from_ts=from_ts, to_ts=to_ts)
 
 
 def parse_latlng(spec: str) -> tuple[float, float]:
@@ -56,8 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("build", help="parse export and write data files")
     b.add_argument("file")
     b.add_argument("--out", default=str(DEFAULT_OUT))
-    b.add_argument("--home", action="append", type=parse_home, metavar="LAT,LNG[,YYYY-MM]",
-                   help="a home and the month it started; repeat for moves (default: longest-stayed place)")
+    b.add_argument("--home", action="append", type=parse_home, metavar="LAT,LNG[,YYYY-MM[,YYYY-MM]]",
+                   help="a home, the month it started and optionally the month it ended; repeat for moves (default: longest-stayed place)")
     b.add_argument("--work", type=parse_latlng, metavar="LAT,LNG", help="work place, optional")
     b.set_defaults(fn=cmd_build)
     e = sub.add_parser("enrich", help="fetch Google Places names for top places")

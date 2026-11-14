@@ -4,10 +4,11 @@ export interface Home { lat: number; lng: number; city: string; cc: string; from
 export interface Work { lat: number; lng: number; place_id: string }
 export interface Profile { name: string | null; units: 'km' | 'mi'; homes: Home[]; work: Work | null }
 
-/** The home active at `ts`; homes sorted by `from`. Before the first window → first home. */
+/** The home active at `ts`; homes sorted by `from`. Before the first window → first home. Past a
+ *  home's `to` the next home takes over early (you were on your way); the last home never ends. */
 export function homeAt(homes: Home[], ts: number): Home {
   let cur = homes[0]
-  for (const h of homes) if (h.from <= ts) cur = h
+  homes.forEach((h, i) => { if (h.from <= ts) { cur = h; if (h.to !== null && ts >= h.to && i + 1 < homes.length) cur = homes[i + 1] } })
   return cur
 }
 

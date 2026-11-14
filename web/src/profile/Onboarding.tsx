@@ -43,7 +43,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   const next = () => setStep(ORDER[i + 1])
   const back = () => setStep(ORDER[Math.max(1, i - 1)])
   const finish = (h = homes) => {
-    const sorted = [...h].sort((a, b) => a.from - b.from).map((x, k, arr) => ({ ...x, to: arr[k + 1]?.from ?? null }))
+    const sorted = [...h].sort((a, b) => a.from - b.from).map((x, k, arr) => { const nxt = arr[k + 1]?.from ?? null; return { ...x, to: x.to && nxt ? Math.min(x.to, nxt) : x.to ?? nxt } })
     store.set({ name: name.trim() || null, units, homes: sorted, work })
     onClose?.()
   }
@@ -108,7 +108,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 ))}
                 {!sleep.length && <p className="lede">No overnight stays found in this record.</p>}
               </div>
-              {homes.length > 0 && <HomeList homes={homes} setHomes={setHomes} range={range} hint="Since when? Leave it blank if you lived here for the whole record." />}
+              {homes.length > 0 && <HomeList homes={homes} setHomes={setHomes} range={range} hint="Since when, and until when? Leave both blank if you lived here for the whole record." />}
             </Q>
           )}
 
@@ -188,6 +188,7 @@ function HomeList({ homes, setHomes, range, hint }: { homes: Home[]; setHomes: (
           <li key={`${h.lat},${h.lng}`}>
             <span className="name">{h.name ?? h.city ?? 'Home'}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
             <label className="ob-month"><span className="lab">home since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} home since`} /></label>
+            <label className="ob-month"><span className="lab">until</span><input type="month" value={h.to ? monthOf(h.to) : ''} min={h.from ? monthOf(h.from) : monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, to: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : null } : x))} aria-label={`${h.city} home until`} /></label>
             {homes.length > 1 && <button className="btn quiet" onClick={() => setHomes(homes.filter((x) => x !== h))}>Remove</button>}
           </li>
         ))}

@@ -67,3 +67,13 @@ def test_fold_roles_points_every_home_label_at_the_busiest_one():
     fold_roles(visits, homes, None)
     # Boston labels a and b are one home, named after the busier b; the far place is untouched.
     assert [v.place_id for v in visits] == ["b", "b", "b", "far", "c", "a"]
+
+
+def test_home_at_honours_an_explicit_end_date():
+    # Left Boston in March, Sunnyvale only started in August: the gap counts toward the next home.
+    homes = [Home(42.36, -71.06, from_ts=0, to_ts=100), Home(37.37, -122.0, from_ts=200)]
+    assert home_at(homes, 50) is homes[0]
+    assert home_at(homes, 150) is homes[1]
+    assert home_at(homes, 250) is homes[1]
+    # An end date on the last home: still that home afterwards, there is nowhere else to go.
+    assert home_at([Home(42.36, -71.06, from_ts=0, to_ts=100)], 500).lat == 42.36

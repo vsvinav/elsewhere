@@ -17,11 +17,14 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 def home_at(homes: list[Home], ts: int) -> Home:
-    """The home current at `ts`: the last one whose start is at or before it."""
+    """The home current at `ts`: the last one started by then. Past that home's end date the
+    next home takes over early (you were on your way); the last home never ends."""
     cur = homes[0]
-    for h in homes:
+    for i, h in enumerate(homes):
         if h.from_ts <= ts:
             cur = h
+            if h.to_ts is not None and ts >= h.to_ts and i + 1 < len(homes):
+                cur = homes[i + 1]
     return cur
 
 

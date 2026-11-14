@@ -59,7 +59,7 @@ The browser import is all you need. If you'd rather build the data files once an
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 python -m pipeline build Timeline.json --home LAT,LNG        # → web/public/data/
-#   repeat --home LAT,LNG,YYYY-MM for each move; add --work LAT,LNG if you like
+#   repeat --home LAT,LNG,YYYY-MM[,YYYY-MM] for each move (start, optional end); add --work LAT,LNG if you like
 GOOGLE_MAPS_API_KEY=… python -m pipeline enrich --top 2000  # optional place names + photos
 ```
 

@@ -46,3 +46,15 @@ describe('foldRoles', () => {
     expect(visits[0].place_id).toBe('a')
   })
 })
+
+describe('homeAt', () => {
+  it('honours an explicit end date: the gap before the next home counts toward it', async () => {
+    const { homeAt } = await import('../profile/profile')
+    const h = (lat: number, from: number, to: number | null) => ({ lat, lng: 0, city: '', cc: '', from, to })
+    const homes = [h(1, 0, 100), h(2, 200, null)]
+    expect(homeAt(homes, 50).lat).toBe(1)
+    expect(homeAt(homes, 150).lat).toBe(2)
+    expect(homeAt(homes, 250).lat).toBe(2)
+    expect(homeAt([h(1, 0, 100)], 500).lat).toBe(1)
+  })
+})

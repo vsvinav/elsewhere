@@ -22,7 +22,7 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
     out_dir.mkdir(parents=True, exist_ok=True)
     homes = sorted(homes or [guess_home(parsed.visits)], key=lambda h: h.from_ts)
     for h, nxt in zip(homes, homes[1:]):
-        h.to_ts = nxt.from_ts
+        h.to_ts = min(h.to_ts, nxt.from_ts) if h.to_ts else nxt.from_ts
     tag_geo(parsed, homes)
     fold_roles(parsed.visits, homes, work)
 
