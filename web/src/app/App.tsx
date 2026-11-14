@@ -15,13 +15,7 @@ export function App() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<Error | null>(null)
   useEffect(() => {
-    loadData().then((d) => {
-      const [, m1] = d.meta.range
-      const r0 = Math.max(d.meta.range[0], m1 - 90 * 86400)
-      useStore.getState().setTimeRange([r0, m1])
-      useStore.getState().setPlayhead(r0)
-      setData(d)
-    }).catch(setError)
+    loadData().then((d) => { useStore.getState().setPlayhead(d.meta.range[0]); setData(d) }).catch(setError)
   }, [])
   useEffect(() => {
     const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }

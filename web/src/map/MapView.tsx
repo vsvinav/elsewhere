@@ -3,17 +3,28 @@ import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
-import { insightById } from '../insights/registry'
 import { positionAt } from '../analytics/position'
-import { useCamera } from './useCamera'
+import { denseBounds } from '../analytics/geo'
+import { mapLayers } from './layers'
+import { useFollow } from './useFollow'
+import { Field, Pass } from '../world'
+import { MAP_STYLES } from './style'
 
 const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined
 
-function DeckOverlay() {
+function Deck() {
   const map = useMap()
   const data = useData()
-  const state = useStore()
-  const overlay = useMemo(() => new GoogleMapsOverlay({}), [])
+  const playhead = useStore((s) => s.playhead)
+  const speed = useStore((s) => s.speed)
+  const playing = useStore((s) => s.playing)
+  const basemap = useStore((s) => s.basemap)
+  const overlay = useMemo(() => new GoogleMapsOverlay({
+    onHover: (info) => {
+      const o = info.object as { id: string } | undefined
+      useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
+    },
+  }), [])
   // Google may fall back from vector to raster after load; (re)attach deck once the type is settled.
   useEffect(() => {
     if (!map) return
@@ -22,29 +33,29 @@ function DeckOverlay() {
     const l = map.addListener('renderingtype_changed', attach)
     return () => { l.remove(); overlay.setMap(null) }
   }, [map, overlay])
-  const insight = insightById[state.activeInsight]
-  const layers = insight ? insight.layers(data, state) : []
+  useEffect(() => { overlay.setProps({ layers: mapLayers(data, playhead ?? data.meta.range[0], speed, playing, basemap) }) }, [overlay, data, playhead, speed, playing, basemap])
+  useFollow()
+  // Map tab opens on the whole record; Play follows the playhead.
+  const tab = useStore((s) => s.tab)
   useEffect(() => {
-    if (!map) return
-    overlay.setProps({
-      layers,
-      getTooltip: ({ object }) => {
-        if (!object || !('place_id' in object)) return null
-        const p = data.places[object.place_id]
-        return p ? `${p.name ?? p.city ?? object.place_id}\n${p.n_visits} visits` : null
-      },
-    })
-  })
-  useCamera()
+    if (!map || tab !== 'map') return
+    useStore.getState().setFollow(false)
+    const b = denseBounds(data.visits.filter((v) => v.lvl === 0).map((v) => ({ lng: v.lng, lat: v.lat })))
+    if (b) map.fitBounds(new google.maps.LatLngBounds({ lng: b[0][0], lat: b[0][1] }, { lng: b[1][0], lat: b[1][1] }), { top: 60, bottom: 220, left: 220, right: 60 })
+  }, [map, tab, data])
   return null
 }
 
 export function MapView() {
   const data = useData()
   const basemap = useStore((s) => s.basemap)
-  const start = useMemo(() => positionAt(data, useStore.getState().timeRange[0]) ?? data.profile.home, [data])
+  const start = useMemo(() => positionAt(data, useStore.getState().playhead ?? data.meta.range[0]) ?? data.profile.home, [data])
   if (!KEY) {
-    return <div className="fullscreen error"><h1>Missing Google Maps key</h1><p>Put <code>VITE_GOOGLE_MAPS_KEY=…</code> in <code>web/.env.local</code> and reload.</p></div>
+    return (
+      <main className="strip">
+        <Pass stripe><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Put VITE_GOOGLE_MAPS_KEY=… in web/.env.local and reload</Field></div></Pass>
+      </main>
+    )
   }
   return (
     <APIProvider apiKey={KEY}>
@@ -53,15 +64,14 @@ export function MapView() {
         style={{ position: 'absolute', inset: 0 }}
         defaultCenter={{ lat: start.lat, lng: start.lng }}
         defaultZoom={12}
-        mapId="DEMO_MAP_ID"
-        renderingType="VECTOR"
-        colorScheme={basemap === 'dark' ? 'DARK' : 'LIGHT'}
+        styles={MAP_STYLES[basemap]}
+        backgroundColor={basemap === 'dark' ? '#0b0c10' : '#f7f6f2'}
         disableDefaultUI
         gestureHandling="greedy"
         clickableIcons={false}
         isFractionalZoomEnabled
       >
-        <DeckOverlay />
+        <Deck />
       </Map>
     </APIProvider>
   )

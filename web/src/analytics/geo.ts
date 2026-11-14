@@ -11,3 +11,11 @@ export function boundsOf(pts: LngLat[]): Bounds | null {
 
 export function isHome(type: string): boolean { return type === 'INFERRED_HOME' }
 export function isWork(type: string): boolean { return type === 'INFERRED_WORK' || type === 'WORK' }
+
+/** Bounds of the dense part of a record (5th–95th percentile), so flights do not shrink daily life to a dot. */
+export function denseBounds(pts: LngLat[]): Bounds | null {
+  if (!pts.length) return null
+  const q = (vals: number[], p: number) => vals.sort((a, b) => a - b)[Math.floor(p * (vals.length - 1))]
+  const xs = pts.map((p) => p.lng), ys = pts.map((p) => p.lat)
+  return [[q(xs, 0.05), q(ys, 0.05)], [q(xs, 0.95), q(ys, 0.95)]]
+}
