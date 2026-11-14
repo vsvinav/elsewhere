@@ -34,7 +34,7 @@ export function stats(data: Data): Stats {
   const rhythm = Array.from({ length: 7 }, () => new Array<number>(24).fill(0))
   let rhythmMax = 0
   for (const v of data.visits) {
-    if (v.lvl !== 0 || isHome(v.type)) continue
+    if (v.lvl !== 0 || isHome(data.places[v.place_id])) continue
     // walk the visit hour by hour in local time, crediting each cell with the fraction covered
     for (let t = v.start; t < v.end; ) {
       const local = new Date((t + v.tz * 60) * 1000)

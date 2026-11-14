@@ -49,7 +49,7 @@ export function homeFacts(data: Data): HomeFacts {
   const topCities = [...cityVisits.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c]) => c)
 
   const thirdPlaces = Object.entries(data.places)
-    .filter(([, p]) => !isHome(p.semantic_type) && !isWork(p.semantic_type) && p.label == null)
+    .filter(([, p]) => p.role === null && p.label == null)
     .sort((a, b) => b[1].n_visits - a[1].n_visits)
     .slice(0, 3)
     .map(([id, place]) => ({ id, place, name: placeName(place, id) }))

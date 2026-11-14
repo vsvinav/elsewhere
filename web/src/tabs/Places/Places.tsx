@@ -15,7 +15,7 @@ const SORT: Record<Sort, (a: Place, b: Place) => number> = {
   first: (a, b) => b.first_ts - a.first_ts,
 }
 const PAGE = 48
-const kind = (p: Place) => (isHome(p.semantic_type) ? 'Home' : isWork(p.semantic_type) ? 'Work' : p.primary_type?.replace(/_/g, ' ') ?? null)
+const kind = (p: Place) => (isHome(p) ? 'Home' : isWork(p) ? 'Work' : p.primary_type?.replace(/_/g, ' ') ?? null)
 
 export function Places() {
   const data = useData()

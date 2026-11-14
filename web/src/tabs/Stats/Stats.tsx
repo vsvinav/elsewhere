@@ -13,6 +13,7 @@ const Pct = ({ n }: { n: number }) => <>{n}<small style={{ fontSize: '0.5em' }}>
 export function Stats() {
   const data = useData()
   const s = useMemo(() => stats(data), [data])
+  const hasWork = !!data.profile.work
   const commute = useMemo(() => commuteStats(data, data.meta.range), [data])
   const explore = useMemo(() => explorationScore(data, data.meta.range), [data])
 
@@ -100,13 +101,14 @@ export function Stats() {
           <div className="big"><CountUp value={s.dayTypes.away} /><small>DAYS AWAY</small></div>
           <div className="strip100" aria-hidden>
             <span className="other" style={{ width: `${pct(s.dayTypes.away)}%` }}>Away</span>
-            <span className="work" style={{ width: `${pct(s.dayTypes.work)}%` }}>Work</span>
+            {hasWork && <span className="work" style={{ width: `${pct(s.dayTypes.work)}%` }}>Work</span>}
             <span className="home" style={{ width: `${pct(s.dayTypes.out)}%` }}>Out</span>
             <span className="transit" style={{ width: `${pct(s.dayTypes.home)}%` }}>Home</span>
           </div>
         </PrintIn>
       </Pass>
 
+      {hasWork && (
       <Pass stub={
         <PrintIn>
           <Field label="Legs on record" big><CountUp value={commute.legs.length} /></Field>
@@ -128,6 +130,7 @@ export function Stats() {
           )}
         </PrintIn>
       </Pass>
+      )}
 
       <Pass stub={
         <PrintIn>

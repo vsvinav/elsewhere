@@ -21,7 +21,7 @@ function apply(places: Record<string, Place>, cache: Record<string, Cached>, key
 /** Which places deserve a lookup: the most visited ones that still lack a name or a photo, home excluded. */
 function wanted(places: Record<string, Place>, cache: Record<string, Cached>): string[] {
   return Object.entries(places)
-    .filter(([id, p]) => !isHome(p.semantic_type) && !(id in cache) && (!p.name || !p.photo))
+    .filter(([id, p]) => !isHome(p) && !(id in cache) && (!p.name || !p.photo))
     .sort((a, b) => b[1].n_visits - a[1].n_visits).slice(0, LIMIT).map(([id]) => id)
 }
 

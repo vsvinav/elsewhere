@@ -149,6 +149,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .hero { position: relative; }
 .hero .title { margin: 22px 0 0; font: 900 clamp(118px, 17vw, 230px)/0.8 var(--display); text-transform: uppercase; letter-spacing: -0.015em; }
 .hero .title span { display: block; }
+.hero .title.named { font-size: clamp(84px, 11.5vw, 160px); }
 .hero .sub { margin: 28px 0 0; }
 .hero .map { margin-top: 40px; }
 .hero .stamp { position: absolute; right: 40px; bottom: 150px; }

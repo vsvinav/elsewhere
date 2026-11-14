@@ -51,6 +51,7 @@ export function YourRecord() {
               <div className="dz-sub">Android: Settings → Location → Timeline → Export. iPhone: Google Maps → your photo → Your timeline → ⋯ → Export. It's a <code>Timeline.json</code>.</div>
               <div className="dz-actions">
                 <button className="btn" onClick={() => file.current?.click()}>Choose file</button>
+                <button className="btn quiet" onClick={rec.editProfile}>Edit profile</button>
                 {rec.mine && <button className="btn quiet" onClick={rec.reset}>Back to the sample</button>}
               </div>
             </>

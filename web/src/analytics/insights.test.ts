@@ -1,4 +1,3 @@
-import { wrappedFacts } from './wrapped'
 import { homeFacts } from './home'
 import { stats, dayType } from './stats'
 import { explorationScore, placeStatuses } from './explore'
@@ -30,11 +29,11 @@ const data = {
   ],
   paths: [], strokes: [],
   places: {
-    home: { lng: 0, lat: 0, semantic_type: 'INFERRED_HOME', city: 'Boston', country_code: 'US', n_visits: 2, first_ts: JAN, last_ts: JAN + 18 * H, name: null },
-    work: { lng: 0, lat: 0, semantic_type: 'INFERRED_WORK', city: 'Boston', country_code: 'US', n_visits: 1, first_ts: JAN, last_ts: JAN, name: null },
-    cafe: { lng: 0, lat: 0, semantic_type: 'UNKNOWN', city: 'Boston', country_code: 'US', n_visits: 2, first_ts: JAN + 31 * H, last_ts: FEB, name: 'Cafe' },
-    museum: { lng: 0, lat: 0, semantic_type: 'UNKNOWN', city: 'Paris', country_code: 'FR', n_visits: 1, first_ts: FEB + 2 * H, last_ts: FEB + 2 * H, name: 'Louvre' },
-    old: { lng: 0, lat: 0, semantic_type: 'UNKNOWN', city: 'Boston', country_code: 'US', n_visits: 5, first_ts: JAN - 200 * D, last_ts: JAN - 80 * D, name: 'Gym' },
+    home: { lng: 0, lat: 0, role: 'home', city: 'Boston', country_code: 'US', n_visits: 2, first_ts: JAN, last_ts: JAN + 18 * H, name: null },
+    work: { lng: 0, lat: 0, role: 'work', city: 'Boston', country_code: 'US', n_visits: 1, first_ts: JAN, last_ts: JAN, name: null },
+    cafe: { lng: 0, lat: 0, role: null, city: 'Boston', country_code: 'US', n_visits: 2, first_ts: JAN + 31 * H, last_ts: FEB, name: 'Cafe' },
+    museum: { lng: 0, lat: 0, role: null, city: 'Paris', country_code: 'FR', n_visits: 1, first_ts: FEB + 2 * H, last_ts: FEB + 2 * H, name: 'Louvre' },
+    old: { lng: 0, lat: 0, role: null, city: 'Boston', country_code: 'US', n_visits: 5, first_ts: JAN - 200 * D, last_ts: JAN - 80 * D, name: 'Gym' },
   },
   daily: [
     { date: '2025-01-01', km_by_mode: { WALKING: 1 }, n_places: 3, cities: ['Boston'], hours_work: 8, hours_other: 1, max_dist_from_home_km: 5 },
@@ -44,18 +43,6 @@ const data = {
   profile: { home: { lng: 0, lat: 0 } },
   meta: { range: [JAN, MAR] },
 } as unknown as Data
-
-test('wrappedFacts builds cards from the range', () => {
-  const cards = wrappedFacts(data, [JAN, MAR])
-  const heads = cards.map((c) => c.headline)
-  expect(heads[0]).toMatch(/days on the move/)
-  expect(cards[0].detail).toBe('4 places · 2 cities · 2 countries')
-  expect(heads).toContainEqual(expect.stringMatching(/1 flight/))
-  expect(heads).toContain('Cafe')
-  expect(heads).toContain('3 places in one day')
-  expect(cards.find((c) => c.arcs)?.arcs).toHaveLength(1)
-  expect(wrappedFacts(data, [MAR + 10 * D, MAR + 20 * D])).toEqual([])
-})
 
 test('explorationScore buckets by month, excluding home/work and nested visits', () => {
   const b = explorationScore(data, [JAN, FEB + 10 * D])

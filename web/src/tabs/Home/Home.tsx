@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useData } from '../../data/DataContext'
 import { homeFacts, placeName } from '../../analytics/home'
 import { tour } from '../../analytics/tour'
@@ -8,6 +8,7 @@ import { TrailMap } from '../../world/TrailMap'
 import { date, dateISO, label, n0 } from '../../world/fmt'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
+import { useProfile } from '../../profile/profile'
 
 const INK: Record<string, string> = { fly: 'red', foot: 'mustard', drive: '', transit: '' }
 const yearSpan = ([a, b]: [number, number]) => (a === b ? String(a) : `${a}–${b}`)
@@ -17,7 +18,8 @@ export function Home() {
   const data = useData()
   const f = useMemo(() => homeFacts(data), [data])
   const t = useMemo(() => tour(data), [data])
-  const [name, setName] = useState(() => localStorage.getItem('elsewhere.name') ?? '')
+  const prof = useProfile()
+  const name = prof?.name ?? ''
   const setTab = useStore((s) => s.setTab)
   const act = t.headline
   const actPlace = act ? data.places[act.place_id] : undefined
@@ -30,7 +32,7 @@ export function Home() {
       <Bill className="hero">
         <div className="two">
           <div>
-            <h1 className="title"><span className="misreg">World</span><span className="misreg red">Tour</span></h1>
+            <h1 className={`title${name ? ' named' : ''}`}>{name ? <><span className="misreg">{name}'s</span><span className="misreg red">Elsewhere</span></> : <><span className="misreg">Else</span><span className="misreg red">where</span></>}</h1>
             <p className="lede sub">{yearSpan(t.years)}, live from {n0(f.days)} days of record. Everywhere your phone slept, every leg between. {n0(f.places)} places, {n0(f.cities)} cities, {n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}.</p>
             <TrailMap data={data} stops={t.stops} className="map drift" />
           </div>
@@ -100,7 +102,7 @@ export function Home() {
           <div>
             <div className="caps">Residency · where the hours went</div>
             <div className="num"><CountUp value={f.hours.other} /><small>h out</small></div>
-            <p className="lede">{pct(f.hours.home)}% home · {pct(f.hours.work)}% work · {pct(f.hours.other)}% elsewhere · {pct(f.hours.transit)}% moving. About {(f.hours.other / Math.max(1, f.days)).toFixed(1)} hours a day somewhere else.</p>
+            <p className="lede">{pct(f.hours.home)}% home · {prof?.work ? `${pct(f.hours.work)}% work · ` : ''}{pct(f.hours.other)}% elsewhere · {pct(f.hours.transit)}% moving. About {(f.hours.other / Math.max(1, f.days)).toFixed(1)} hours a day somewhere else.</p>
           </div>
           <ol className="dates" aria-label="Most visited third places">
             {f.thirdPlaces.map((p) => (
@@ -128,11 +130,8 @@ export function Home() {
       <Bill tone="ink" share={false} id="backstage">
         <div className="caps">Backstage · your record, your key</div>
         <div className="fields">
-          <div className="field">
-            <div className="lab">Name on the bill</div>
-            <input className="val" value={name} placeholder="add your name" aria-label="Your name"
-              onChange={(e) => { setName(e.target.value); localStorage.setItem('elsewhere.name', e.target.value) }} />
-          </div>
+          <Field label="Name on the bill">{name || '—'}</Field>
+          <Field label="Home">{prof?.homes.at(-1)?.city || '—'}</Field>
           <Field label="Record">{date(f.range[0])} → {date(f.range[1])}</Field>
         </div>
         <YourRecord />

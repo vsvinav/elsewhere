@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { parseTimeline } from './parse'
 import { buildData, type Cities } from './derive'
 import type { Data } from '../data/types'
+import type { Profile } from '../profile/profile'
 
 const SRC = new URL('../../../timeline.json', import.meta.url).pathname
 const pub = (f: string) => JSON.parse(readFileSync(new URL(`../../public/data/${f}.json`, import.meta.url), 'utf8'))
@@ -10,8 +11,9 @@ const pub = (f: string) => JSON.parse(readFileSync(new URL(`../../public/data/${
 describe.skipIf(!existsSync(SRC))('in-browser pipeline matches the Python export', () => {
   const parsed = parseTimeline(readFileSync(SRC, 'utf8'))
   const cities = JSON.parse(readFileSync(new URL('../../public/cities.json', import.meta.url), 'utf8')) as Cities
-  const data: Data = buildData(parsed, cities, { file: 'timeline.json', sha256: 'x' })
   const py = { visits: pub('visits'), activities: pub('activities'), trips: pub('trips'), daily: pub('daily'), places: pub('places'), meta: pub('meta'), profile: pub('profile') }
+  const profile: Profile = { name: null, units: 'km', homes: py.profile.homes ?? [{ ...py.profile.home, city: '', cc: '', from: 0, to: null }], work: py.profile.work ?? null }
+  const data: Data = buildData(parsed, cities, { file: 'timeline.json', sha256: 'x' }, profile)
 
   it('parses the same records', () => {
     expect(data.visits.length).toBe(py.visits.length)

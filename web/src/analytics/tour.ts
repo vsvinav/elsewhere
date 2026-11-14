@@ -33,7 +33,7 @@ export function tour(data: Data): Tour {
     const n = nightsIn(v)
     if (!n) continue
     const p = data.places[v.place_id]
-    if (isHome(v.type) || distanceKm(home, v) < 30) { nightsHome += n; continue }
+    if (isHome(data.places[v.place_id]) || distanceKm(home, v) < 30) { nightsHome += n; continue }
     nightsAway += n
     const city = p?.city ?? 'Unknown city'
     const s = byCity.get(city) ?? { city, country: p?.country_code ?? null, nights: 0, visits: 0, first: v.start, last: v.end, lat: v.lat, lng: v.lng }

@@ -1,3 +1,4 @@
+import type { Home, Work } from '../profile/profile'
 export interface Visit {
   id: number; start: number; end: number; tz: number; place_id: string
   lat: number; lng: number; type: string; p: number; lvl: number
@@ -9,7 +10,7 @@ export interface Activity {
 }
 export interface Path { start: number; end: number; pts: [number, number, number][] }
 export interface Place {
-  lat: number; lng: number; label: string | null; semantic_type: string
+  lat: number; lng: number; label: string | null; role: 'home' | 'work' | null
   city: string | null; country_code: string | null; n_visits: number
   total_hours: number; first_ts: number; last_ts: number
   name: string | null; address?: string | null
@@ -27,6 +28,8 @@ export interface Trip {
 }
 export interface Profile {
   home: { lat: number; lng: number }
+  /** The visitor's declared homes and work, as derivation used them. Absent on records baked before profiles existed. */
+  homes?: Home[]; work?: Work | null
   frequent_places: { place_id: string; lat: number; lng: number; label: string | null }[]
   frequent_trips: unknown[]; persona: unknown
 }

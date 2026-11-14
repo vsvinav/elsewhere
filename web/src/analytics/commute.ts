@@ -41,12 +41,12 @@ function stats(legs: Leg[]): LegStats {
 /** Home↔work legs: consecutive top-level visits home→work or work→home with the activities between them. */
 export function commuteStats(data: Data, range: [number, number]): CommuteStats {
   const visits = inRange(data.visits, range).filter((v) => v.lvl === 0)
-  const acts = data.activities
+  const acts = data.activities, pl = data.places
   const legs: Leg[] = []
   let ai = 0
   for (let i = 1; i < visits.length; i++) {
     const a = visits[i - 1], b = visits[i]
-    const dir: Direction | null = isHome(a.type) && isWork(b.type) ? 'to_work' : isWork(a.type) && isHome(b.type) ? 'to_home' : null
+    const dir: Direction | null = isHome(pl[a.place_id]) && isWork(pl[b.place_id]) ? 'to_work' : isWork(pl[a.place_id]) && isHome(pl[b.place_id]) ? 'to_home' : null
     if (!dir) continue
     const gap = b.start - a.end
     if (gap <= 0 || gap > MAX_COMMUTE_SECONDS) continue

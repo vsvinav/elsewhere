@@ -2,7 +2,9 @@ import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useM
 import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data, Place } from '../data/types'
-import { clearRecord, ingestFile, loadRecord } from '../ingest'
+import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
+import { Onboarding } from '../profile/Onboarding'
+import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
 import { enrichPlaces } from '../ingest/enrich'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
@@ -18,7 +20,9 @@ import { RangeBar } from './RangeBar'
 const FlightScreen = lazy(() => import('../tabs/Flights/Flights').then((m) => ({ default: m.Flights })))
 const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: m.MapScreen })))
 
-export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void }
+export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void; editProfile(): void }
+/** Used to parse a fresh import before the visitor has answered the home question; the real profile re-derives. */
+const PROVISIONAL: Profile = { name: null, units: 'km', homes: [{ lat: 0, lng: 0, city: '', cc: '', from: 0, to: null }], work: null }
 const RecordContext = createContext<Record_ | null>(null)
 export const useRecord = () => useContext(RecordContext)!
 
@@ -30,11 +34,23 @@ export function App() {
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
+  const [editing, setEditing] = useState(false)
+  const prof = useProfile()
   const { mapsKey } = useSettings()
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setPlaces(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch(setError)
   }, [adopt])
+  // The record follows the profile: when home or work moves, trips and days are worked out again.
+  const homesKey = JSON.stringify([prof?.homes ?? null, prof?.work ?? null])
+  useEffect(() => {
+    if (!record || !prof) return
+    if (JSON.stringify([record.profile.homes ?? null, record.profile.work ?? null]) === homesKey) return
+    let live = true
+    rederive(record, prof, setStage).then((d) => { if (!live) return; setStage(null); setRecord({ ...d, paths: record.paths }) }).catch((e) => { if (live) { setStage(null); setImportError(e) } })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record?.meta.source_sha256, homesKey])
   const tab = useStore((s) => s.tab)
   const onMap = tab === 'map' || tab === 'play'
   useEffect(() => {
@@ -54,8 +70,9 @@ export function App() {
   const data = useMemo(() => (record && places ? { ...record, places } : record), [record, places])
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,
-    importFile: (f) => { setImportError(null); ingestFile(f, setStage).then((d) => { setStage(null); adopt(d, true); useStore.getState().setTab('home') }).catch((e) => { setStage(null); setImportError(e) }) },
-    reset: () => { clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch(setError) },
+    importFile: (f) => { setImportError(null); ingestFile(f, profileStore.get() ?? PROVISIONAL, setStage).then((d) => { setStage(null); adopt(d, true); if (profileStore.get()) useStore.getState().setTab('home') }).catch((e) => { setStage(null); setImportError(e) }) },
+    reset: () => { profileStore.set(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch(setError) },
+    editProfile: () => setEditing(true),
   }), [mine, stage, importError, enrichError, adopt])
   // Chrome tucks away once the first bill has scrolled off; the heads underneath print clean.
   useEffect(() => {
@@ -69,11 +86,16 @@ export function App() {
     return () => removeEventListener('hashchange', onHash)
   }, [])
 
+  if (error) return <div className="tray"><LoadFailed error={error} /></div>
+  if (!record) return <div className="tray"><Printing /></div>
+  if (!prof || editing) {
+    return <Onboarding key={editing ? 'edit' : 'new'} data={record} demo={!mine} stage={stage} importError={importError} importFile={ctx.importFile} initial={editing ? prof : null} onClose={editing ? () => setEditing(false) : undefined} />
+  }
   return (
     <div className="tray">
-      <div className="tourline" aria-hidden><span className="mark">E</span><span className="caps">World <b>Tour</b> · your record</span></div>
+      <div className="tourline" aria-hidden><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></div>
       <StubNav />
-      {error ? <LoadFailed error={error} /> : data ? <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider> : <Printing />}
+      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
     </div>
   )
 }

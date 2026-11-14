@@ -21,7 +21,7 @@ export function ArrivalTags() {
     const v = data.visits.find((x) => x.lvl === 0 && x.start <= playhead && playhead <= x.end)
     if (!v || v.id === lastVisit.current) return
     lastVisit.current = v.id
-    if (isHome(v.type)) return
+    if (isHome(data.places[v.place_id])) return
     const nth = data.visits.filter((x) => x.lvl === 0 && x.place_id === v.place_id && x.start <= v.start).length
     setTags((t) => [{ key: v.id, id: v.place_id, nth, at: Date.now() }, ...t].slice(0, KEEP))
   }, [playhead, playing, data])

@@ -17,7 +17,7 @@ function nextMonth(ts: number): number {
 }
 
 function nonRoutine(data: Data) {
-  return data.visits.filter((v) => v.lvl === 0 && !isHome(v.type) && !isWork(v.type))
+  return data.visits.filter((v) => v.lvl === 0 && data.places[v.place_id]?.role == null)
 }
 
 /**
@@ -39,7 +39,7 @@ export function explorationScore(data: Data, range: [number, number]): Bucket[] 
     }
     let lapsed = 0
     for (const p of Object.values(data.places)) {
-      if (p.n_visits < LAPSE_MIN_VISITS || p.semantic_type.includes('HOME') || p.semantic_type.includes('WORK')) continue
+      if (p.n_visits < LAPSE_MIN_VISITS || p.role !== null) continue
       const crossed = p.last_ts + LAPSE_SECONDS
       if (crossed >= s && crossed < e) lapsed++
     }
@@ -64,7 +64,7 @@ export function placeStatuses(data: Data, range: [number, number]): { place_id: 
   }
   for (const [place_id, p] of Object.entries(data.places)) {
     if (seen.has(place_id) || p.n_visits < LAPSE_MIN_VISITS) continue
-    if (p.semantic_type.includes('HOME') || p.semantic_type.includes('WORK')) continue
+    if (p.role !== null) continue
     if (p.last_ts < range[1] - LAPSE_SECONDS && p.last_ts >= range[0] - 365 * 86400) out.push({ place_id, lng: p.lng, lat: p.lat, status: 'lapsed', n: p.n_visits })
   }
   return out

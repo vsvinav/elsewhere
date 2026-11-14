@@ -9,8 +9,8 @@ export function boundsOf(pts: LngLat[]): Bounds | null {
   return [[x0, y0], [x1, y1]]
 }
 
-export function isHome(type: string): boolean { return type === 'INFERRED_HOME' || type === 'HOME' }
-export function isWork(type: string): boolean { return type === 'INFERRED_WORK' || type === 'WORK' }
+export const isHome = (p: { role: 'home' | 'work' | null } | undefined) => p?.role === 'home'
+export const isWork = (p: { role: 'home' | 'work' | null } | undefined) => p?.role === 'work'
 
 /** Bounds of the dense part of a record (5th–95th percentile), so flights do not shrink daily life to a dot. */
 export function denseBounds(pts: LngLat[]): Bounds | null {

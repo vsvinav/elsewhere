@@ -1,0 +1,61 @@
+/* Front door: one bill, poster voice, a stepper of dashes. */
+.ob { min-height: 100svh; }
+.ob-bill { position: relative; min-height: 100svh; padding: 36px var(--gutter) 120px; }
+.ob-head { display: flex; align-items: center; gap: 24px; min-height: 40px; }
+.ob-mark { font: 900 28px/1 var(--display); background: var(--ink); color: var(--stock); width: 40px; height: 40px; display: grid; place-items: center; }
+.ob-steps { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.ob-steps li { width: 34px; height: 5px; background: var(--stock-3); transition: background 0.3s var(--ease); }
+.ob-steps li[data-done] { background: var(--ink); }
+.ob-steps li[aria-current] { background: var(--red); }
+.ob-cancel { margin-left: auto; }
+
+.ob-start { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px var(--gutter); margin-top: 6vh; align-items: start; }
+.ob-start .title { margin: 0; font: 900 clamp(84px, 11.5vw, 170px)/0.8 var(--display); text-transform: uppercase; letter-spacing: -0.015em; }
+.ob-start .title span { display: block; }
+.ob-start .lede { font: 500 clamp(18px, 1.6vw, 22px)/1.35 var(--body); max-width: 40ch; margin: 44px 0 0; }
+.ob-drop { display: block; cursor: pointer; margin-top: 0; }
+.ob-drop:hover, .ob-drop:focus-within { background: var(--stock-2); }
+.ob-error { margin-top: 14px; font: 600 14px/1.4 var(--body); color: var(--red-2); }
+.ob-key { margin-top: 26px; max-width: 520px; }
+.ob-key .val { width: 100%; font: 500 16px/1.4 var(--body); padding: 10px 12px; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
+.ob-demo { margin-top: 28px; }
+
+.ob-q { max-width: 920px; margin-top: 8vh; animation: ob-in 0.5s var(--ease) both; }
+@keyframes ob-in { from { opacity: 0; transform: translateY(14px); } }
+.ob-title { margin: 0; font: 900 clamp(56px, 8.5vw, 120px)/0.84 var(--display); text-transform: uppercase; letter-spacing: -0.015em; text-wrap: balance; }
+.ob-q .lede { font: 500 clamp(17px, 1.4vw, 20px)/1.4 var(--body); color: var(--ink-2); max-width: 56ch; margin: 36px 0 0; }
+.ob-input { display: block; width: 100%; max-width: 640px; margin-top: 32px; padding: 6px 0 10px; border: 0; border-bottom: 4px solid var(--ink); background: transparent; color: var(--ink); font: 900 clamp(44px, 6vw, 84px)/1 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
+.ob-input::placeholder { color: var(--ghost); }
+.ob-input:focus { outline: none; border-bottom-color: var(--red); }
+
+.ob-tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 34px; }
+.ob-tag { cursor: pointer; min-height: 132px; gap: 8px; }
+.ob-tag .name { min-height: 0; }
+.ob-tag .sub { margin-top: auto; }
+.ob-tag[aria-pressed='true'] { background: var(--ink); color: var(--stock); }
+.ob-tag[aria-pressed='true'] .sub, .ob-tag[aria-pressed='true'] .lab { color: var(--mustard); }
+.ob-tag:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+
+.ob-homes { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
+.ob-homes li { display: flex; align-items: center; gap: 18px; padding: 12px 0; border-top: 2px solid var(--ink); }
+.ob-homes li:last-child { border-bottom: 2px solid var(--ink); }
+.ob-homes .name { font: 800 24px/1 var(--display); text-transform: uppercase; flex: 1; }
+.ob-month { display: flex; align-items: center; gap: 10px; }
+.ob-month input { font: 600 14px/1 var(--body); padding: 6px 8px; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
+.ob-homes .btn { margin: 0; }
+
+.ob-units { display: flex; gap: 12px; margin-top: 34px; }
+.ob-actions { display: flex; gap: 12px; align-items: center; margin-top: 40px; }
+.ob-actions .btn { margin: 0; }
+.ob-actions .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.ob-actions .btn:disabled:hover { background: var(--ink); border-color: var(--ink); }
+.ob-actions .ob-back { margin-left: auto; }
+
+@media (max-width: 720px) {
+  .ob-bill { padding-bottom: 150px; }
+  .ob-start { grid-template-columns: 1fr; gap: 32px; margin-top: 4vh; }
+  .ob-q { margin-top: 5vh; }
+  .ob-tags { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .ob-homes li { flex-wrap: wrap; }
+  .ob-bill .stamp { display: none; }
+}
