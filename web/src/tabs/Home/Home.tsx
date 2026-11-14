@@ -107,7 +107,7 @@ export function Home() {
           <div>
             <div className="caps">Residency · where the hours went</div>
             <div className="num"><CountUp value={f.hours.other} /><small>h out</small></div>
-            <p className="lede">{pct(f.hours.home)}% home · {prof?.work ? `${pct(f.hours.work)}% work · ` : ''}{pct(f.hours.other)}% elsewhere · {pct(f.hours.transit)}% moving. About {(f.hours.other / Math.max(1, f.days)).toFixed(1)} hours a day somewhere else.</p>
+            <p className="lede">{pct(f.hours.home)}% home · {prof?.works.length ? `${pct(f.hours.work)}% work · ` : ''}{pct(f.hours.other)}% elsewhere · {pct(f.hours.transit)}% moving. About {(f.hours.other / Math.max(1, f.days)).toFixed(1)} hours a day somewhere else.</p>
           </div>
           <ol className="dates" aria-label="Most visited third places">
             {f.thirdPlaces.map((p) => (

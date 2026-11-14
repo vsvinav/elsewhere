@@ -29,7 +29,7 @@ export interface Trip {
 export interface Profile {
   home: { lat: number; lng: number }
   /** The visitor's declared homes and work, as derivation used them. Absent on records baked before profiles existed. */
-  homes?: Home[]; work?: Work | null
+  homes?: Home[]; works?: Work[]; work?: { lat: number; lng: number; place_id: string } | null
   frequent_places: { place_id: string; lat: number; lng: number; label: string | null }[]
   frequent_trips: unknown[]; persona: unknown
 }

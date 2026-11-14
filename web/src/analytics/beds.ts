@@ -1,5 +1,6 @@
 import type { Data, Visit } from '../data/types'
 import { isHome } from './geo'
+import { homeAt } from '../profile/profile'
 import { distanceKm } from './position'
 
 export type NightKind = 'home' | 'new' | 'repeat' | 'none'
@@ -25,13 +26,13 @@ function nightsOf(v: Pick<Visit, 'start' | 'end' | 'tz'>): string[] {
  * "new" when the range is cut to January.
  */
 export function bedStrip(data: Data, range: [number, number] = data.meta.range): Night[] {
-  const home = data.profile.home
+  const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
   const slept = new Map<string, { kind: NightKind; city: string | null }>()
   const seenCity = new Set<string>()
   for (const v of data.visits) {
     if (v.lvl !== 0) continue
     const p = data.places[v.place_id]
-    const atHome = isHome(p) || distanceKm(home, v) < HOME_RADIUS_KM
+    const atHome = isHome(p) || distanceKm(homeOf(v.start), v) < HOME_RADIUS_KM
     const city = p?.city ?? null
     const key = city ?? v.place_id
     // Judged once per stay, so every night of a first visit reads as new.

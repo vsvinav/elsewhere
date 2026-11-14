@@ -1,7 +1,7 @@
 // Port of pipeline/geo.py + derive.py + export.py: parsed records → the Data the app reads.
 import type { Data, Daily, Place, Trip } from '../data/types'
 import type { Parsed, PVisit } from './parse'
-import { homeAt, type Profile } from '../profile/profile'
+import { homeAt, worksAt, type Profile } from '../profile/profile'
 
 const TRIP_RADIUS_KM = 50, STROKE_POINTS = 8000
 export const ROLE_RADIUS_KM = 0.3
@@ -46,17 +46,23 @@ const nights = (start: number, end: number, tz: number) => Math.round((Date.pars
 const r3 = (x: number) => Math.round(x * 1000) / 1000
 
 export type Role = 'home' | 'work' | null
-/** Home = within 300 m of the home active on the visit date; work = within 300 m of the declared work place. */
+/** Home = within 300 m of the home active on the visit date; work = within 300 m of a work place active then. */
 export function roleOf(v: PVisit, profile: Profile): Role {
   const h = homeAt(profile.homes, v.start)
   if (haversineKm(h.lat, h.lng, v.lat, v.lng) <= ROLE_RADIUS_KM) return 'home'
-  if (profile.work && haversineKm(profile.work.lat, profile.work.lng, v.lat, v.lng) <= ROLE_RADIUS_KM) return 'work'
+  if (worksAt(profile.works, v.start).some((w) => haversineKm(w.lat, w.lng, v.lat, v.lng) <= ROLE_RADIUS_KM)) return 'work'
   return null
 }
 /** Google splits one address across several place ids. Visits at a home (or work) are re-pointed
  *  at the busiest id of that cluster, so the record has one Home per home. Returns copies. */
 export function foldRoles(visits: PVisit[], profile: Profile): PVisit[] {
-  const key = (v: PVisit) => { const r = roleOf(v, profile); return r === 'home' ? `home:${profile.homes.indexOf(homeAt(profile.homes, v.start))}` : r }
+  // Keyed by coordinates, so a home you came back to stays one Home, and each work place is its own.
+  const key = (v: PVisit) => {
+    const r = roleOf(v, profile)
+    if (r === 'home') { const h = homeAt(profile.homes, v.start); return `home:${h.lat},${h.lng}` }
+    if (r === 'work') { const w = worksAt(profile.works, v.start).find((w) => haversineKm(w.lat, w.lng, v.lat, v.lng) <= ROLE_RADIUS_KM)!; return `work:${w.lat},${w.lng}` }
+    return r
+  }
   const keys = visits.map(key)
   const count = new Map<string, number>()
   keys.forEach((k, i) => { if (k) { const ck = `${k}\u0000${visits[i].place_id}`; count.set(ck, (count.get(ck) ?? 0) + 1) } })
@@ -162,7 +168,7 @@ export function buildData(parsed: Parsed, cities: Cities, source: { file: string
     activities: p.activities.map(({ e_city: _e, ...a }) => ({ ...a, p: r3(a.p) })),
     paths: p.paths, strokes,
     places: derivePlaces(p, profile), daily: deriveDaily(p, profile), trips: deriveTrips(p, profile),
-    profile: { home: { lat: last.lat, lng: last.lng }, homes: profile.homes, work: profile.work, frequent_places: p.frequent_places, frequent_trips: p.frequent_trips, persona: p.persona },
+    profile: { home: { lat: last.lat, lng: last.lng }, homes: profile.homes, works: profile.works, frequent_places: p.frequent_places, frequent_trips: p.frequent_trips, persona: p.persona },
     meta: { source_file: source.file, source_sha256: source.sha256, built_at: Math.floor(Date.now() / 1000), range: [starts.length ? Math.min(...starts) : 0, ends.length ? Math.max(...ends) : 0], import_report: p.report },
   }
 }

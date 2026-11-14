@@ -1,5 +1,6 @@
 import type { Data, Visit } from '../data/types'
 import { isHome } from './geo'
+import { homeAt } from '../profile/profile'
 import { distanceKm } from './position'
 
 export interface Stop { city: string; country: string | null; nights: number; visits: number; first: number; last: number; lat: number; lng: number }
@@ -24,7 +25,7 @@ export function nightsIn(v: Pick<Visit, 'start' | 'end' | 'tz'>): number {
 
 /** Where you slept: nights per city away from home, like a tour's dates list. */
 export function tour(data: Data): Tour {
-  const home = data.profile.home
+  const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
   const byCity = new Map<string, Stop>()
   let nightsHome = 0, nightsAway = 0
   let headline: HeadlineAct | null = null
@@ -33,14 +34,14 @@ export function tour(data: Data): Tour {
     const n = nightsIn(v)
     if (!n) continue
     const p = data.places[v.place_id]
-    if (isHome(data.places[v.place_id]) || distanceKm(home, v) < 30) { nightsHome += n; continue }
+    if (isHome(data.places[v.place_id]) || distanceKm(homeOf(v.start), v) < 30) { nightsHome += n; continue }
     nightsAway += n
     const city = p?.city ?? 'Unknown city'
     const s = byCity.get(city) ?? { city, country: p?.country_code ?? null, nights: 0, visits: 0, first: v.start, last: v.end, lat: v.lat, lng: v.lng }
     s.nights += n; s.visits++
     s.first = Math.min(s.first, v.start); s.last = Math.max(s.last, v.end)
     byCity.set(city, s)
-    const km = distanceKm(home, v)
+    const km = distanceKm(homeOf(v.start), v)
     if (!headline || km > headline.km) headline = { city, country: p?.country_code ?? null, km, nights: n, start: v.start, end: v.end, place_id: v.place_id }
   }
   const stops = [...byCity.values()].sort((a, b) => b.nights - a.nights || b.visits - a.visits)

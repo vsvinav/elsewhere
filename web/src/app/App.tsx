@@ -24,7 +24,7 @@ const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: 
 
 export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void; editProfile(): void }
 /** Used to parse a fresh import before the visitor has answered the home question; the real profile re-derives. */
-const PROVISIONAL: Profile = { name: null, units: 'km', homes: [{ lat: 0, lng: 0, city: '', cc: '', from: 0, to: null }], work: null }
+const PROVISIONAL: Profile = { name: null, units: 'km', homes: [{ lat: 0, lng: 0, city: '', cc: '', from: 0, to: null }], works: [] }
 const RecordContext = createContext<Record_ | null>(null)
 export const useRecord = () => useContext(RecordContext)!
 
@@ -44,10 +44,10 @@ export function App() {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch(setError)
   }, [adopt])
   // The record follows the profile: when home or work moves, trips and days are worked out again.
-  const homesKey = JSON.stringify([prof?.homes ?? null, prof?.work ?? null])
+  const homesKey = JSON.stringify([prof?.homes ?? null, prof?.works ?? null])
   useEffect(() => {
     if (!record || !prof) return
-    if (JSON.stringify([record.profile.homes ?? null, record.profile.work ?? null]) === homesKey) return
+    if (JSON.stringify([record.profile.homes ?? null, record.profile.works ?? null]) === homesKey) return
     let live = true
     rederive(record, prof, setStage).then((d) => { if (!live) return; setStage(null); setRecord({ ...d, paths: record.paths }) }).catch((e) => { if (live) { setStage(null); setImportError(e) } })
     return () => { live = false }

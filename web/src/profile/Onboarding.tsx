@@ -32,7 +32,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   const [step, setStep] = useState<Step>(initial || (data && !demo) ? 'name' : 'start')
   const [name, setName] = useState(initial?.name ?? '')
   const [homes, setHomes] = useState<Home[]>(initial?.homes ?? [])
-  const [work, setWork] = useState<Work | null>(initial?.work ?? null)
+  const [works, setWorks] = useState<Work[]>(initial?.works ?? [])
   const [units, setUnits] = useState<'km' | 'mi'>(initial?.units ?? 'km')
   const [key, setKey] = useState(mapsKey)
   const sleep = useMemo(() => (data ? sleepPlaces(data, 8) : []), [data])
@@ -46,7 +46,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   const back = () => setStep(ORDER[Math.max(1, i - 1)])
   const finish = (h = homes) => {
     const sorted = [...h].sort((a, b) => a.from - b.from).map((x, k, arr) => { const nxt = arr[k + 1]?.from ?? null; return { ...x, to: x.to && nxt ? Math.min(x.to, nxt) : x.to ?? nxt } })
-    store.set({ name: name.trim() || null, units, homes: sorted, work })
+    store.set({ name: name.trim() || null, units, homes: sorted, works })
     onClose?.()
   }
   // Names: a proper name from any Google label in the cluster (one cached Details call per label, three at most),
@@ -126,7 +126,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 ))}
                 {!sleep.length && <p className="lede">No overnight stays found in this record.</p>}
               </div>
-              {homes.length > 0 && <HomeList homes={homes} setHomes={setHomes} range={range} hint="Since when, and until when? Leave both blank if you lived here for the whole record." />}
+              {homes.length > 0 && <StintList items={homes} set={setHomes} range={range} word="home" removable={homes.length > 1} hint="Since when, and until when? Leave both blank if you lived here for the whole record." />}
             </Q>
           )}
 
@@ -148,22 +148,26 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   )
                 })}
               </div>
-              <HomeList homes={homes} setHomes={setHomes} range={range} />
+              <StintList items={homes} set={setHomes} range={range} word="home" removable={homes.length > 1} />
             </Q>
           )}
 
           {step === 'work' && (
-            <Q n={4} title="Where do you spend weekdays?" sub="Optional. Skip it and nothing about work is printed." onBack={back} onNext={next} skip={() => { setWork(null); next() }}>
+            <Q n={4} title="Where do you spend weekdays?" sub="Optional. Pick every job on the record and set when each one ran. Skip it and nothing about work is printed." onBack={back} onNext={next} skip={() => { setWorks([]); next() }}>
               <div className="ob-tags">
-                {weekday.map((s) => (
-                  <button key={s.place_id} className="tag ob-tag" aria-pressed={work?.place_id === s.place_id} onClick={() => setWork(work?.place_id === s.place_id ? null : { lat: s.lat, lng: s.lng, place_id: s.place_id })}>
-                    <span className="lab">{s.cc || '—'}</span>
-                    <span className="name">{label(s)}</span>
-                    <span className="sub">{Math.round(s.score)} weekday hours</span>
-                  </button>
-                ))}
+                {weekday.map((s) => {
+                  const on = works.some((w) => w.place_id === s.place_id)
+                  return (
+                    <button key={s.place_id} className="tag ob-tag" aria-pressed={on} onClick={() => setWorks(on ? works.filter((w) => w.place_id !== s.place_id) : [...works, { lat: s.lat, lng: s.lng, place_id: s.place_id, name: label(s), from: 0, to: null }])}>
+                      <span className="lab">{s.cc || '—'}</span>
+                      <span className="name">{label(s)}</span>
+                      <span className="sub">{Math.round(s.score)} weekday hours</span>
+                    </button>
+                  )
+                })}
                 {!weekday.length && <p className="lede">No regular weekday place stands out.</p>}
               </div>
+              {works.length > 0 && <StintList items={works} set={setWorks} range={range} word="work" removable hint="Blank dates mean the whole record." />}
             </Q>
           )}
 
@@ -199,20 +203,25 @@ function Q({ n, title, sub, children, onNext, onBack, skip, nextLabel = 'Next' }
 
 const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
 
-/** Chosen homes with the month each became home; blank means "from the start of the record". */
-function HomeList({ homes, setHomes, range, hint }: { homes: Home[]; setHomes: (h: Home[]) => void; range: [number, number]; hint?: string }) {
+type Stint = { name?: string; city?: string; from: number; to: number | null }
+/** Chosen homes or jobs with the month each began and ended; blank means "from the start of the record" / "still". */
+function StintList<T extends Stint>({ items, set, range, word, removable, hint }: { items: T[]; set: (h: T[]) => void; range: [number, number]; word: string; removable: boolean; hint?: string }) {
+  const month = (v: string) => (v ? Date.parse(v + '-01') / 1000 : 0)
   return (
     <div className="ob-homelist">
       {hint && <p className="ob-hint">{hint}</p>}
-      <ol className="ob-homes" aria-label="Your homes">
-        {[...homes].sort((a, b) => a.from - b.from).map((h) => (
-          <li key={`${h.lat},${h.lng},${h.from}`}>
-            <span className="name">{h.name ?? h.city ?? 'Home'}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
-            <label className="ob-month"><span className="lab">home since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} home since`} /></label>
-            <label className="ob-month"><span className="lab">until</span><input type="month" value={h.to ? monthOf(h.to) : ''} min={h.from ? monthOf(h.from) : monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, to: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : null } : x))} aria-label={`${h.city} home until`} /></label>
-            {homes.length > 1 && <button className="btn quiet" onClick={() => setHomes(homes.filter((x) => x !== h))}>Remove</button>}
-          </li>
-        ))}
+      <ol className="ob-homes" aria-label={`Your ${word}s`}>
+        {[...items].sort((a, b) => a.from - b.from).map((h) => {
+          const name = h.name ?? h.city ?? word
+          return (
+            <li key={`${name},${h.from}`}>
+              <span className="name">{name}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
+              <label className="ob-month"><span className="lab">{word} since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => set(items.map((x) => x === h ? { ...x, from: month(e.target.value) } : x))} aria-label={`${name} ${word} since`} /></label>
+              <label className="ob-month"><span className="lab">until</span><input type="month" value={h.to ? monthOf(h.to) : ''} min={h.from ? monthOf(h.from) : monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => set(items.map((x) => x === h ? { ...x, to: e.target.value ? month(e.target.value) : null } : x))} aria-label={`${name} ${word} until`} /></label>
+              {removable && <button className="btn quiet" onClick={() => set(items.filter((x) => x !== h))}>Remove</button>}
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

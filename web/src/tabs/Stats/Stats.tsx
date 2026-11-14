@@ -15,7 +15,7 @@ export function Stats() {
   const { u, cv } = useUnits()
   const data = useData()
   const s = useMemo(() => stats(data), [data])
-  const hasWork = !!data.profile.work
+  const hasWork = !!(data.profile.works?.length || data.profile.work)
   const commute = useMemo(() => commuteStats(data, data.meta.range), [data])
   const explore = useMemo(() => explorationScore(data, data.meta.range), [data])
 
