@@ -7,7 +7,6 @@ import { MapLoad } from '../usage/Meter'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt } from '../analytics/position'
-import { denseBounds } from '../analytics/geo'
 import { mapLayers, pinLayers } from './layers'
 import { liveCam } from './live'
 import { useSettings } from '../ingest/settings'
@@ -49,17 +48,13 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()
     const unsub = useStore.subscribe(schedule)
-    const off = cam.on('zoom', schedule)
+    const off = cam.on('move', schedule)
     return () => { unsub(); off(); cancelAnimationFrame(raf) }
   }, [cam, overlay, data])
   useFollow(cam)
   useEffect(() => { liveCam.set(cam); return () => liveCam.set(null) }, [cam])
-  useEffect(() => {
-    if (!cam || tab !== 'map') return
-    useStore.getState().setFollow(false)
-    const b = denseBounds(data.visits.filter((v) => v.lvl === 0).map((v) => ({ lng: v.lng, lat: v.lat })))
-    if (b) cam.fit(b[0], b[1], { top: 60, bottom: 220, left: 220, right: 60 })
-  }, [cam, tab, data])
+  // The Map tab frames its pins from PinHud; here only stop the replay camera from following.
+  useEffect(() => { if (cam && tab === 'map') useStore.getState().setFollow(false) }, [cam, tab])
 }
 
 function GoogleDeck() {

@@ -101,12 +101,14 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   if (!cl) c.shown.clusters.set(zb, (cl = cluster(c.shown.dots, zb, 60)))
   const { singles, groups } = cl
   let labelled = c.shown.labels.get(zb)
-  if (!labelled) c.shown.labels.set(zb, (labelled = labelDots(singles, zb)))
+  // Homes label first so they always win their box.
+  if (!labelled) c.shown.labels.set(zb, (labelled = labelDots([...c.homes, ...singles], zb)))
   // Zoomed out, pins shrink with the map so a cluster never blankets an island.
-  const k = Math.max(0.45, Math.min(1, (zoom - 1) / 5))
+  const k = Math.max(0.45, Math.min(1, (zoom - 1) / 5)) + Math.max(0, Math.min(0.3, (zoom - 11) / 10))
   const weight = (d: Dot) => (o.sizeBy === 'visits' ? d.n_visits : d.total_hours / 3)
   const size = (d: Dot) => k * (16 + Math.min(14, Math.sqrt(weight(d)) * 2.2))
-  const sel = o.selected ? c.all.find((d) => d.id === o.selected) : undefined
+  const sel = o.selected ? c.all.find((d) => d.id === o.selected) ?? c.homes.find((d) => d.id === o.selected) : undefined
+  const selHome = !!sel && c.homes.includes(sel)
   const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 } } as const
   const layers: Layer[] = [
     // Groups: an ink disc sized by how many stops it holds, the count printed in stock.
@@ -132,14 +134,14 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
     new TextLayer<Dot>({
       id: 'labels', data: labelled, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
       getColor: INK, getSize: 11, ...font, outlineWidth: 2, outlineColor: [239, 230, 210, 235],
-      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [9, -13],
+      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [9 * k, -13 * k], updateTriggers: { getPixelOffset: [k] },
     }),
   ]
   if (sel) {
     // The open pin sits on top with a stock halo, so it reads in a crowd.
     layers.push(new ScatterplotLayer<Dot>({ id: 'pin-halo', data: [sel], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 18, radiusMaxPixels: 18, getFillColor: [239, 230, 210, 170], stroked: true, getLineColor: INK, lineWidthMinPixels: 2 }),
-      new IconLayer<Dot>({ id: 'pin-top-back', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN_BACK, getColor: INK, getSize: size(sel) + 12, sizeUnits: 'pixels', billboard: false }),
-      new IconLayer<Dot>({ id: 'pin-top', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: sel.ink, getSize: size(sel) + 8, sizeUnits: 'pixels', billboard: false }))
+      new IconLayer<Dot>({ id: 'pin-top-back', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => (selHome ? HOUSE : PIN_BACK), getColor: INK, getSize: selHome ? 34 * k : size(sel) + 12, sizeUnits: 'pixels', billboard: false, updateTriggers: { getIcon: [selHome] } }),
+      new IconLayer<Dot>({ id: 'pin-top', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => (selHome ? HOUSE : PIN), getColor: sel.ink, getSize: selHome ? 27 * k : size(sel) + 8, sizeUnits: 'pixels', billboard: false, updateTriggers: { getIcon: [selHome] } }))
   }
   return layers
 }
