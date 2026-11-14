@@ -19,7 +19,7 @@ def derive_places(parsed: Parsed) -> dict[str, dict]:
                 "lat": v.lat, "lng": v.lng, "label": labels.get(v.place_id),
                 "semantic_type": v.semantic_type, "city": v.city,
                 "country_code": v.country_code, "n_visits": 0, "total_hours": 0.0,
-                "first_ts": v.start, "last_ts": v.end, "name": None,
+                "first_ts": v.start, "last_ts": v.end, "name": None, "address": None,
             }
         p["n_visits"] += 1
         p["total_hours"] += (v.end - v.start) / 3600
