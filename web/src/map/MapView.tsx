@@ -8,7 +8,8 @@ import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt } from '../analytics/position'
 import { denseBounds } from '../analytics/geo'
-import { mapLayers } from './layers'
+import { mapLayers, pinLayers } from './layers'
+import { liveCam } from './live'
 import { useSettings } from '../ingest/settings'
 import { useFollow } from './useFollow'
 import { MAP_STYLES } from './style'
@@ -24,6 +25,10 @@ const onHover = (info: { object?: unknown; x: number; y: number }) => {
   const o = info.object as { id: string } | undefined
   useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
 }
+const onClick = (info: { object?: unknown }) => {
+  const o = info.object as { id: string } | undefined
+  if (useStore.getState().tab === 'map') useStore.getState().setPin(o?.id ?? null)
+}
 
 /** Layers update straight from the store on an animation frame; React never renders for the playhead. Map tab opens on the whole record; Play follows the playhead. */
 function useDeck(cam: Cam | null, overlay: Overlay | null) {
@@ -36,7 +41,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, cam.zoom(), s.lens, s.hiddenCats, s.tab === 'map') })
+      overlay.setProps({ layers: s.tab === 'map' ? pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize }) : mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) })
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()
@@ -45,6 +50,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
     return () => { unsub(); off(); cancelAnimationFrame(raf) }
   }, [cam, overlay, data])
   useFollow(cam)
+  useEffect(() => { liveCam.set(cam); return () => liveCam.set(null) }, [cam])
   useEffect(() => {
     if (!cam || tab !== 'map') return
     useStore.getState().setFollow(false)
@@ -56,7 +62,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
 function GoogleDeck() {
   const map = useMap()
   const cam = useMemo(() => (map ? googleCam(map) : null), [map])
-  const overlay = useMemo(() => new GoogleMapsOverlay({ onHover }), [])
+  const overlay = useMemo(() => new GoogleMapsOverlay({ onHover, onClick }), [])
   // Google may fall back from vector to raster after load; (re)attach deck once the type is settled.
   useEffect(() => {
     if (!map) return
@@ -75,7 +81,7 @@ function LibreDeck() {
   const [overlay, setOverlay] = useState<MapLibreOverlay | null>(null)
   useEffect(() => {
     if (!map) return
-    const o = new MapLibreOverlay({ interleaved: false, onHover })
+    const o = new MapLibreOverlay({ interleaved: false, onHover, onClick })
     map.addControl(o)
     setOverlay(o)
     return () => { setOverlay(null); if (map.hasControl(o)) map.removeControl(o) }

@@ -409,6 +409,10 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .hud-cats button.on small { color: var(--stock); opacity: 0.7; }
 .hud-cats button:not(.on) .ink { opacity: 0.35; }
 .hud-cats button.all { border-style: dashed; }
+/* The Map tab: no transport, just the chips and a line of help, sitting on the strip's shoulder. */
+.hud.pins { display: block; left: var(--gutter); right: auto; max-width: min(860px, calc(100% - 2 * var(--gutter))); padding: 12px 14px 10px; }
+.hud.pins .hud-cats { position: static; margin-bottom: 8px; }
+.hud-note { margin: 0; font: 500 13px/1.4 var(--body); color: var(--ink-2); }
 .hud-cats button:hover { color: var(--ink); }
 .hud-cats button.on:hover { color: var(--stock); }
 .hud-lens button {
@@ -540,3 +544,28 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .bill.nights .two { align-items: end; }
 .bill.nights .num { text-align: right; }
 .bill.nights .beds { margin-top: 40px; }
+
+/* Map tab panel */
+.hud.pins { display: flex; flex-direction: column; gap: 10px; left: var(--gutter); right: var(--gutter); max-width: none; padding: 12px 14px; }
+.hud.pins .hud-cats { position: static; }
+.pins-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pins-sum { font: 800 13px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.pins-find { position: relative; flex: 1 1 220px; max-width: 360px; }
+.pins-find input { width: 100%; font: 500 14px/1 var(--body); padding: 9px 10px 8px; border: 2px solid var(--ink); background: #fff; color: var(--ink); }
+.pins-find input:focus { outline: 3px solid var(--red); outline-offset: 1px; }
+.pins-hits { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); margin: 0; padding: 0; list-style: none; background: #fff; border: 2px solid var(--ink); z-index: 7; }
+.pins-hits li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font: 600 14px/1.1 var(--body); cursor: pointer; }
+.pins-hits li:hover { background: var(--stock); }
+.pins-hits li small { margin-left: auto; color: var(--ink-3); font-weight: 500; }
+.pins-size { display: inline-flex; align-items: center; gap: 2px; }
+.pins-size .lab { font: 800 11px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 6px; }
+.pins-size button { font: 800 12px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 10px 6px; border: 2px solid var(--ink); background: var(--stock); color: var(--ink-2); }
+.pins-size button.on { background: var(--ink); color: var(--stock); }
+.pins-fit { padding: 7px 12px 6px; }
+.pin-card { position: absolute; right: -3px; bottom: calc(100% + 12px); width: 260px; --tilt: -0.8deg; z-index: 6; }
+.pin-card .close { position: absolute; top: 6px; right: 8px; font: 700 20px/1 var(--body); background: none; border: 0; color: var(--ink-3); cursor: pointer; }
+.pin-card .lab { display: flex; align-items: center; gap: 6px; }
+.pin-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+.pin-facts dt { font: 800 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.pin-facts dd { margin: 2px 0 0; font: 600 14px/1.1 var(--body); }
+@media (max-width: 720px) { .pin-card { right: auto; left: -3px; width: min(260px, 90vw); } }

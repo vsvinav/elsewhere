@@ -24,6 +24,11 @@ export interface Store {
   hiddenCats: Cat[]
   toggleCat(c: Cat): void
   setHiddenCats(c: Cat[]): void
+  /** Map tab: the pin whose tag is open, and what sets a pin's size. */
+  pin: string | null
+  setPin(id: string | null): void
+  pinSize: 'visits' | 'hours'
+  setPinSize(k: 'visits' | 'hours'): void
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
   setRange(r: [number, number] | null): void
@@ -67,6 +72,10 @@ export const useStore = create<Store>((set) => ({
   hiddenCats: [],
   toggleCat: (c) => set((s) => ({ hiddenCats: s.hiddenCats.includes(c) ? s.hiddenCats.filter((x) => x !== c) : [...s.hiddenCats, c] })),
   setHiddenCats: (hiddenCats) => set({ hiddenCats }),
+  pin: null,
+  setPin: (pin) => set({ pin }),
+  pinSize: 'visits',
+  setPinSize: (pinSize) => set({ pinSize }),
   range: null,
   setRange: (range) => set({ range, playhead: range ? range[0] : null }),
   hoverPlace: null,

@@ -26,6 +26,8 @@ const ICON: Record<Lens | 'still', { url: string; width: number; height: number;
   all: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
   still: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
 }
+// The map pin: a teardrop with a stock hole, anchored at its point.
+const PIN = { url: svg('M16 1C9.9 1 5 5.9 5 12c0 8 11 19 11 19s11-11 11-19c0-6.1-4.9-11-11-11zm0 6.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z'), width: 64, height: 64, anchorY: 64, mask: true as const }
 interface Dot extends Place { id: string; title: string; cat: Cat; ink: RGBA }
 const CAT_INK = Object.fromEntries(Object.entries(CAT_COLOR).map(([k, v]) => [k, rgba(v)])) as Record<Cat, RGBA>
 
@@ -82,14 +84,44 @@ function labelDots(dots: Dot[], zoom: number): Dot[] {
   return out
 }
 
-export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all', hidden: Cat[] = [], pinAll = false): Layer[] {
+export interface PinOpts { hidden: Cat[]; selected: string | null; sizeBy: 'visits' | 'hours' }
+/** Every stop in the record as pins and nothing else: the Map tab. */
+export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   const c = prepared(data)
-  let { dots, labels } = c
-  if (pinAll) {
-    const key = hidden.slice().sort().join()
-    if (c.shown.key !== key || c.shown.dots.length === 0) c.shown = { key, dots: hidden.length ? c.all.filter((d) => !hidden.includes(d.cat)) : c.all, labels: new Map() }
-    dots = c.shown.dots; labels = c.shown.labels
+  const key = o.hidden.slice().sort().join()
+  if (c.shown.key !== key || c.shown.dots.length === 0) c.shown = { key, dots: o.hidden.length ? c.all.filter((d) => !o.hidden.includes(d.cat)) : c.all, labels: new Map() }
+  const dots = c.shown.dots
+  const zb = Math.floor(zoom * 2) / 2
+  let labelled = c.shown.labels.get(zb)
+  if (!labelled) c.shown.labels.set(zb, (labelled = labelDots(dots, zb)))
+  const size = (d: Dot) => 18 + Math.min(16, Math.sqrt(o.sizeBy === 'visits' ? d.n_visits : d.total_hours / 2) * 2)
+  const sel = o.selected ? dots.find((d) => d.id === o.selected) : undefined
+  const layers: Layer[] = [
+    new IconLayer<Dot>({
+      id: 'places', data: dots, pickable: true,
+      getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: (d) => (d.id === o.selected ? INK : d.ink),
+      getSize: size, sizeUnits: 'pixels', billboard: false,
+      updateTriggers: { getColor: [o.selected], getSize: [o.sizeBy] },
+    }),
+    new TextLayer<Dot>({
+      id: 'labels', data: labelled,
+      getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
+      getColor: INK, getSize: 11, fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
+      outlineWidth: 2, outlineColor: [239, 230, 210, 235],
+      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [10, -14],
+    }),
+  ]
+  if (sel) {
+    // The open pin sits on top with a stock halo, so it reads in a crowd.
+    layers.push(new ScatterplotLayer<Dot>({ id: 'pin-halo', data: [sel], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 16, radiusMaxPixels: 16, getFillColor: [239, 230, 210, 160], stroked: true, getLineColor: INK, lineWidthMinPixels: 2 }),
+      new IconLayer<Dot>({ id: 'pin-top', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: INK, getSize: size(sel) + 8, sizeUnits: 'pixels', billboard: false }))
   }
+  return layers
+}
+
+export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
+  const c = prepared(data)
+  const { dots, labels } = c
   const trails = lensTrails(c, lens)
   const zb = Math.floor(zoom * 2) / 2
   let labelled = labels.get(zb)
@@ -114,17 +146,17 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
       id: 'places', data: dots, pickable: true,
       getPosition: (d) => [d.lng, d.lat],
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
-      getFillColor: (d) => { const k = pinAll ? d.ink : INK; return [k[0], k[1], k[2], d.first_ts <= reveal ? 220 : 0] },
+      getFillColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 220 : 0],
       stroked: true, getLineColor: (d) => [STOCK[0], STOCK[1], STOCK[2], d.first_ts <= reveal ? 255 : 0], lineWidthMinPixels: 2,
-      updateTriggers: { getFillColor: [Math.floor(reveal / 86400), pinAll], getLineColor: [Math.floor(reveal / 86400)] },
+      updateTriggers: { getFillColor: [Math.floor(reveal / 86400)], getLineColor: [Math.floor(reveal / 86400)] },
     }),
     new TextLayer<Dot>({
       id: 'labels', data: labelled,
       getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
       getColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 255 : 0],
-      getSize: 11, fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
+      getSize: 11, getPixelOffset: [12, 0], fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
       outlineWidth: 2, outlineColor: [239, 230, 210, 235],
-      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [12, 0],
+      getTextAnchor: 'start', getAlignmentBaseline: 'center',
       updateTriggers: { getColor: [Math.floor(reveal / 86400)] },
     }),
   )

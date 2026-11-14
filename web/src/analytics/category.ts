@@ -4,7 +4,7 @@ import type { Place } from '../data/types'
 export type Cat = 'eat' | 'stay' | 'shop' | 'culture' | 'transit' | 'work' | 'other'
 export const CATS: Cat[] = ['eat', 'stay', 'shop', 'culture', 'transit', 'work', 'other']
 export const CAT_LABEL: Record<Cat, string> = { eat: 'Food & drink', stay: 'Stays', shop: 'Shops', culture: 'Out & about', transit: 'Transit', work: 'Work & study', other: 'Unsorted' }
-export const CAT_COLOR: Record<Cat, string> = { eat: '#d63c20', stay: '#e9b531', shop: '#e8762c', culture: '#1e4f8f', transit: '#6b6358', work: '#141414', other: '#9c9385' }
+export const CAT_COLOR: Record<Cat, string> = { eat: '#d63c20', stay: '#e9b531', shop: '#e8762c', culture: '#1e4f8f', transit: '#3f8f7a', work: '#141414', other: '#6b4e3d' }
 
 const RULES: [Cat, RegExp][] = [
   ['transit', /station|airport|_stop$|terminal|transit|port$/],
