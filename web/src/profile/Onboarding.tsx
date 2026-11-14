@@ -51,7 +51,6 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }
   const label = (s: Suggestion) => data?.places[s.place_id]?.name ?? s.city ?? 'Unnamed place'
   const isSame = (h: Home, s: Suggestion) => h.lat === s.lat && h.lng === s.lng
-  const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
   const range = data?.meta.range ?? [0, 0]
 
   return (
@@ -109,11 +108,12 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 ))}
                 {!sleep.length && <p className="lede">No overnight stays found in this record.</p>}
               </div>
+              {homes.length > 0 && <HomeList homes={homes} setHomes={setHomes} range={range} hint="Since when? Leave it blank if you lived here for the whole record." />}
             </Q>
           )}
 
           {step === 'moved' && (
-            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => m.month).join(' and ')}. Tap a place to add it as a home from then on.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
+            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => m.month).join(' and ')}. Tap a place to add it as a home, then set the month each one started.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
               <div className="ob-tags">
                 {sleep.filter((s) => !homes.some((h) => isSame(h, s))).map((s) => {
                   const mv = moves.find((m) => m.to === s.place_id)
@@ -127,15 +127,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   )
                 })}
               </div>
-              <ol className="ob-homes" aria-label="Your homes">
-                {[...homes].sort((a, b) => a.from - b.from).map((h) => (
-                  <li key={`${h.lat},${h.lng}`}>
-                    <span className="name">{h.city || 'Home'}</span>
-                    <label className="ob-month"><span className="lab">from</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} from`} /></label>
-                    {homes.length > 1 && <button className="btn quiet" onClick={() => setHomes(homes.filter((x) => x !== h))}>Remove</button>}
-                  </li>
-                ))}
-              </ol>
+              <HomeList homes={homes} setHomes={setHomes} range={range} />
             </Q>
           )}
 
@@ -180,6 +172,26 @@ function Q({ n, title, sub, children, onNext, onBack, skip, nextLabel = 'Next' }
         {skip && <button className="btn quiet" onClick={skip}>Skip</button>}
         {onBack && <button className="btn quiet ob-back" onClick={onBack}>Back</button>}
       </div>
+    </div>
+  )
+}
+
+const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
+
+/** Chosen homes with the month each became home; blank means "from the start of the record". */
+function HomeList({ homes, setHomes, range, hint }: { homes: Home[]; setHomes: (h: Home[]) => void; range: [number, number]; hint?: string }) {
+  return (
+    <div className="ob-homelist">
+      {hint && <p className="ob-hint">{hint}</p>}
+      <ol className="ob-homes" aria-label="Your homes">
+        {[...homes].sort((a, b) => a.from - b.from).map((h) => (
+          <li key={`${h.lat},${h.lng}`}>
+            <span className="name">{h.city || 'Home'}</span>
+            <label className="ob-month"><span className="lab">home since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} home since`} /></label>
+            {homes.length > 1 && <button className="btn quiet" onClick={() => setHomes(homes.filter((x) => x !== h))}>Remove</button>}
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

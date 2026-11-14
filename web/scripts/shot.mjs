@@ -7,6 +7,7 @@ await page.setViewport({ width: W, height: H })
 page.on('console', m => { const t = m.text(); if (!/vite\]|DevTools|GL Driver/.test(t)) console.log('CONSOLE', m.type(), t.slice(0, 300)) })
 page.on('pageerror', e => console.log('PAGEERROR', (e.stack ?? e.message).slice(0, 900)))
 page.on('requestfailed', r => console.log('REQFAIL', r.url().slice(0, 120), r.failure()?.errorText))
+if (process.env.LS) await page.evaluateOnNewDocument((ls) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v) }, JSON.parse(process.env.LS))
 await page.goto(process.argv[2] ?? 'http://localhost:5173', { waitUntil: 'networkidle0', timeout: 60000 })
 if (process.argv[3]) { await page.click(process.argv[3]); }
 await new Promise(r => setTimeout(r, +(process.argv[4] ?? 8000)))

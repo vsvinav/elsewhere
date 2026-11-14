@@ -36,11 +36,14 @@
 .ob-tag[aria-pressed='true'] .sub, .ob-tag[aria-pressed='true'] .lab { color: var(--mustard); }
 .ob-tag:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
 
-.ob-homes { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
+.ob-homelist { margin-top: 30px; }
+.ob-hint { font: 500 15px/1.4 var(--body); color: var(--ink-3); margin: 0 0 12px; max-width: 56ch; }
+.ob-homes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
 .ob-homes li { display: flex; align-items: center; gap: 18px; padding: 12px 0; border-top: 2px solid var(--ink); }
 .ob-homes li:last-child { border-bottom: 2px solid var(--ink); }
 .ob-homes .name { font: 800 24px/1 var(--display); text-transform: uppercase; flex: 1; }
 .ob-month { display: flex; align-items: center; gap: 10px; }
+.ob-month .lab { font: 700 10px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
 .ob-month input { font: 600 14px/1 var(--body); padding: 6px 8px; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
 .ob-homes .btn { margin: 0; }
 
