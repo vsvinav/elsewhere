@@ -2,7 +2,8 @@ import puppeteer from 'puppeteer-core'
 const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true,
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1400,900'] })
 const page = await browser.newPage()
-await page.setViewport({ width: 1400, height: 900 })
+const W = +(process.env.W ?? 1440), H = +(process.env.H ?? 900)
+await page.setViewport({ width: W, height: H })
 page.on('console', m => { const t = m.text(); if (!/vite\]|DevTools|GL Driver/.test(t)) console.log('CONSOLE', m.type(), t.slice(0, 300)) })
 page.on('pageerror', e => console.log('PAGEERROR', e.message))
 page.on('requestfailed', r => console.log('REQFAIL', r.url().slice(0, 120), r.failure()?.errorText))
@@ -22,5 +23,5 @@ const stats = await page.evaluate(() => {
   return out
 })
 console.log('CANVAS', JSON.stringify(stats))
-await page.screenshot({ path: '/tmp/shot.png' })
+await page.screenshot({ path: process.env.OUT ?? '/tmp/shot.png', fullPage: !!process.env.FULL })
 await browser.close()

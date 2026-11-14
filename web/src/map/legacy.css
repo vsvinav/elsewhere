@@ -4,13 +4,8 @@
   --muted: #9ca3af;
   --accent: #5eead4;
   --border: rgba(255, 255, 255, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  color: var(--fg);
 }
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; background: #0b0d12; overflow: hidden; }
-button { font: inherit; color: inherit; cursor: pointer; }
-
+.screen { color: var(--fg); }
 .card {
   background: var(--bg);
   backdrop-filter: blur(14px);

@@ -1,4 +1,5 @@
 import { wrappedFacts } from './wrapped'
+import { homeFacts } from './home'
 import { explorationScore, placeStatuses } from './explore'
 import { commuteStats } from './commute'
 import type { Data } from '../data/types'
@@ -75,4 +76,16 @@ test('commuteStats finds both legs with modes and durations', () => {
   expect(c.to_work.by_hour[8]).toBe(1)
   expect(c.to_work.by_weekday[2]).toBe(1) // 2025-01-01 is a Wednesday
   expect(c.legs[0].path).toHaveLength(6)
+})
+
+test('homeFacts totals the export, excludes home/work from third places, and rolls up years', () => {
+  const f = homeFacts(data)
+  expect(f.totalKm).toBeCloseTo(512)
+  expect(f.kmByMode[0]).toEqual(['FLYING', 500])
+  expect(f.places).toBe(4)
+  expect(f.countries).toBe(2)
+  expect(f.topCities[0]).toBe('Boston')
+  expect(f.thirdPlaces.map((p) => p.name)).toEqual(['Gym', 'Cafe', 'Louvre'])
+  expect(f.records.busiestDay).toEqual({ date: '2025-01-01', places: 3 })
+  expect(f.years).toEqual([{ year: 2025, km: 512, places: 4, trips: 0, flights: 1 }])
 })

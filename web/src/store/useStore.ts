@@ -3,8 +3,12 @@ import type { Bounds } from '../analytics/geo'
 
 export type InsightId = 'replay' | 'wrapped' | 'explore' | 'commute'
 export type Speed = 1 | 10 | 100
+export type Tab = 'home' | 'stats' | 'places' | 'trips' | 'map' | 'play'
+export const TABS: Tab[] = ['home', 'stats', 'places', 'trips', 'map', 'play']
 
 export interface Store {
+  tab: Tab
+  setTab(t: Tab): void
   timeRange: [number, number]
   playhead: number | null
   playing: boolean
@@ -27,6 +31,8 @@ export interface Store {
 }
 
 export const useStore = create<Store>((set) => ({
+  tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
+  setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play' }) },
   timeRange: [0, 0],
   playhead: null,
   playing: false,
