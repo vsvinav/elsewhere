@@ -23,12 +23,12 @@ export function Ring({ pct, label }: { pct: number; label: string }) {
 }
 
 /** Two bars on one scale: what you did against something you can picture. */
-export function Scale({ value, ref, refLabel, unit }: { value: number; ref: number; refLabel: string; unit: string }) {
+export function Scale({ value, ref, refLabel, unit, valueLabel = 'You' }: { value: number; ref: number; refLabel: string; unit: string; valueLabel?: string }) {
   const max = Math.max(value, ref)
   const w = (x: number) => `${Math.max(1.5, (100 * x) / max)}%`
   return (
-    <div className="fig scale" role="img" aria-label={`${n(value)} ${unit} against ${refLabel}, ${n(ref)} ${unit}`}>
-      <div className="row"><span className="lab">You</span><i className="c-red" style={{ width: w(value) }} /><span className="val">{n(value)} {unit}</span></div>
+    <div className="fig scale" role="img" aria-label={`${valueLabel}: ${n(value)} ${unit} against ${refLabel}, ${n(ref)} ${unit}`}>
+      <div className="row"><span className="lab">{valueLabel}</span><i className="c-red" style={{ width: w(value) }} /><span className="val">{n(value)} {unit}</span></div>
       <div className="row"><span className="lab">{refLabel}</span><i className="c-ink" style={{ width: w(ref) }} /><span className="val">{n(ref)} {unit}</span></div>
     </div>
   )
@@ -134,7 +134,7 @@ function interpolate(a: [number, number], b: [number, number], t: number): [numb
 export function Fig({ f }: { f: Figure }) {
   switch (f.t) {
     case 'ring': return <Ring pct={f.pct} label={f.label} />
-    case 'scale': return <Scale value={f.value} ref={f.ref} refLabel={f.refLabel} unit={f.unit} />
+    case 'scale': return <Scale value={f.value} ref={f.ref} refLabel={f.refLabel} unit={f.unit} valueLabel={f.valueLabel} />
     case 'dial': return <Dial hours={f.hours} />
     case 'week': return <Week cells={f.cells} />
     case 'globe': return <Globe lat={f.lat} lng={f.lng} homeLat={f.homeLat} homeLng={f.homeLng} />

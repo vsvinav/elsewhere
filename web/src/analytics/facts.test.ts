@@ -54,10 +54,10 @@ test('longestRun finds the longest matching streak with its dates', () => {
 test('facts: fires on a small record, converts to miles, and stays silent on an empty one', () => {
   const km = facts(data, 'km')
   const ids = km.map((f) => f.id)
-  expect(ids).toContain('countries')
+  expect(ids).toContain('hermit')
   expect(ids).toContain('furthest')
   expect(ids).toContain('walked')
-  expect(km.find((f) => f.id === 'countries')!.headline).toBe('2 of 195 countries')
+  expect(km.find((f) => f.id === 'hermit')!.headline).toBe('84 hours without leaving the house')
   // Sorted explored → record → scale → habit.
   const order = ['explored', 'record', 'scale', 'habit']
   expect(km.every((f, i) => i === 0 || order.indexOf(f.kind) >= order.indexOf(km[i - 1].kind))).toBe(true)
@@ -74,6 +74,6 @@ test('facts: a cut range only counts what happened inside it, but keeps firsts f
   const cut = filterData(data, [JAN + 7 * D, JAN + 10 * D])
   const f = facts(cut, 'km', data)
   expect(f.map((x) => x.id)).not.toContain('walked')
-  expect(f.map((x) => x.id)).not.toContain('countries')
+  expect(f.map((x) => x.id)).not.toContain('hermit')
   expect(f.find((x) => x.id === 'furthest')?.detail).toMatch(/January 8, 2025/)
 })
