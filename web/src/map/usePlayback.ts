@@ -34,7 +34,7 @@ export function usePlayback() {
         if (!leg) { leg = legs.find((a) => a.start > cur); if (!leg) { s.setPlaying(false); return }; cur = leg.start }
         seg = { kind: 'activity', start: leg.start, end: leg.end, s: { lat: leg.s_lat, lng: leg.s_lng }, e: { lat: leg.e_lat, lng: leg.e_lng }, mode: leg.mode, km: leg.m / 1000 }
       } else seg = segmentAt(data, cur)
-      const rate = Math.min(48 * 3600, Math.max(60, (seg.end - seg.start) / (realSeconds(seg) / s.speed)))
+      const rate = Math.min(48 * 3600 * Math.max(1, s.speed), Math.max(60, (seg.end - seg.start) / (realSeconds(seg) / s.speed)))
       const next = Math.min(cur + dt * rate, seg.end + 1)
       if (next >= r1) { s.setPlayhead(r1); s.setPlaying(false); return }
       // The rate the visuals see eases, so trail length does not snap at every segment boundary.

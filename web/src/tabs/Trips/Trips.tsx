@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { placeName } from '../../analytics/home'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
-import { TrailMap } from '../../world/TrailMap'
+import { TripMap } from '../../world/TripMap'
 import { date, label, n0 } from '../../world/fmt'
 
 export function Trips() {
@@ -59,7 +59,7 @@ export function Trips() {
                 </div>
                 {isOpen ? (
                   <>
-                    <TrailMap data={data} range={[t.start, t.end]} height={200} />
+                    <TripMap data={data} range={[t.start, t.end]} />
                     <div className="bars">
                       {km.slice(0, 4).map(([m, v], j) => (
                         <div className="bar" key={m}><span className="lab">{label(m)}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(v)} km</span></div>

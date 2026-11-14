@@ -54,16 +54,19 @@ export function useFollow() {
       if (!here) return
       const seg = segmentAt(data, now)
       const div = map.getDiv()
+      // Faster replay: a quicker camera and a wider frame, so the subject stays on screen instead of being chased.
+      const fast = Math.max(1, s.speed)
+      const quick = 1 / Math.sqrt(fast)
       const legZoom = seg.kind === 'visit' || !s.playing ? STAY_ZOOM : fitZoom(seg.s, seg.e, div.clientWidth * 0.7, div.clientHeight * 0.7)
-      const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, legZoom)) + zoomOffset.current
+      const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, legZoom - Math.log2(fast) * 0.8)) + zoomOffset.current
 
       if (!spr.current) {
         const c = map.getCenter()
         spr.current = { lng: { x: c?.lng() ?? here.lng, v: 0 }, lat: { x: c?.lat() ?? here.lat, v: 0 }, zoom: { x: map.getZoom() ?? zTarget, v: 0 } }
       }
       const sp = spr.current
-      step(sp.lng, here.lng, dt, POS_PERIOD_S); step(sp.lat, here.lat, dt, POS_PERIOD_S)
-      step(sp.zoom, zTarget, dt, ZOOM_PERIOD_S)
+      step(sp.lng, here.lng, dt, POS_PERIOD_S * quick); step(sp.lat, here.lat, dt, POS_PERIOD_S * quick)
+      step(sp.zoom, zTarget, dt, ZOOM_PERIOD_S * quick)
 
       const moved = Math.abs(sp.lng.v) + Math.abs(sp.lat.v) > 1e-7 || Math.abs(sp.zoom.v) > 1e-4
       if (moved || t - lastTarget.current > 500) {

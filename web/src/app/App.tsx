@@ -15,6 +15,7 @@ import { Pass, Field } from '../world'
 import { RangeBar } from './RangeBar'
 
 // deck.gl and Google Maps only ship when the map opens.
+const FlightScreen = lazy(() => import('../tabs/Flights/Flights').then((m) => ({ default: m.Flights })))
 const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: m.MapScreen })))
 
 export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void }
@@ -35,7 +36,7 @@ export function App() {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch(setError)
   }, [adopt])
   const tab = useStore((s) => s.tab)
-  const onMap = tab === 'map' || tab === 'play'
+  const onMap = tab === 'map' || tab === 'play' || tab === 'flights'
   useEffect(() => {
     if (!onMap || !record || record.paths.length) return
     let live = true
@@ -74,6 +75,7 @@ export function App() {
 function Screen() {
   const tab = useStore((s) => s.tab)
   if (tab === 'map' || tab === 'play') return <Suspense fallback={<Printing />}><MapScreen /></Suspense>
+  if (tab === 'flights') return <Suspense fallback={<Printing />}><FlightScreen /></Suspense>
   if (tab === 'stats') return <Stats />
   if (tab === 'places') return <Places />
   if (tab === 'trips') return <Trips />

@@ -18,7 +18,7 @@ const loadLand = () => (land ??= import('world-atlas/countries-110m.json').then(
 }))
 
 /** Flights as raised great-circle arcs over a cream relief; the camera tilts and the visitor can orbit it. */
-export function FlightMap({ data, height = 520 }: { data: Data; height?: number }) {
+export function FlightMap({ data, height = 520, fill = false }: { data: Data; height?: number; fill?: boolean }) {
   const { hops, ports } = useMemo(() => flights(data), [data])
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -30,9 +30,10 @@ export function FlightMap({ data, height = 520 }: { data: Data; height?: number 
     if (!el || !ports.length) return
     const w = el.clientWidth || 1000, h = el.clientHeight || height
     const lngs = ports.map((p) => p.p[0]), lats = ports.map((p) => p.p[1])
-    const vp = new WebMercatorViewport({ width: w, height: h }).fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: w > 700 ? { top: 60, bottom: 40, left: 60, right: 120 } : 24 })
-    setView({ longitude: vp.longitude, latitude: vp.latitude, zoom: Math.min(vp.zoom, 5) - 0.25, pitch: w > 700 ? 48 : 35, bearing: -8, minZoom: 0, maxZoom: 8, minPitch: 0, maxPitch: 65 })
-  }, [ports, height])
+    const vp = new WebMercatorViewport({ width: w, height: h }).fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: w > 700 ? { top: 60, bottom: fill ? 200 : 40, left: 60, right: 120 } : { top: 100, bottom: fill ? h * 0.5 : 24, left: 24, right: 24 } })
+    // Under pitch the ground sits low on a tall phone; aim the camera south so the routes clear the stub.
+    setView({ longitude: vp.longitude, latitude: vp.latitude - (fill && w <= 700 ? 22 : 0), zoom: Math.min(vp.zoom, 5) - 0.25, pitch: w > 700 ? 48 : 35, bearing: -8, minZoom: 0, maxZoom: 8, minPitch: 0, maxPitch: 65 })
+  }, [ports, height, fill])
   const wide = (ref.current?.clientWidth ?? 1000) > 700
   const maxN = hops.reduce((m, h) => Math.max(m, h.n), 1)
   const layers = [
@@ -50,15 +51,15 @@ export function FlightMap({ data, height = 520 }: { data: Data; height?: number 
     new TextLayer<Port>({
       id: 'port-labels', data: wide ? ports.filter((p) => p.name).slice(0, 10) : [], getPosition: (d) => d.p, getText: (d) => d.name.toUpperCase(),
       getColor: INK, getSize: 12, fontFamily: '"Big Shoulders Display Variable", Impact, sans-serif', fontWeight: 800,
-      fontSettings: { sdf: true, buffer: 4 }, outlineWidth: 4, outlineColor: [239, 230, 210, 235], getTextAnchor: 'start', getPixelOffset: [10, -2],
+      fontSettings: { sdf: true, buffer: 3 }, outlineWidth: 2, outlineColor: [239, 230, 210, 235], getTextAnchor: 'start', getPixelOffset: [10, -2],
       characterSet: 'auto',
     }),
   ].filter(Boolean)
   return (
-    <div ref={ref} className="flightmap" style={{ height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
+    <div ref={ref} className={`flightmap ${fill ? 'fill' : ''}`} style={fill ? undefined : { height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
       {view && (
         <DeckGL views={new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => setView(e.viewState as MapViewState)}
-          controller={{ scrollZoom: false, dragRotate: true, touchRotate: true, keyboard: false }} layers={layers} style={{ position: 'absolute', inset: '0' }}
+          controller={{ scrollZoom: fill, dragRotate: true, touchRotate: true, keyboard: false }} layers={layers} style={{ position: 'absolute', inset: '0' }}
           getCursor={({ isDragging }) => (isDragging ? 'grabbing' : 'grab')} />
       )}
       <span className="hint">Drag to orbit</span>

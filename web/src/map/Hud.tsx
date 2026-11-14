@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../data/DataContext'
-import { SPEEDS, SPEED_LABEL, useStore, useThrottledPlayhead } from '../store/useStore'
+import { useStore, useThrottledPlayhead } from '../store/useStore'
 import { whereaboutsAt } from '../analytics/position'
 import { placeName } from '../analytics/home'
 import { fmtTime } from '../analytics/format'
@@ -54,7 +54,10 @@ export function Hud() {
             {playing ? <svg viewBox="0 0 16 16" width="16" height="16"><rect x="2" y="2" width="4" height="12" fill="currentColor" /><rect x="10" y="2" width="4" height="12" fill="currentColor" /></svg>
               : <svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 2l11 6-11 6z" fill="currentColor" /></svg>}
           </button>
-          {SPEEDS.map((s) => <button key={s} className={s === speed ? 'on' : ''} onClick={() => setSpeed(s)}>{SPEED_LABEL[s]}</button>)}
+          <label className="hud-speed">
+            <span>{speed < 10 ? speed.toFixed(1) : Math.round(speed)}×</span>
+            <input type="range" min={-1} max={5} step={0.1} value={Math.log2(speed)} aria-label="Replay speed" onChange={(e) => setSpeed(2 ** +e.target.value)} />
+          </label>
           {!follow && <button className="on" onClick={() => setFollow(true)}>Follow</button>}
         </div>
       </div>

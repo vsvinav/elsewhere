@@ -1,6 +1,6 @@
 import { TABS, useStore, type Tab } from '../store/useStore'
 
-const LABEL: Record<Tab, string> = { home: 'Tour', stats: 'Numbers', places: 'Stops', trips: 'Dates', map: 'Map', play: 'Replay' }
+const LABEL: Record<Tab, string> = { home: 'Tour', stats: 'Numbers', places: 'Stops', trips: 'Dates', flights: 'Flights', map: 'Map', play: 'Replay' }
 
 export function StubNav() {
   const tab = useStore((s) => s.tab)

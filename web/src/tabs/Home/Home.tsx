@@ -1,15 +1,11 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { homeFacts, placeName } from '../../analytics/home'
 import { tour } from '../../analytics/tour'
 import { lensOf } from '../../analytics/lens'
 import { Bill, CountUp, Field, Stamp, Sticker } from '../../world'
-import { flights } from '../../world/flights'
-// deck.gl stays off the first paint; the bill shows its figures while the relief loads.
-const FlightMap = lazy(() => import('../../world/FlightMap').then((m) => ({ default: m.FlightMap })))
 import { TrailMap } from '../../world/TrailMap'
 import { date, dateISO, label, n0 } from '../../world/fmt'
-import type { Data } from '../../data/types'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
 
@@ -100,8 +96,6 @@ export function Home() {
         </div>
       </Bill>
 
-      {f.flights > 0 && <FlightsBill data={data} />}
-
       <Bill tone="red">
         <div className="two">
           <div>
@@ -148,21 +142,3 @@ export function Home() {
   )
 }
 
-function FlightsBill({ data }: { data: Data }) {
-  const { hops, ports } = useMemo(() => flights(data), [data])
-  const km = hops.reduce((s, h) => s + h.km * h.n, 0)
-  const longest = [...hops].sort((a, b) => b.km - a.km)[0]
-  // Ports are bucketed to 0.1°, so match by cell, not by exact coordinate.
-  const name = (p: [number, number]) => ports.find((x) => Math.abs(x.p[0] - p[0]) < 0.1 && Math.abs(x.p[1] - p[1]) < 0.1)?.name || 'somewhere'
-  return (
-    <Bill className="flights">
-      <div className="caps">Air legs · every route flown, raised off the sheet</div>
-      <div className="num"><CountUp value={km} /><small>km flown</small></div>
-      <Suspense fallback={<div className="flightmap" style={{ height: 520 }} />}><FlightMap data={data} /></Suspense>
-      <div className="foot">
-        <span>{hops.length} {hops.length === 1 ? 'route' : 'routes'} · {ports.length} airports</span>
-        {longest && <span>Longest hop {n0(longest.km)} km · {name(longest.s)} ↔ {name(longest.t)}</span>}
-      </div>
-    </Bill>
-  )
-}

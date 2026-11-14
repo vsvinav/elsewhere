@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import type { Lens } from '../analytics/lens'
 
-export type Tab = 'home' | 'stats' | 'places' | 'trips' | 'map' | 'play'
-export const TABS: Tab[] = ['home', 'stats', 'places', 'trips', 'map', 'play']
+export type Tab = 'home' | 'stats' | 'places' | 'trips' | 'flights' | 'map' | 'play'
+export const TABS: Tab[] = ['home', 'stats', 'places', 'trips', 'flights', 'map', 'play']
 /** Replay pace: multiplier on the per-segment timing (each leg plays for a few seconds, each stay for about one). */
-export const SPEEDS = [0.5, 1, 2] as const
-export const SPEED_LABEL: Record<number, string> = { 0.5: 'Slow', 1: 'Normal', 2: 'Fast' }
 
 export interface Store {
   tab: Tab
