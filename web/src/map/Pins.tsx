@@ -27,8 +27,10 @@ export function PinHud() {
   const hits = useMemo(() => {
     const t = q.trim().toLowerCase()
     if (t.length < 2) return []
-    return shown.filter((s) => `${placeName(s.p, s.id)} ${s.p.city ?? ''}`.toLowerCase().includes(t)).sort((a, b) => b.p.n_visits - a.p.n_visits).slice(0, 6)
-  }, [q, shown])
+    // Homes are searchable too, even though the chips never count them.
+    const pool = [...shown, ...Object.entries(data.places).filter(([, p]) => isHome(p)).map(([id, p]) => ({ id, p, cat: categoryOf(p) }))]
+    return pool.filter((s) => `${placeName(s.p, s.id)} ${s.p.city ?? ''}`.toLowerCase().includes(t)).sort((a, b) => b.p.n_visits - a.p.n_visits).slice(0, 6)
+  }, [q, shown, data])
 
   const go = (id: string) => {
     const p = data.places[id]

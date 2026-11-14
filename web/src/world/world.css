@@ -564,7 +564,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .pins-fit { padding: 7px 12px 6px; }
 .pin-card { position: absolute; right: -3px; bottom: calc(100% + 12px); width: 260px; --tilt: -0.8deg; z-index: 6; }
 .pin-card .close { position: absolute; top: 6px; right: 8px; font: 700 20px/1 var(--body); background: none; border: 0; color: var(--ink-3); cursor: pointer; }
-.pin-card .lab { display: flex; align-items: center; gap: 6px; }
+.pin-card .lab { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.pin-card .name { min-height: 0; }
 .pin-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
 .pin-facts dt { font: 800 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
 .pin-facts dd { margin: 2px 0 0; font: 600 14px/1.1 var(--body); }

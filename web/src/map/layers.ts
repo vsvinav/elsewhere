@@ -1,4 +1,5 @@
 import { isHome } from '../analytics/geo'
+import { cluster, type Group } from './cluster'
 import { IconLayer, PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Layer } from 'deck.gl'
 import type { Data, Place } from '../data/types'
 import { whereaboutsAt } from '../analytics/position'
@@ -9,6 +10,7 @@ import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
 type RGBA = [number, number, number, number]
 const STOCK: RGBA = [239, 230, 210, 255]
 const INK: RGBA = [20, 20, 20, 255]
+const RED: RGBA = [214, 60, 32, 255]
 export const LONG_TRAIL_S = 7 * 86400
 const HEAD_REAL_S = 4
 
@@ -28,6 +30,9 @@ const ICON: Record<Lens | 'still', { url: string; width: number; height: number;
 }
 // The map pin: a teardrop with a stock hole, anchored at its point.
 const PIN = { url: svg('M16 1C9.9 1 5 5.9 5 12c0 8 11 19 11 19s11-11 11-19c0-6.1-4.9-11-11-11zm0 6.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z'), width: 64, height: 64, anchorY: 64, mask: true as const }
+// Same teardrop, solid: drawn under the coloured one a touch larger as its ink outline.
+const PIN_BACK = { url: svg('M16 1C9.9 1 5 5.9 5 12c0 8 11 19 11 19s11-11 11-19c0-6.1-4.9-11-11-11z'), width: 64, height: 64, anchorY: 64, mask: true as const }
+const HOUSE = { url: svg('M16 3 2 15h4v13h8v-8h4v8h8V15h4z'), width: 64, height: 64, mask: true as const }
 interface Dot extends Place { id: string; title: string; cat: Cat; ink: RGBA }
 const CAT_INK = Object.fromEntries(Object.entries(CAT_COLOR).map(([k, v]) => [k, rgba(v)])) as Record<Cat, RGBA>
 
@@ -37,16 +42,17 @@ export function buildTrails(data: Data, t0: number): Trail[] {
 }
 
 // Trails key on the record's geometry and dots on its places, so a place-name flush never re-uploads 80k points.
-let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; all: Dot[]; shown: { key: string; dots: Dot[]; labels: Map<number, Dot[]> }; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null } | null = null
+let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; all: Dot[]; shown: { key: string; dots: Dot[]; labels: Map<number, Dot[]>; clusters: Map<number, { singles: Dot[]; groups: Group<Dot>[] }> }; homes: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null } | null = null
 function prepared(data: Data) {
-  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], all: [], shown: { key: '', dots: [], labels: new Map() }, labels: new Map(), active: [], activeIdx: [], activeOf: null }
+  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], all: [], shown: { key: '', dots: [], labels: new Map(), clusters: new Map() }, homes: [], labels: new Map(), active: [], activeIdx: [], activeOf: null }
   if (cache.places !== data.places) {
     cache.places = data.places
     // Replay dots are the places you kept going back to; the Map tab pins every stop.
     cache.all = Object.entries(data.places).filter(([, p]) => !isHome(p))
       .map(([id, p]) => { const cat = categoryOf(p); return { ...p, id, title: (p.name ?? p.label ?? '').trim(), cat, ink: CAT_INK[cat] } }).sort((a, b) => b.n_visits - a.n_visits)
     cache.dots = cache.all.filter((d) => d.n_visits >= 2)
-    cache.shown = { key: '', dots: [], labels: new Map() }
+    cache.homes = Object.entries(data.places).filter(([, p]) => isHome(p)).map(([id, p]) => ({ ...p, id, title: (p.name ?? p.label ?? 'Home').trim(), cat: 'other' as Cat, ink: RED }))
+    cache.shown = { key: '', dots: [], labels: new Map(), clusters: new Map() }
     cache.labels = new Map()
   }
   return cache
@@ -89,32 +95,49 @@ export interface PinOpts { hidden: Cat[]; selected: string | null; sizeBy: 'visi
 export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   const c = prepared(data)
   const key = o.hidden.slice().sort().join()
-  if (c.shown.key !== key || c.shown.dots.length === 0) c.shown = { key, dots: o.hidden.length ? c.all.filter((d) => !o.hidden.includes(d.cat)) : c.all, labels: new Map() }
-  const dots = c.shown.dots
+  if (c.shown.key !== key || (c.shown.dots.length === 0 && c.all.length)) c.shown = { key, dots: o.hidden.length ? c.all.filter((d) => !o.hidden.includes(d.cat)) : c.all, labels: new Map(), clusters: new Map() }
   const zb = Math.floor(zoom * 2) / 2
+  let cl = c.shown.clusters.get(zb)
+  if (!cl) c.shown.clusters.set(zb, (cl = cluster(c.shown.dots, zb, 60)))
+  const { singles, groups } = cl
   let labelled = c.shown.labels.get(zb)
-  if (!labelled) c.shown.labels.set(zb, (labelled = labelDots(dots, zb)))
-  const size = (d: Dot) => 18 + Math.min(16, Math.sqrt(o.sizeBy === 'visits' ? d.n_visits : d.total_hours / 2) * 2)
-  const sel = o.selected ? dots.find((d) => d.id === o.selected) : undefined
+  if (!labelled) c.shown.labels.set(zb, (labelled = labelDots(singles, zb)))
+  const weight = (d: Dot) => (o.sizeBy === 'visits' ? d.n_visits : d.total_hours / 3)
+  const size = (d: Dot) => 16 + Math.min(14, Math.sqrt(weight(d)) * 2.2)
+  const sel = o.selected ? c.all.find((d) => d.id === o.selected) : undefined
+  const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 } } as const
   const layers: Layer[] = [
-    new IconLayer<Dot>({
-      id: 'places', data: dots, pickable: true,
-      getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: (d) => (d.id === o.selected ? INK : d.ink),
-      getSize: size, sizeUnits: 'pixels', billboard: false,
-      updateTriggers: { getColor: [o.selected], getSize: [o.sizeBy] },
+    // Groups: an ink disc sized by how many stops it holds, the count printed in stock.
+    new ScatterplotLayer<Group<Dot>>({
+      id: 'groups', data: groups, pickable: true, getPosition: (d) => [d.lng, d.lat],
+      radiusUnits: 'pixels', getRadius: (d) => 10 + Math.min(12, Math.log2(d.items.length) * 2.2),
+      getFillColor: INK, stroked: true, getLineColor: STOCK, lineWidthUnits: 'pixels', getLineWidth: 2,
     }),
+    new TextLayer<Group<Dot>>({
+      id: 'group-counts', data: groups, getPosition: (d) => [d.lng, d.lat], getText: (d) => String(d.items.length),
+      getColor: STOCK, getSize: 12, ...font, getTextAnchor: 'middle', getAlignmentBaseline: 'center',
+    }),
+    // Singles: a small pin in its category's ink over an ink outline.
+    new IconLayer<Dot>({ id: 'pin-back', data: singles, getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN_BACK, getColor: INK, getSize: (d) => size(d) + 4, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy] } }),
+    new IconLayer<Dot>({
+      id: 'places', data: singles, pickable: true,
+      getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: (d) => d.ink,
+      getSize: size, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy] },
+    }),
+    // Homes stay put whatever is toggled: a red house with an ink outline.
+    new IconLayer<Dot>({ id: 'home-back', data: c.homes, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: INK, getSize: 26, sizeUnits: 'pixels', billboard: false }),
+    new IconLayer<Dot>({ id: 'homes', data: c.homes, pickable: true, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: RED, getSize: 20, sizeUnits: 'pixels', billboard: false }),
     new TextLayer<Dot>({
-      id: 'labels', data: labelled,
-      getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
-      getColor: INK, getSize: 11, fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
-      outlineWidth: 2, outlineColor: [239, 230, 210, 235],
-      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [10, -14],
+      id: 'labels', data: labelled, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
+      getColor: INK, getSize: 11, ...font, outlineWidth: 2, outlineColor: [239, 230, 210, 235],
+      getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [9, -13],
     }),
   ]
   if (sel) {
     // The open pin sits on top with a stock halo, so it reads in a crowd.
-    layers.push(new ScatterplotLayer<Dot>({ id: 'pin-halo', data: [sel], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 16, radiusMaxPixels: 16, getFillColor: [239, 230, 210, 160], stroked: true, getLineColor: INK, lineWidthMinPixels: 2 }),
-      new IconLayer<Dot>({ id: 'pin-top', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: INK, getSize: size(sel) + 8, sizeUnits: 'pixels', billboard: false }))
+    layers.push(new ScatterplotLayer<Dot>({ id: 'pin-halo', data: [sel], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 18, radiusMaxPixels: 18, getFillColor: [239, 230, 210, 170], stroked: true, getLineColor: INK, lineWidthMinPixels: 2 }),
+      new IconLayer<Dot>({ id: 'pin-top-back', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN_BACK, getColor: INK, getSize: size(sel) + 12, sizeUnits: 'pixels', billboard: false }),
+      new IconLayer<Dot>({ id: 'pin-top', data: [sel], getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: sel.ink, getSize: size(sel) + 8, sizeUnits: 'pixels', billboard: false }))
   }
   return layers
 }

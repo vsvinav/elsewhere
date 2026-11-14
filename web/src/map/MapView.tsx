@@ -26,8 +26,11 @@ const onHover = (info: { object?: unknown; x: number; y: number }) => {
   useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
 }
 const onClick = (info: { object?: unknown }) => {
-  const o = info.object as { id: string } | undefined
-  if (useStore.getState().tab === 'map') useStore.getState().setPin(o?.id ?? null)
+  if (useStore.getState().tab !== 'map') return
+  const o = info.object as { id?: string; items?: unknown[]; lng: number; lat: number } | undefined
+  const cam = liveCam.get()
+  if (o?.items && cam) { cam.move({ lng: o.lng, lat: o.lat }, Math.min(18, cam.zoom() + 2.5)); return }
+  useStore.getState().setPin(o?.id ?? null)
 }
 
 /** Layers update straight from the store on an animation frame; React never renders for the playhead. Map tab opens on the whole record; Play follows the playhead. */
