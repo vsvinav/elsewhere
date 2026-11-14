@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from 'react'
 
 /** Content prints in top-down, line by line, the first time it scrolls into view. */
 export function PrintIn({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -51,9 +51,7 @@ export function Field({ label, children, ghost = false, big = false }: { label: 
   )
 }
 
-/** A pass: printed body on stock plus a torn-off stub. */
-export function Pass({ children, stub, stripe = false, share = true, className = '' }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string }) {
-  const ref = useRef<HTMLElement>(null)
+function useSave(ref: RefObject<HTMLElement | null>) {
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
   const save = async (e: MouseEvent) => {
     e.stopPropagation()
@@ -61,7 +59,7 @@ export function Pass({ children, stub, stripe = false, share = true, className =
     if (!el || state === 'busy') return
     setState('busy')
     try {
-      const name = el.querySelector('h1, h2, h3, .val')?.textContent ?? 'card'
+      const name = el.querySelector('h1, h2, h3, .val, .num')?.textContent ?? 'card'
       await (await import('../share/saveCard')).saveCard(el, name)
       setState('idle')
     } catch (err) {
@@ -71,6 +69,13 @@ export function Pass({ children, stub, stripe = false, share = true, className =
     }
   }
   const label = { idle: 'Save', busy: 'Saving…', failed: "Couldn't save" }[state]
+  return { state, save, label }
+}
+
+/** A pass: printed body on stock plus a torn-off stub. */
+export function Pass({ children, stub, stripe = false, share = true, className = '' }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string }) {
+  const ref = useRef<HTMLElement>(null)
+  const { state, save, label } = useSave(ref)
   return (
     <article ref={ref} className={`pass ${stub ? '' : 'one'} ${className}`}>
       <div className={`body ${stub ? 'perf' : ''}`}>
@@ -80,6 +85,38 @@ export function Pass({ children, stub, stripe = false, share = true, className =
       {stub && <aside className="stub">{stub}</aside>}
       {share && <button type="button" className="save" onClick={save} disabled={state === 'busy'} aria-label="Save this pass as an image">{label}</button>}
     </article>
+  )
+}
+
+/** A bill: one full-bleed poster chapter. Peels off the stack as it scrolls in. */
+export function Bill({ children, tone, share = true, className = '', id }: { children: ReactNode; tone?: 'ink' | 'red'; share?: boolean; className?: string; id?: string }) {
+  const ref = useRef<HTMLElement>(null)
+  const { state, save, label } = useSave(ref)
+  return (
+    <section ref={ref} id={id} className={`bill ${tone ?? ''} ${className}`}>
+      <div className="peel">{children}</div>
+      {share && <button type="button" className="save" onClick={save} disabled={state === 'busy'} aria-label="Save this bill as an image">{label}</button>}
+    </section>
+  )
+}
+
+/** Round record stamp: a small line, a big figure, a small line. */
+export function Stamp({ top, big, bottom, tone, size, style }: { top: string; big: string | number; bottom?: string; tone?: 'ink'; size?: 'sm'; style?: CSSProperties }) {
+  return <div className={`stamp ${tone ?? ''} ${size ?? ''}`} style={style} aria-hidden>
+    <div>{top}<b>{big}</b>{bottom}</div>
+  </div>
+}
+
+/** A place slapped on the sheet: photo (or blank stock), name, where. */
+export function Sticker({ photo, name, sub, tilt, children, onClick }: { photo?: string | null; name: string; sub?: string | null; tilt?: number; children?: ReactNode; onClick?(): void }) {
+  const Tag = onClick ? 'button' : 'div'
+  return (
+    <Tag className="sticker" style={tilt != null ? ({ '--tilt': `${tilt}deg` } as CSSProperties) : undefined} onClick={onClick} type={onClick ? 'button' : undefined}>
+      {photo ? <img className="photo" src={photo} alt="" loading="lazy" /> : <div className="blank caps">no photo on record</div>}
+      <div className="name">{name}</div>
+      {sub && <div className="sub">{sub}</div>}
+      {children}
+    </Tag>
   )
 }
 

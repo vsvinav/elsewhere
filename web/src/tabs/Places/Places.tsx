@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { placeName } from '../../analytics/home'
 import { isHome, isWork } from '../../analytics/geo'
-import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
-import { TrailMap } from '../../world/TrailMap'
+import { Barcode, CountUp, Field, Pass, PrintIn, Sticker } from '../../world'
+import { PlaceMap } from '../../world/PlaceMap'
 import { date, hours, n0 } from '../../world/fmt'
 import type { Place } from '../../data/types'
 
@@ -55,9 +55,11 @@ export function Places() {
               <Field label="City">{sel.city}</Field>
               <Field label="Address">{sel.address}</Field>
             </div>
-            <div className="big" style={{ fontSize: 'clamp(44px, 7vw, 96px)', lineHeight: 1 }}>{placeName(sel, open)}</div>
-            {sel.photo && <img className="photo" src={sel.photo} alt="" style={{ marginTop: 22, width: '100%', aspectRatio: '21 / 9', objectFit: 'cover' }} />}
-            <TrailMap data={data} mark={sel} height={180} />
+            <div className="big" style={{ fontSize: 'clamp(44px, 7vw, 96px)', lineHeight: 0.9 }}>{placeName(sel, open)}</div>
+            <div className="two" style={{ marginTop: 32 }}>
+              <PlaceMap place={sel} height={360} />
+              <Sticker photo={sel.photo} name={placeName(sel, open)} sub={[sel.city, sel.country_code].filter(Boolean).join(', ') || 'city not on record'} tilt={1.5} />
+            </div>
             <button className="btn quiet" onClick={() => setOpen(null)}>Back to all places</button>
           </PrintIn>
         </Pass>

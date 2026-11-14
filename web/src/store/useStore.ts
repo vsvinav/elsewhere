@@ -21,7 +21,6 @@ export interface Store {
   /** Movement lens; Play cuts between matching legs, the map draws only that ink. */
   lens: Lens
   setLens(l: Lens): void
-  basemap: 'dark' | 'light'
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
   setRange(r: [number, number] | null): void
@@ -30,7 +29,6 @@ export interface Store {
   setPlaying(p: boolean): void
   setSpeed(s: number): void
   setFollow(f: boolean): void
-  toggleBasemap(): void
   setHoverPlace(h: Store['hoverPlace']): void
 }
 
@@ -63,7 +61,6 @@ export const useStore = create<Store>((set) => ({
   follow: true,
   lens: 'all',
   setLens: (lens) => set({ lens }),
-  basemap: 'dark',
   range: null,
   setRange: (range) => set({ range, playhead: range ? range[0] : null }),
   hoverPlace: null,
@@ -71,6 +68,5 @@ export const useStore = create<Store>((set) => ({
   setPlaying: (playing) => set(playing ? { playing, follow: true } : { playing }),
   setSpeed: (speed) => set({ speed }),
   setFollow: (follow) => set({ follow }),
-  toggleBasemap: () => set((s) => ({ basemap: s.basemap === 'dark' ? 'light' : 'dark' })),
   setHoverPlace: (hoverPlace) => set({ hoverPlace }),
 }))

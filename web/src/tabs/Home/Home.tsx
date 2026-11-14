@@ -1,166 +1,168 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
-import { homeFacts } from '../../analytics/home'
-import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
+import { homeFacts, placeName } from '../../analytics/home'
+import { tour } from '../../analytics/tour'
+import { lensOf } from '../../analytics/lens'
+import { Bill, CountUp, Field, Stamp, Sticker } from '../../world'
+import { flights } from '../../world/flights'
+// deck.gl stays off the first paint; the bill shows its figures while the relief loads.
+const FlightMap = lazy(() => import('../../world/FlightMap').then((m) => ({ default: m.FlightMap })))
 import { TrailMap } from '../../world/TrailMap'
 import { date, dateISO, label, n0 } from '../../world/fmt'
+import type { Data } from '../../data/types'
+import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
 
+const INK: Record<string, string> = { fly: 'red', foot: 'mustard', drive: '', transit: '' }
+const yearSpan = ([a, b]: [number, number]) => (a === b ? String(a) : `${a}–${b}`)
+
+/** Home is the poster: a stack of bills you peel through. */
 export function Home() {
   const data = useData()
   const f = useMemo(() => homeFacts(data), [data])
+  const t = useMemo(() => tour(data), [data])
   const [name, setName] = useState(() => localStorage.getItem('elsewhere.name') ?? '')
-  const code = `ELSW ${date(f.range[0]).replace(/ /g, '')} ${date(f.range[1]).replace(/ /g, '')} ${data.meta.source_sha256.slice(0, 8).toUpperCase()}`
-  const topMode = f.kmByMode[0]
+  const setTab = useStore((s) => s.setTab)
+  const act = t.headline
+  const actPlace = act ? data.places[act.place_id] : undefined
   const hoursTotal = f.hours.home + f.hours.work + f.hours.other + f.hours.transit
-  const pct = (h: number) => (100 * h) / Math.max(1, hoursTotal)
+  const pct = (h: number) => Math.round((100 * h) / Math.max(1, hoursTotal))
+  const sixStops = t.stops.slice(0, 6)
 
   return (
-    <main className="strip">
-      <Pass stripe stub={
-        <PrintIn>
-          <Field label="Flights" big><CountUp value={f.flights} /></Field>
-          <Field label="Trips" big><CountUp value={f.trips} /></Field>
-          <Field label="Places" big><CountUp value={f.places} /></Field>
-          <Field label="Countries" big><CountUp value={f.countries} /></Field>
-          <Barcode text={code} />
-        </PrintIn>
-      }>
-        <PrintIn>
-          <div className="fields">
-            <div className="field">
-              <div className="lab">Passenger</div>
-              <input className="val" value={name} placeholder="add your name" aria-label="Passenger name"
-                onChange={(e) => { setName(e.target.value); localStorage.setItem('elsewhere.name', e.target.value) }} />
+    <main className="bills">
+      <Bill className="hero">
+        <div className="two">
+          <div>
+            <div className="caps">{name ? `${name} ·` : 'Your'} {yearSpan(t.years)} · live from {n0(f.days)} days of record</div>
+            <h1 className="title"><span className="misreg">World</span><span className="misreg red">Tour</span></h1>
+            <p className="lede sub">Everywhere your phone slept, every leg between. {n0(f.places)} places, {n0(f.cities)} cities, {n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}.</p>
+            <TrailMap data={data} className="map drift" />
+          </div>
+          <div>
+            <ol className="dates" aria-label="Where you slept">
+              {sixStops.map((s) => (
+                <li key={s.city}>
+                  <span className="where">{s.city}{s.country && <small>{s.country}</small>}</span>
+                  <span className="n">{s.nights}<small>{s.nights === 1 ? 'night' : 'nights'}</small></span>
+                </li>
+              ))}
+              {t.stops.length > 6 && <li className="more"><button className="caps" style={{ color: 'inherit', letterSpacing: 'inherit' }} onClick={() => setTab('trips')}>+ {t.stops.length - 6} more cities →</button></li>}
+              {!t.stops.length && <li className="more">No nights away on record</li>}
+            </ol>
+          </div>
+        </div>
+        <div className="foot">
+          <span>{n0(f.cities)} cities · {n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}</span>
+          <span><CountUp value={f.totalKm} /> km</span>
+        </div>
+        <Stamp top="Official record" big={String(t.years[1])} bottom="live" />
+      </Bill>
+
+      {act && (
+        <Bill tone="ink">
+          <div className="two">
+            <div>
+              <div className="caps">Headline act · farthest from home</div>
+              <h2 className="word">{act.city}</h2>
+              <p className="lede">{n0(act.km)} km from home. {act.nights} {act.nights === 1 ? 'night' : 'nights'}, {date(act.start)} → {date(act.end)}.</p>
+              <ol className="dates" style={{ marginTop: 40 }}>
+                {f.longestTrip && <li><span className="where">Longest trip<small>{f.longestTrip.anchor_cities.slice(0, 2).join(' · ') || 'away'}</small></span><span className="n">{f.longestTrip.nights}<small>nights</small></span></li>}
+                <li><span className="where">Nights away</span><span className="n">{n0(t.nightsAway)}</span></li>
+                <li><span className="where">Nights home</span><span className="n">{n0(t.nightsHome)}</span></li>
+                <li><span className="where">Trips</span><span className="n">{f.trips}</span></li>
+              </ol>
             </div>
-            <Field label="Record">{date(f.range[0])} → {date(f.range[1])} · {n0(f.days)} days</Field>
-            <Field label="Issued by">elsewhere</Field>
+            <div style={{ display: 'grid', justifyItems: 'end', paddingTop: 24 }}>
+              <Sticker photo={actPlace?.photo} name={placeName(actPlace, act.place_id)} sub={[actPlace?.address, act.country].filter(Boolean).join(' · ') || null} tilt={2} onClick={() => setTab('places')}>
+                <Stamp size="sm" top="" big={`${Math.round(act.km / 100) / 10}k`} bottom="km out" />
+              </Sticker>
+            </div>
           </div>
-          <div className="big"><CountUp value={f.totalKm} /><small>KM</small></div>
-          <div className="route">
-            {f.topCities.map((c, i) => <span key={c}>{i > 0 && <span className="arrow">→ </span>}{c}</span>)}
-          </div>
-          <TrailMap data={data} />
-        </PrintIn>
-      </Pass>
-
-      <Pass stub={
-        <PrintIn>
-          {f.kmByMode.slice(0, 3).map(([m, km]) => (
-            <Field key={m} label={label(m)} big>{Math.round((100 * km) / f.totalKm)}<small style={{ fontSize: '0.5em' }}>%</small></Field>
-          ))}
-          <Field label="Around the Earth" big>{(f.totalKm / 40075).toFixed(1)}×</Field>
-        </PrintIn>
-      }>
-        <PrintIn>
-          <div className="fields"><Field label="Mostly by">{topMode ? label(topMode[0]) : ''}</Field><Field label="Modes on record">{f.kmByMode.length}</Field></div>
-          <div className="big"><CountUp value={topMode?.[1] ?? 0} /><small>KM {topMode ? label(topMode[0]).toUpperCase() : ''}</small></div>
-          <div className="bars">
-            {f.kmByMode.map(([m, km], i) => (
-              <div className="bar" key={m}>
-                <span className="lab">{label(m)}</span>
-                <span className="track"><i className={i === 0 ? 'orange' : i === 1 ? 'blue' : ''} style={{ width: `${(100 * km) / f.kmByMode[0][1]}%` }} /></span>
-                <span className="num">{n0(km)} km</span>
-              </div>
-            ))}
-          </div>
-        </PrintIn>
-      </Pass>
-
-      <Pass stub={
-        <PrintIn>
-          <Field label="Most visited" big>{f.thirdPlaces[0] ? <CountUp value={f.thirdPlaces[0].place.n_visits} /> : null}</Field>
-          <Field label="Place">{f.thirdPlaces[0]?.name}</Field>
-          <Field label="Cities" big><CountUp value={f.cities} /></Field>
-        </PrintIn>
-      }>
-        <PrintIn>
-          <div className="fields"><Field label="Third places">Not home, not work</Field><Field label="Enriched">{Object.values(data.places).filter((p) => p.name).length} of {Object.keys(data.places).length} named</Field></div>
-          <div className="big"><CountUp value={f.places} /><small>PLACES</small></div>
-          <ol className="plist">
-            {f.thirdPlaces.map((p, i) => (
-              <li key={p.id}>
-                <span className="rank">0{i + 1}</span>
-                <span><div className="name">{p.name}</div><div className="sub">{[p.place.city, p.place.address].filter(Boolean).join(' · ') || 'address not on record'}</div></span>
-                <span className="n">{p.place.n_visits} <small style={{ font: '500 13px var(--body)', color: 'var(--ink-3)' }}>visits</small></span>
-              </li>
-            ))}
-          </ol>
-        </PrintIn>
-      </Pass>
-
-      <Pass stub={
-        <PrintIn>
-          <Field label="Home" big>{Math.round(pct(f.hours.home))}%</Field>
-          <Field label="Work" big>{Math.round(pct(f.hours.work))}%</Field>
-          <Field label="Elsewhere" big>{Math.round(pct(f.hours.other))}%</Field>
-          <Field label="In transit" big>{Math.round(pct(f.hours.transit))}%</Field>
-        </PrintIn>
-      }>
-        <PrintIn>
-          <div className="fields"><Field label="Time budget">{n0(hoursTotal)} hours on record</Field><Field label="Per day">{(f.hours.other / Math.max(1, f.days)).toFixed(1)} h elsewhere</Field></div>
-          <div className="big"><CountUp value={f.hours.other} /><small>H ELSEWHERE</small></div>
-          <div className="strip100" aria-hidden>
-            <span className="home" style={{ width: `${pct(f.hours.home)}%` }}>Home</span>
-            <span className="work" style={{ width: `${pct(f.hours.work)}%` }}>Work</span>
-            <span className="other" style={{ width: `${pct(f.hours.other)}%` }}>Elsewhere</span>
-            <span className="transit" style={{ width: `${pct(f.hours.transit)}%` }}>Transit</span>
-          </div>
-        </PrintIn>
-      </Pass>
-
-      {f.longestTrip && (
-        <Pass stub={
-          <PrintIn>
-            <Field label="Departed">{date(f.longestTrip.start)}</Field>
-            <Field label="Returned">{date(f.longestTrip.end)}</Field>
-            <Field label="Farthest from home" big>{n0(f.longestTrip.max_dist_from_home_km)}<small style={{ fontSize: '0.4em' }}> KM</small></Field>
-            <Barcode text={`TRIP ${date(f.longestTrip.start).replace(/ /g, '')} ${f.longestTrip.nights}N`} />
-          </PrintIn>
-        }>
-          <PrintIn>
-            <div className="fields"><Field label="Longest trip">{f.longestTrip.anchor_cities.join(' · ') || 'destination not on record'}</Field></div>
-            <div className="big"><CountUp value={f.longestTrip.nights} /><small>NIGHTS</small></div>
-            <div className="route">{f.longestTrip.anchor_cities.slice(0, 3).map((c, i) => <span key={c}>{i > 0 && <span className="arrow">→ </span>}{c}</span>)}</div>
-          </PrintIn>
-        </Pass>
+        </Bill>
       )}
 
-      <Pass stub={
-        <PrintIn>
-          <Field label="Longest day">{f.records.longestDay ? dateISO(f.records.longestDay.date) : null}</Field>
-          <Field label="Busiest day">{f.records.busiestDay ? dateISO(f.records.busiestDay.date) : null}</Field>
-          <Field label="Farthest from home">{f.records.farthest?.city}</Field>
-        </PrintIn>
-      }>
-        <PrintIn>
-          <div className="fields"><Field label="Records">Personal bests on record</Field></div>
-          <table className="ptable">
-            <thead><tr><th>Record</th><th>Value</th></tr></thead>
-            <tbody>
-              <tr><td>Longest day</td><td>{f.records.longestDay ? n0(f.records.longestDay.km) : '—'}<small>km</small></td></tr>
-              <tr><td>Busiest day</td><td>{f.records.busiestDay?.places ?? '—'}<small>places</small></td></tr>
-              <tr><td>Farthest</td><td>{f.records.farthest ? n0(f.records.farthest.km) : '—'}<small>km from home</small></td></tr>
-            </tbody>
-          </table>
-        </PrintIn>
-      </Pass>
+      <Bill>
+        <div className="caps">Setlist · kilometres by mode</div>
+        <div className="num"><CountUp value={f.totalKm} /><small>km</small></div>
+        <ol className="setlist" aria-label="Kilometres by mode">
+          {f.kmByMode.map(([m, km]) => (
+            <li key={m}>
+              <span>{label(m)}</span>
+              <span className="track"><i className={INK[lensOf(m)] ?? ''} style={{ width: `${(100 * km) / f.kmByMode[0][1]}%` }} /></span>
+              <span className="n">{n0(km)}<small>km</small></span>
+            </li>
+          ))}
+        </ol>
+        <div className="foot">
+          <span>{(f.totalKm / 40075).toFixed(1)}× around the Earth</span>
+          <span>{f.flights} {f.flights === 1 ? 'flight' : 'flights'}</span>
+        </div>
+      </Bill>
 
-      <Pass>
-        <PrintIn>
-          <div className="fields"><Field label="Year over year">{f.years.length} {f.years.length === 1 ? 'year' : 'years'} on record</Field></div>
-          <table className="ptable">
-            <thead><tr><th>Year</th><th>km</th><th>Places</th><th>Trips</th><th>Flights</th></tr></thead>
-            <tbody>
-              {f.years.map((y) => (
-                <tr key={y.year}><td>{y.year}</td><td>{n0(y.km)}</td><td>{n0(y.places)}</td><td>{y.trips}</td><td>{y.flights}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </PrintIn>
-      </Pass>
+      {f.flights > 0 && <FlightsBill data={data} />}
 
-      <YourRecord />
+      <Bill tone="red">
+        <div className="two">
+          <div>
+            <div className="caps">Residency · where the hours went</div>
+            <div className="num"><CountUp value={f.hours.other} /><small>h out</small></div>
+            <p className="lede">{pct(f.hours.home)}% home · {pct(f.hours.work)}% work · {pct(f.hours.other)}% elsewhere · {pct(f.hours.transit)}% moving. About {(f.hours.other / Math.max(1, f.days)).toFixed(1)} hours a day somewhere else.</p>
+          </div>
+          <ol className="dates" aria-label="Most visited third places">
+            {f.thirdPlaces.map((p) => (
+              <li key={p.id}><span className="where">{p.name}{p.place.city && <small>{p.place.city}</small>}</span><span className="n">{p.place.n_visits}<small>visits</small></span></li>
+            ))}
+          </ol>
+        </div>
+      </Bill>
+
+      <Bill>
+        <div className="caps">Records · personal bests</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, alignItems: 'center' }}>
+          {f.records.longestDay && <Stamp top="Longest day" big={n0(f.records.longestDay.km)} bottom={`km · ${dateISO(f.records.longestDay.date).slice(0, 6)}`} tone="ink" />}
+          {f.records.busiestDay && <Stamp top="Busiest day" big={String(f.records.busiestDay.places)} bottom={`places · ${dateISO(f.records.busiestDay.date).slice(0, 6)}`} />}
+          {f.records.farthest && <Stamp top="Farthest" big={n0(f.records.farthest.km)} bottom={`km · ${f.records.farthest.city ?? 'away'}`} tone="ink" />}
+        </div>
+        <table className="ptable">
+          <thead><tr><th>Year</th><th>km</th><th>Places</th><th>Trips</th><th>Flights</th></tr></thead>
+          <tbody>
+            {f.years.map((y) => <tr key={y.year}><td>{y.year}</td><td>{n0(y.km)}</td><td>{n0(y.places)}</td><td>{y.trips}</td><td>{y.flights}</td></tr>)}
+          </tbody>
+        </table>
+      </Bill>
+
+      <Bill tone="ink" share={false} id="backstage">
+        <div className="caps">Backstage · your record, your key</div>
+        <div className="fields">
+          <div className="field">
+            <div className="lab">Name on the bill</div>
+            <input className="val" value={name} placeholder="add your name" aria-label="Your name"
+              onChange={(e) => { setName(e.target.value); localStorage.setItem('elsewhere.name', e.target.value) }} />
+          </div>
+          <Field label="Record">{date(f.range[0])} → {date(f.range[1])}</Field>
+        </div>
+        <YourRecord />
+      </Bill>
     </main>
+  )
+}
+
+function FlightsBill({ data }: { data: Data }) {
+  const { hops, ports } = useMemo(() => flights(data), [data])
+  const km = hops.reduce((s, h) => s + h.km * h.n, 0)
+  const longest = [...hops].sort((a, b) => b.km - a.km)[0]
+  // Ports are bucketed to 0.1°, so match by cell, not by exact coordinate.
+  const name = (p: [number, number]) => ports.find((x) => Math.abs(x.p[0] - p[0]) < 0.1 && Math.abs(x.p[1] - p[1]) < 0.1)?.name || 'somewhere'
+  return (
+    <Bill className="flights">
+      <div className="caps">Air legs · every route flown, raised off the sheet</div>
+      <div className="num"><CountUp value={km} /><small>km flown</small></div>
+      <Suspense fallback={<div className="flightmap" style={{ height: 520 }} />}><FlightMap data={data} /></Suspense>
+      <div className="foot">
+        <span>{hops.length} {hops.length === 1 ? 'route' : 'routes'} · {ports.length} airports</span>
+        {longest && <span>Longest hop {n0(longest.km)} km · {name(longest.s)} ↔ {name(longest.t)}</span>}
+      </div>
+    </Bill>
   )
 }

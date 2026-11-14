@@ -3,7 +3,7 @@ import { useData } from '../data/DataContext'
 import { useRecord } from './App'
 import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings } from '../ingest/settings'
-import { Field, Pass, PrintIn } from '../world'
+import { Field } from '../world'
 import { date, n0 } from '../world/fmt'
 
 /** The last pass on Home: where a visitor's own export goes in, and where their Google key lives. */
@@ -29,17 +29,10 @@ export function YourRecord() {
   }
 
   return (
-    <Pass share={false} className={over ? 'drop-over' : ''} stub={
-      <PrintIn>
-        <Field label="Source">{rec.mine ? 'Your export' : 'Sample record'}</Field>
-        <Field label="File">{data.meta.source_file}</Field>
-        <Field label="Segments" big>{n0(data.meta.import_report.parsed)}</Field>
-        <Field label="Skipped">{n0(data.meta.import_report.segments_total - data.meta.import_report.parsed)}</Field>
-      </PrintIn>
-    }>
-      <PrintIn>
-        <div className="fields">
-          <Field label="Your record">{rec.mine ? `Printed from ${data.meta.source_file}` : 'Showing the sample. Add yours below.'}</Field>
+    <div className={over ? 'drop-over' : ''}>
+        <div className="fields" style={{ marginTop: 28 }}>
+          <Field label="Source">{rec.mine ? `Your export · ${data.meta.source_file}` : 'Sample record. Add yours below.'}</Field>
+          <Field label="Segments">{n0(data.meta.import_report.parsed)} parsed · {n0(data.meta.import_report.segments_total - data.meta.import_report.parsed)} skipped</Field>
           <Field label="Kept">In this browser only</Field>
           <Field label="Named">{named} places{photos ? ` · ${photos} with photos` : ''}</Field>
         </div>
@@ -78,7 +71,6 @@ export function YourRecord() {
         </div>
         {rec.enrichError && <div className="dz-err">Places lookups stopped: {rec.enrichError.message}</div>}
         <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; restrict it to this site's address. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>
-      </PrintIn>
-    </Pass>
+    </div>
   )
 }

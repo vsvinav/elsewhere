@@ -64,6 +64,7 @@ export function App() {
 
   return (
     <div className="tray">
+      <div className="tourline" aria-hidden><span className="mark">E</span><span className="caps">World <b>Tour</b> · your record</span></div>
       <StubNav />
       {error ? <LoadFailed error={error} /> : data ? <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider> : <Printing />}
     </div>

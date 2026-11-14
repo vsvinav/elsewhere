@@ -18,7 +18,7 @@ export function Hud() {
   const speed = useStore((s) => s.speed)
   const follow = useStore((s) => s.follow)
   const lens = useStore((s) => s.lens)
-  const { setPlayhead, setPlaying, setSpeed, setFollow, toggleBasemap, setLens } = useStore.getState()
+  const { setPlayhead, setPlaying, setSpeed, setFollow, setLens } = useStore.getState()
 
   const w = whereaboutsAt(data, playhead)
   const visit = w?.mode === 'STILL' ? data.visits.find((v) => v.lvl === 0 && v.start <= playhead && playhead <= v.end) : null
@@ -56,9 +56,6 @@ export function Hud() {
           </button>
           {SPEEDS.map((s) => <button key={s} className={s === speed ? 'on' : ''} onClick={() => setSpeed(s)}>{SPEED_LABEL[s]}</button>)}
           {!follow && <button className="on" onClick={() => setFollow(true)}>Follow</button>}
-          <button onClick={toggleBasemap} aria-label="Toggle basemap" title="Light / dark map">
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" /></svg>
-          </button>
         </div>
       </div>
       <div className="hud-scrub">

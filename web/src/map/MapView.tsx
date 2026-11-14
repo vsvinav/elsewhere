@@ -39,7 +39,7 @@ function Deck() {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.basemap, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10, s.lens) })
+      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10, s.lens) })
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()
@@ -60,7 +60,6 @@ function Deck() {
 
 export function MapView() {
   const data = useData()
-  const basemap = useStore((s) => s.basemap)
   const { mapsKey: KEY, mapId: MAP_ID } = useSettings()
   const start = useMemo(() => positionAt(data, useStore.getState().playhead ?? data.meta.range[0]) ?? data.profile.home, [data])
   if (!KEY) {
@@ -73,12 +72,12 @@ export function MapView() {
   return (
     <APIProvider apiKey={KEY}>
       <Map
-        key={basemap + MAP_ID}
+        key={MAP_ID}
         style={{ position: 'absolute', inset: 0 }}
         defaultCenter={{ lat: start.lat, lng: start.lng }}
         defaultZoom={12}
-        {...(MAP_ID ? { mapId: MAP_ID, renderingType: 'VECTOR' as const } : { styles: MAP_STYLES[basemap] })}
-        backgroundColor={basemap === 'dark' ? '#0b0c10' : '#f7f6f2'}
+        {...(MAP_ID ? { mapId: MAP_ID, renderingType: 'VECTOR' as const } : { styles: MAP_STYLES })}
+        backgroundColor="#efe6d2"
         disableDefaultUI
         gestureHandling="greedy"
         clickableIcons={false}

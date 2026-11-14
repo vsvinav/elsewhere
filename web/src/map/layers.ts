@@ -4,16 +4,17 @@ import { positionAt } from '../analytics/position'
 import { lensOf, type Lens } from '../analytics/lens'
 
 type RGBA = [number, number, number, number]
-const STOCK: RGBA = [247, 246, 242, 255]
-const INK: RGBA = [17, 17, 17, 255]
-const ORANGE: RGBA = [255, 90, 31, 255]
-const BLUE: RGBA = [159, 179, 230, 255]
+const STOCK: RGBA = [239, 230, 210, 255]
+const INK: RGBA = [20, 20, 20, 255]
+const RED: RGBA = [214, 60, 32, 255]
+const MUSTARD: RGBA = [233, 181, 49, 255]
+const GREY: RGBA = [124, 118, 103, 255]
 export const LONG_TRAIL_S = 7 * 86400
 const HEAD_REAL_S = 4
 
 interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number; lens: Lens }
-/** Ink per kind of movement: flights orange, foot blue, transit a quieter stock, drives stock. */
-const INK_OF: Record<Lens, RGBA> = { all: STOCK, fly: ORANGE, drive: STOCK, transit: [200, 205, 220, 255], foot: BLUE }
+/** Ink per kind of movement: flights red, foot mustard, transit grey, drives black. */
+const INK_OF: Record<Lens, RGBA> = { all: INK, fly: RED, drive: INK, transit: GREY, foot: MUSTARD }
 interface Dot extends Place { id: string; title: string }
 
 // TripsLayer keeps timestamps in float32; offset by t0 to keep precision.
@@ -75,59 +76,59 @@ function labelDots(dots: Dot[], zoom: number): Dot[] {
   return out
 }
 
-export function mapLayers(data: Data, now: number, rate: number, playing: boolean, basemap: 'dark' | 'light' = 'dark', reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
+export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
   const c = prepared(data)
   const { dots, labels } = c
   const trails = lensTrails(c, lens)
   const zb = Math.floor(zoom * 2) / 2
   let labelled = labels.get(zb)
   if (!labelled) labels.set(zb, (labelled = labelDots(dots, zb)))
-  const paper = basemap === 'dark' ? STOCK : INK
-  const tint = (c: RGBA): RGBA => (c === STOCK ? paper : c === INK_OF.transit && basemap === 'light' ? [96, 104, 128, 255] : c)
+  const paper = STOCK
+  const tint = (c: RGBA): RGBA => c
   const t0 = data.meta.range[0]
   const layers: Layer[] = []
   if (!playing) {
     // Paused: the whole record as hairlines, like the strip printed on the pass.
-    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => { const c = tint(d.color); return [c[0], c[1], c[2], d.lens === 'fly' ? 90 : 55] }, widthMinPixels: 1, widthMaxPixels: 2, opacity: 1 }))
+    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => { const c = tint(d.color); return [c[0], c[1], c[2], d.lens === 'fly' ? 140 : 90] }, widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))
   }
   const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails) => new TripsLayer<Trail>({
-    id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: color, updateTriggers: { getColor: [basemap] },
+    id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: color,
     currentTime: now - t0, trailLength: length, fadeTrail: true, widthMinPixels: width, widthMaxPixels: width * 2, capRounded: true, jointRounded: true, opacity,
   })
   const headLen = HEAD_REAL_S * rate
   const head = activeTrails(c, trails, now - t0 - headLen * 1.6, now - t0)
   layers.push(
-    // Week-long wake over everything (hairline), then the wide glow and orange core over only the live trails.
-    trail('trail-long', LONG_TRAIL_S, (d) => tint(d.color), 2, playing ? 0.45 : 0.22),
-    trail('trail-glow', headLen * 1.6, () => ORANGE, 18, 0.16, head),
-    trail('trail-head', headLen, () => ORANGE, 5, 0.95, head),
+    // Week-long wake over everything in its ink, then a wide flat red head over only the live trails: ink flooding the screen.
+    trail('trail-long', LONG_TRAIL_S, (d) => tint(d.color), 2.5, playing ? 0.85 : 0.4),
+    trail('trail-head', headLen, () => RED, 7, 1, head),
     new ScatterplotLayer<Dot>({
       id: 'places', data: dots, pickable: true,
       getPosition: (d) => [d.lng, d.lat],
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
-      getFillColor: (d) => { const c = basemap === 'dark' ? BLUE : [10, 42, 107]; return [c[0], c[1], c[2], d.first_ts <= reveal ? 150 : 0] },
-      stroked: true, getLineColor: (d) => [paper[0], paper[1], paper[2], d.first_ts <= reveal ? 220 : 0], lineWidthMinPixels: 1.5,
-      updateTriggers: { getFillColor: [Math.floor(reveal / 3600), basemap], getLineColor: [Math.floor(reveal / 3600), basemap] },
+      getFillColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 200 : 0],
+      stroked: true, getLineColor: (d) => [paper[0], paper[1], paper[2], d.first_ts <= reveal ? 255 : 0], lineWidthMinPixels: 2,
+      updateTriggers: { getFillColor: [Math.floor(reveal / 3600)], getLineColor: [Math.floor(reveal / 3600)] },
     }),
     new TextLayer<Dot>({
       id: 'labels', data: labelled,
       getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
-      getColor: (d) => [paper[0], paper[1], paper[2], d.first_ts <= reveal ? 235 : 0],
-      getSize: 11, fontFamily: 'Barlow, sans-serif', fontWeight: 600, characterSet: 'auto', fontSettings: { sdf: true, buffer: 4 },
-      outlineWidth: 4, outlineColor: basemap === 'dark' ? [15, 16, 22, 230] : [247, 246, 242, 230],
+      getColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 255 : 0],
+      getSize: 12, fontFamily: '"Big Shoulders Display Variable", Impact, sans-serif', fontWeight: 800, characterSet: 'auto', fontSettings: { sdf: true, buffer: 4 },
+      outlineWidth: 4, outlineColor: [239, 230, 210, 235],
       getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [12, 0],
-      updateTriggers: { getColor: [Math.floor(reveal / 3600), basemap] },
+      updateTriggers: { getColor: [Math.floor(reveal / 3600)] },
     }),
   )
   const here = positionAt(data, now)
   if (here) layers.push(
+    // The stamp: a red ring and a solid dot, no glow.
     new ScatterplotLayer<{ lng: number; lat: number }>({
-      id: 'here-glow', data: [here], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 22, radiusMaxPixels: 22,
-      getFillColor: [ORANGE[0], ORANGE[1], ORANGE[2], 60], stroked: false,
+      id: 'here-ring', data: [here], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 16, radiusMaxPixels: 16,
+      getFillColor: [0, 0, 0, 0], stroked: true, getLineColor: RED, lineWidthMinPixels: 3,
     }),
     new ScatterplotLayer<{ lng: number; lat: number }>({
       id: 'here', data: [here], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: 7, radiusMaxPixels: 7,
-      getFillColor: ORANGE, stroked: true, getLineColor: paper, lineWidthMinPixels: 2.5, updateTriggers: { getLineColor: [basemap] },
+      getFillColor: RED, stroked: true, getLineColor: paper, lineWidthMinPixels: 2.5,
     }),
   )
   return layers
