@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export interface Home { lat: number; lng: number; city: string; cc: string; from: number; to: number | null }
+export interface Home { lat: number; lng: number; city: string; cc: string; from: number; to: number | null; name?: string }
 export interface Work { lat: number; lng: number; place_id: string }
 export interface Profile { name: string | null; units: 'km' | 'mi'; homes: Home[]; work: Work | null }
 

@@ -47,9 +47,9 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
     store.set({ name: name.trim() || null, units, homes: sorted, work })
     onClose?.()
   }
-  const asHome = (s: Suggestion, from = 0): Home => ({ lat: s.lat, lng: s.lng, city: s.city ?? '', cc: s.cc ?? '', from, to: null })
-  const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }
   const label = (s: Suggestion) => data?.places[s.place_id]?.name ?? s.city ?? 'Unnamed place'
+  const asHome = (s: Suggestion, from = 0): Home => ({ lat: s.lat, lng: s.lng, city: s.city ?? '', cc: s.cc ?? '', from, to: null, name: label(s) })
+  const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }
   const isSame = (h: Home, s: Suggestion) => h.lat === s.lat && h.lng === s.lng
   const range = data?.meta.range ?? [0, 0]
 
@@ -186,7 +186,7 @@ function HomeList({ homes, setHomes, range, hint }: { homes: Home[]; setHomes: (
       <ol className="ob-homes" aria-label="Your homes">
         {[...homes].sort((a, b) => a.from - b.from).map((h) => (
           <li key={`${h.lat},${h.lng}`}>
-            <span className="name">{h.city || 'Home'}</span>
+            <span className="name">{h.name ?? h.city ?? 'Home'}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
             <label className="ob-month"><span className="lab">home since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} home since`} /></label>
             {homes.length > 1 && <button className="btn quiet" onClick={() => setHomes(homes.filter((x) => x !== h))}>Remove</button>}
           </li>
