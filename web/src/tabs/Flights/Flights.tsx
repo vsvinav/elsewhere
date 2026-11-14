@@ -1,7 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { flights } from '../../world/flights'
-import { regions } from '../../world/regions'
 import { FlightMap } from '../../world/FlightMap'
 import { Bill, CountUp } from '../../world'
 import { n0 } from '../../world/fmt'
@@ -10,12 +9,20 @@ import { n0 } from '../../world/fmt'
 export function Flights() {
   const data = useData()
   const { hops, ports } = useMemo(() => flights(data), [data])
-  const regs = useMemo(() => regions(hops, ports), [hops, ports])
   const km = hops.reduce((s, h) => s + h.km * h.n, 0)
   const legs = hops.reduce((s, h) => s + h.n, 0)
   const name = (p: [number, number]) => ports.find((x) => Math.abs(x.p[0] - p[0]) < 0.1 && Math.abs(x.p[1] - p[1]) < 0.1)?.name || 'somewhere'
   const byN = [...hops].sort((a, b) => b.n - a.n || b.km - a.km)
   const longest = [...hops].sort((a, b) => b.km - a.km)[0]
+  // One airport at a time: its routes and the airports they reach. Busiest first; the pick resets with the range.
+  const named = ports.filter((p) => p.name)
+  const [pick, setPick] = useState(0)
+  useEffect(() => setPick(0), [data])
+  const from = named[Math.min(pick, Math.max(0, named.length - 1))]
+  const near = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 0.1 && Math.abs(a[1] - b[1]) < 0.1
+  const fromHops = useMemo(() => (from ? hops.filter((h) => near(h.s, from.p) || near(h.t, from.p)) : []), [hops, from])
+  const fromPorts = useMemo(() => ports.filter((p) => fromHops.some((h) => near(h.s, p.p) || near(h.t, p.p))), [ports, fromHops])
+  const dests = fromHops.map((h) => ({ name: name(near(h.s, from!.p) ? h.t : h.s), n: h.n, km: h.km })).sort((a, b) => b.n - a.n || b.km - a.km)
   if (!hops.length) return <main className="bills"><Bill share={false}><h2 className="word">No flights</h2><p className="lede">Nothing over 80 km in the air on record.</p></Bill></main>
   return (
     <main className="bills">
@@ -30,13 +37,31 @@ export function Flights() {
         <div className="foot"><span>{ports.length} airports · {hops.length} routes</span><span><CountUp value={Math.round(km / 1.609)} /> mi</span></div>
       </Bill>
 
-      {regs.map((r) => (
-        <Bill key={r.name}>
-          <h2 className="word">{r.name}</h2>
-          <div className="caps">{r.hops.reduce((s, h) => s + h.n, 0)} flights · {r.hops.length} routes · {r.ports.length} airports</div>
-          <FlightMap hops={r.hops} ports={r.ports} height={520} />
+      {from && (
+        <Bill>
+          <div className="two globe-row">
+            <div>
+              <h2 className="word">From</h2>
+              <div className="filters">
+                <select value={pick} onChange={(e) => setPick(+e.target.value)} aria-label="Airport">
+                  {named.map((p, i) => <option key={p.name + p.p.join()} value={i}>{p.name} · {p.n} {p.n === 1 ? 'leg' : 'legs'}</option>)}
+                </select>
+              </div>
+              <ol className="dates" aria-label={`Routes from ${from.name}`}>
+                {dests.slice(0, 8).map((d) => (
+                  <li key={d.name}>
+                    <span className="where">{d.name}<small>{n0(d.km)} km</small></span>
+                    <span className="n">{d.n}<small>{d.n === 1 ? 'flight' : 'flights'}</small></span>
+                  </li>
+                ))}
+                {dests.length > 8 && <li className="more">+ {dests.length - 8} more</li>}
+              </ol>
+            </div>
+            <FlightMap key={from.name} hops={fromHops} ports={fromPorts} height={520} />
+          </div>
+          <div className="foot"><span>{from.name} · {fromHops.reduce((s, h) => s + h.n, 0)} flights · {fromHops.length} routes</span><span>{n0(fromHops.reduce((s, h) => s + h.km * h.n, 0))} km</span></div>
         </Bill>
-      ))}
+      )}
 
       <Bill>
         <div className="two">

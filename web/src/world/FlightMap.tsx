@@ -64,12 +64,18 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
     const lngs = ports.map((p) => p.p[0]), lats = ports.map((p) => p.p[1])
     const w = ref.current?.clientWidth ?? 1000, h = ref.current?.clientHeight ?? height
     if (globe) {
-      // Face the centre of mass of every flight (endpoints weighted by times flown) so most routes are on the lit side; sized so the earth fills the sheet's shorter side.
-      const r = Math.PI / 180
-      let x = 0, y = 0, z = 0
-      for (const h of hops) for (const [lng, lat] of [h.s, h.t]) { x += h.n * Math.cos(lat * r) * Math.cos(lng * r); y += h.n * Math.cos(lat * r) * Math.sin(lng * r); z += h.n * Math.sin(lat * r) }
-      const c = hops.length ? [Math.atan2(y, x) / r, Math.atan2(z, Math.hypot(x, y)) / r] : ports[0].p
-      setView({ longitude: c[0], latitude: Math.max(-30, Math.min(30, c[1])), zoom: 1, minZoom: 0, maxZoom: 5 })
+      // Turn the globe so as many airports as possible sit on the lit side (within 75° of centre, weighted by
+      // visits); among equal counts, the one that keeps them nearest the middle. A grid search is plenty.
+      const r = Math.PI / 180, LIMB = 75 * r
+      const pts = ports.map((p) => ({ x: Math.cos(p.p[1] * r) * Math.cos(p.p[0] * r), y: Math.cos(p.p[1] * r) * Math.sin(p.p[0] * r), z: Math.sin(p.p[1] * r), n: p.n }))
+      let best = { lng: ports[0].p[0], lat: ports[0].p[1], seen: -1, spread: Infinity }
+      for (let lat = -60; lat <= 60; lat += 5) for (let lng = -180; lng < 180; lng += 5) {
+        const cx = Math.cos(lat * r) * Math.cos(lng * r), cy = Math.cos(lat * r) * Math.sin(lng * r), cz = Math.sin(lat * r)
+        let seen = 0, spread = 0
+        for (const q of pts) { const a = Math.acos(Math.max(-1, Math.min(1, cx * q.x + cy * q.y + cz * q.z))); if (a < LIMB) { seen += q.n; spread += q.n * a } }
+        if (seen > best.seen || (seen === best.seen && spread < best.spread)) best = { lng, lat, seen, spread }
+      }
+      setView({ longitude: best.lng, latitude: best.lat, zoom: 1, minZoom: 0, maxZoom: 5 })
       fitPasses.current = 4
       return
     }
