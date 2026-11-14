@@ -2,6 +2,7 @@ import { IconLayer, PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Lay
 import type { Data, Place } from '../data/types'
 import { whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
+import { legsOf } from '../analytics/legs'
 
 type RGBA = [number, number, number, number]
 const STOCK: RGBA = [239, 230, 210, 255]
@@ -9,7 +10,7 @@ const INK: RGBA = [20, 20, 20, 255]
 export const LONG_TRAIL_S = 7 * 86400
 const HEAD_REAL_S = 4
 
-interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number; lens: Lens }
+interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number; lens: Lens; guessed: boolean }
 const rgba = (hex: string): RGBA => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 255]
 const INK_OF = Object.fromEntries(Object.entries(LENS_COLOR).map(([k, v]) => [k, rgba(v)])) as Record<Lens, RGBA>
 
@@ -25,46 +26,9 @@ const ICON: Record<Lens | 'still', { url: string; width: number; height: number;
 }
 interface Dot extends Place { id: string; title: string }
 
-/** Points along the great circle from a to b, so a flight bends the way it was flown instead of cutting straight across. */
-function greatCircle(a: [number, number], b: [number, number], n: number): [number, number][] {
-  const r = Math.PI / 180
-  const [l1, f1, l2, f2] = [a[0] * r, a[1] * r, b[0] * r, b[1] * r]
-  const d = 2 * Math.asin(Math.sqrt(Math.sin((f2 - f1) / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin((l2 - l1) / 2) ** 2))
-  if (d < 1e-9) return [a, b]
-  const out: [number, number][] = []
-  for (let i = 0; i <= n; i++) {
-    const f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d)
-    const x = A * Math.cos(f1) * Math.cos(l1) + B * Math.cos(f2) * Math.cos(l2)
-    const y = A * Math.cos(f1) * Math.sin(l1) + B * Math.cos(f2) * Math.sin(l2)
-    const z = A * Math.sin(f1) + B * Math.sin(f2)
-    out.push([Math.atan2(y, x) / r, Math.atan2(z, Math.hypot(x, y)) / r])
-  }
-  return out
-}
-
 // TripsLayer keeps timestamps in float32; offset by t0 to keep precision.
 export function buildTrails(data: Data, t0: number): Trail[] {
-  const trails: Trail[] = []
-  // A GPS path takes the lens of the activity it sits inside; paths are sorted by time, as are activities.
-  const acts = data.activities, traced = new Set<number>()
-  let ai = 0
-  for (const p of data.paths) if (p.pts.length > 1) {
-    const ts = p.pts.map(([ts]) => ts - t0), mid = (p.start + p.end) / 2
-    while (ai < acts.length && acts[ai].end < mid) ai++
-    const a = acts[ai], hit = !!a && a.start <= mid
-    if (hit) traced.add(ai)
-    const lens = hit ? lensOf(a.mode) : 'drive'
-    trails.push({ path: p.pts.map(([, lat, lng]) => [lng, lat]), ts, color: INK_OF[lens], t0: ts[0], t1: ts[ts.length - 1], lens })
-  }
-  // A leg with a GPS trace is already drawn; only untraced legs (flights, gaps in the record) get a synthetic line.
-  for (const [i, a] of acts.entries()) {
-    if (traced.has(i)) continue
-    const lens = lensOf(a.mode)
-    const path = lens === 'fly' && a.m > 80_000 ? greatCircle([a.s_lng, a.s_lat], [a.e_lng, a.e_lat], 48) : [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]] as [number, number][]
-    const ts = path.map((_, i) => a.start - t0 + ((a.end - a.start) * i) / (path.length - 1))
-    trails.push({ path, ts, color: INK_OF[lens], t0: a.start - t0, t1: a.end - t0, lens })
-  }
-  return trails
+  return legsOf(data).map((l) => ({ path: l.path, ts: l.ts.map((t) => t - t0), color: INK_OF[l.lens], t0: l.ts[0] - t0, t1: l.ts[l.ts.length - 1] - t0, lens: l.lens, guessed: l.guessed }))
 }
 
 // Trails key on the record's geometry and dots on its places, so a place-name flush never re-uploads 80k points.
@@ -123,10 +87,10 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
   const layers: Layer[] = []
   if (!playing) {
     // Paused: the whole record as hairlines, like the strip printed on the pass.
-    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => [d.color[0], d.color[1], d.color[2], d.lens === 'fly' ? 140 : 90], widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))
+    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => [d.color[0], d.color[1], d.color[2], d.lens === 'fly' ? 140 : d.guessed ? 50 : 90], widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))
   }
   const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails) => new TripsLayer<Trail>({
-    id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: color,
+    id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: (d) => { const c = color(d); return d.guessed ? [c[0], c[1], c[2], 110] : c },
     currentTime: now - t0, trailLength: length, fadeTrail: true, widthMinPixels: width, widthMaxPixels: width * 2, capRounded: true, jointRounded: true, opacity,
   })
   const headLen = HEAD_REAL_S * rate
@@ -141,7 +105,7 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
       getFillColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 200 : 0],
       stroked: true, getLineColor: (d) => [STOCK[0], STOCK[1], STOCK[2], d.first_ts <= reveal ? 255 : 0], lineWidthMinPixels: 2,
-      updateTriggers: { getFillColor: [Math.floor(reveal / 3600)], getLineColor: [Math.floor(reveal / 3600)] },
+      updateTriggers: { getFillColor: [Math.floor(reveal / 86400)], getLineColor: [Math.floor(reveal / 86400)] },
     }),
     new TextLayer<Dot>({
       id: 'labels', data: labelled,
@@ -150,7 +114,7 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
       getSize: 11, fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
       outlineWidth: 2, outlineColor: [239, 230, 210, 235],
       getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [12, 0],
-      updateTriggers: { getColor: [Math.floor(reveal / 3600)] },
+      updateTriggers: { getColor: [Math.floor(reveal / 86400)] },
     }),
   )
   const w = whereaboutsAt(data, now)

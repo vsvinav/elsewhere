@@ -5,8 +5,8 @@ import { useStore } from '../store/useStore'
 import { positionAt, segmentAt } from '../analytics/position'
 import { fitZoom, step, type Spring } from './camera'
 
-const POS_PERIOD_S = 1.6
-const ZOOM_PERIOD_S = 3.2
+const POS_PERIOD_S = 2.4
+const ZOOM_PERIOD_S = 4.5
 const STAY_ZOOM = 14
 const MAX_ZOOM = 15.5
 const MIN_ZOOM = 3

@@ -1,4 +1,5 @@
 import type { Data } from '../data/types'
+import { legsOf } from './legs'
 
 export interface LngLat { lng: number; lat: number }
 /** Where you are and how you are moving at time t. mode is 'STILL' inside a visit. */
@@ -11,24 +12,7 @@ export function bearing(a: LngLat, b: LngLat): number {
   return ((Math.atan2(y, x) / r) + 360) % 360
 }
 
-interface Index { visits: Data['visits']; pathOf: Map<number, Data['paths'][number]> }
-const INDEX = new WeakMap<Data, Index>()
-/** Top-level visits only, and the GPS path that runs inside each activity (by index), so a drive follows the road. */
-function index(data: Data): Index {
-  let ix = INDEX.get(data)
-  if (!ix) {
-    const pathOf = new Map<number, Data['paths'][number]>()
-    let ai = 0
-    for (const p of data.paths ?? []) {
-      const mid = (p.start + p.end) / 2
-      while (ai < data.activities.length && data.activities[ai].end < mid) ai++
-      const a = data.activities[ai]
-      if (a && a.start <= mid && p.pts.length > 1) pathOf.set(ai, p)
-    }
-    INDEX.set(data, (ix = { visits: data.visits.filter((v) => v.lvl === 0), pathOf }))
-  }
-  return ix
-}
+const TOP = new WeakMap<Data, Data['visits']>()
 /** Index of the last item with start <= t, or -1. Items are sorted by start. */
 function lastStarted(items: { start: number }[], t: number): number { return lastLE(items.length, (i) => items[i].start, t) }
 function lastLE(n: number, at: (i: number) => number, t: number): number {
@@ -36,25 +20,21 @@ function lastLE(n: number, at: (i: number) => number, t: number): number {
   while (lo <= hi) { const m = (lo + hi) >> 1; if (at(m) <= t) { out = m; lo = m + 1 } else hi = m - 1 }
   return out
 }
-
+const topVisits = (data: Data) => { let v = TOP.get(data); if (!v) TOP.set(data, (v = data.visits.filter((x) => x.lvl === 0))); return v }
 export function whereaboutsAt(data: Data, t: number): Whereabouts | null {
-  const ix = index(data)
-  const vi = lastStarted(ix.visits, t)
-  if (vi >= 0 && t <= ix.visits[vi].end) { const v = ix.visits[vi]; return { lng: v.lng, lat: v.lat, mode: 'STILL', heading: 0 } }
+  const visits = topVisits(data)
+  const vi = lastStarted(visits, t)
+  if (vi >= 0 && t <= visits[vi].end) { const v = visits[vi]; return { lng: v.lng, lat: v.lat, mode: 'STILL', heading: 0 } }
   const ai = lastStarted(data.activities, t)
   if (ai >= 0 && t <= data.activities[ai].end) {
-    const a = data.activities[ai], path = ix.pathOf.get(ai)
-    if (path) {
-      const pts = path.pts, k = Math.max(1, lastLE(pts.length, (i) => pts[i][0], t))
-      const [t0, la0, ln0] = pts[k - 1], [t1, la1, ln1] = pts[Math.min(k, pts.length - 1)]
-      const f = Math.min(1, Math.max(0, (t - t0) / Math.max(1, t1 - t0)))
-      const here = { lng: ln0 + (ln1 - ln0) * f, lat: la0 + (la1 - la0) * f }
-      return { ...here, mode: a.mode, heading: bearing({ lng: ln0, lat: la0 }, { lng: ln1, lat: la1 }) }
-    }
-    const f = (t - a.start) / Math.max(1, a.end - a.start), s = { lng: a.s_lng, lat: a.s_lat }, e = { lng: a.e_lng, lat: a.e_lat }
-    return { lng: s.lng + (e.lng - s.lng) * f, lat: s.lat + (e.lat - s.lat) * f, mode: a.mode, heading: bearing(s, e) }
+    // Same line the map draws, so the marker sits exactly on the head of the trail.
+    const { path, ts, mode } = legsOf(data)[ai]
+    const k = Math.min(ts.length - 1, Math.max(1, lastLE(ts.length, (i) => ts[i], t) + 1))
+    const [x0, y0] = path[k - 1], [x1, y1] = path[k]
+    const f = Math.min(1, Math.max(0, (t - ts[k - 1]) / Math.max(1, ts[k] - ts[k - 1])))
+    return { lng: x0 + (x1 - x0) * f, lat: y0 + (y1 - y0) * f, mode, heading: bearing({ lng: x0, lat: y0 }, { lng: x1, lat: y1 }) }
   }
-  if (vi >= 0) { const v = ix.visits[vi]; return { lng: v.lng, lat: v.lat, mode: 'STILL', heading: 0 } }
+  if (vi >= 0) { const v = visits[vi]; return { lng: v.lng, lat: v.lat, mode: 'STILL', heading: 0 } }
   return null
 }
 
