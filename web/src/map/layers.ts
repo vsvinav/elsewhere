@@ -17,6 +17,23 @@ interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: numbe
 const INK_OF: Record<Lens, RGBA> = { all: INK, fly: RED, drive: INK, transit: GREY, foot: MUSTARD }
 interface Dot extends Place { id: string; title: string }
 
+/** Points along the great circle from a to b, so a flight bends the way it was flown instead of cutting straight across. */
+function greatCircle(a: [number, number], b: [number, number], n: number): [number, number][] {
+  const r = Math.PI / 180
+  const [l1, f1, l2, f2] = [a[0] * r, a[1] * r, b[0] * r, b[1] * r]
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((f2 - f1) / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin((l2 - l1) / 2) ** 2))
+  if (d < 1e-9) return [a, b]
+  const out: [number, number][] = []
+  for (let i = 0; i <= n; i++) {
+    const f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d)
+    const x = A * Math.cos(f1) * Math.cos(l1) + B * Math.cos(f2) * Math.cos(l2)
+    const y = A * Math.cos(f1) * Math.sin(l1) + B * Math.cos(f2) * Math.sin(l2)
+    const z = A * Math.sin(f1) + B * Math.sin(f2)
+    out.push([Math.atan2(y, x) / r, Math.atan2(z, Math.hypot(x, y)) / r])
+  }
+  return out
+}
+
 // TripsLayer keeps timestamps in float32; offset by t0 to keep precision.
 export function buildTrails(data: Data, t0: number): Trail[] {
   const trails: Trail[] = []
@@ -30,7 +47,12 @@ export function buildTrails(data: Data, t0: number): Trail[] {
     const lens = a && a.start <= mid ? lensOf(a.mode) : 'drive'
     trails.push({ path: p.pts.map(([, lat, lng]) => [lng, lat]), ts, color: INK_OF[lens], t0: ts[0], t1: ts[ts.length - 1], lens })
   }
-  for (const a of acts) { const lens = lensOf(a.mode); trails.push({ path: [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]], ts: [a.start - t0, a.end - t0], color: INK_OF[lens], t0: a.start - t0, t1: a.end - t0, lens }) }
+  for (const a of acts) {
+    const lens = lensOf(a.mode)
+    const path = lens === 'fly' && a.m > 80_000 ? greatCircle([a.s_lng, a.s_lat], [a.e_lng, a.e_lat], 48) : [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]] as [number, number][]
+    const ts = path.map((_, i) => a.start - t0 + ((a.end - a.start) * i) / (path.length - 1))
+    trails.push({ path, ts, color: INK_OF[lens], t0: a.start - t0, t1: a.end - t0, lens })
+  }
   return trails
 }
 

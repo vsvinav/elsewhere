@@ -447,18 +447,22 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 
 /* Save */
 .pass .save, .bill .save {
-  position: absolute; right: var(--gutter, 0); bottom: 10px; z-index: 3;
-  font: 700 11px/1 var(--body); font-stretch: 85%; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--ink-3); padding: 6px 8px; border: 2px solid transparent;
-  opacity: 0; transition: opacity 160ms ease-out, color 160ms ease-out, border-color 160ms ease-out;
+  position: absolute; right: var(--gutter, 0); bottom: 10px; z-index: 3; display: flex; gap: 2px;
+  opacity: 0; transition: opacity 160ms ease-out;
 }
 .pass .save { right: 0; }
-.pass:not(.one) .save { color: var(--stock-3); } .pass:not(.one) .save:hover { color: var(--stock); border-color: var(--stock); }
-.pass:hover .save, .pass .save:focus-visible, .pass .save:disabled, .bill:hover .save, .bill .save:focus-visible, .bill .save:disabled { opacity: 1; }
-.pass .save:hover, .bill .save:hover { color: var(--ink); border-color: var(--ink); }
-.pass .save:disabled, .bill .save:disabled { cursor: progress; }
-.ink .save { color: var(--stock-3); } .ink .save:hover { color: var(--stock); border-color: var(--stock); }
-.red .save { color: var(--stock); }
+.save button {
+  font: 700 11px/1 var(--body); font-stretch: 85%; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-3); padding: 6px 8px; border: 2px solid transparent; background: none;
+  transition: color 160ms ease-out, border-color 160ms ease-out;
+}
+.save button + button::before { content: '·'; margin-right: 10px; margin-left: -4px; opacity: 0.5; }
+.pass:hover .save, .pass .save:focus-within, .pass .save:has(:disabled), .bill:hover .save, .bill .save:focus-within, .bill .save:has(:disabled) { opacity: 1; }
+.save button:hover { color: var(--ink); border-color: var(--ink); }
+.save button:disabled { cursor: progress; }
+.pass:not(.one) .save button, .ink .save button { color: var(--stock-3); }
+.pass:not(.one) .save button:hover, .ink .save button:hover { color: var(--stock); border-color: var(--stock); }
+.red .save button { color: var(--stock); }
 @media (hover: none) { .pass .save, .bill .save { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .pass .save, .bill .save, .arrivals .tag.on, .tag, .sticker { transition: none; animation: none; } }
 

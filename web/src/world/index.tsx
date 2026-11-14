@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from 'react'
+import type { Format } from '../share/saveCard'
 
 /** Content prints in top-down, line by line, the first time it scrolls into view. */
 export function PrintIn({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -53,14 +54,14 @@ export function Field({ label, children, ghost = false, big = false }: { label: 
 
 function useSave(ref: RefObject<HTMLElement | null>) {
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
-  const save = async (e: MouseEvent) => {
+  const save = async (e: MouseEvent, format: Format = 'free') => {
     e.stopPropagation()
     const el = ref.current
     if (!el || state === 'busy') return
     setState('busy')
     try {
       const name = el.querySelector('h1, h2, h3, .val, .num')?.textContent ?? 'card'
-      await (await import('../share/saveCard')).saveCard(el, name)
+      await (await import('../share/saveCard')).saveCard(el, name, format)
       setState('idle')
     } catch (err) {
       console.error(err)
@@ -70,6 +71,18 @@ function useSave(ref: RefObject<HTMLElement | null>) {
   }
   const label = { idle: 'Save', busy: 'Saving…', failed: "Couldn't save" }[state]
   return { state, save, label }
+}
+
+/** Save as-is, or letterboxed for a story (9:16) or a post (4:5). */
+function SaveMenu({ state, save, label, what }: { state: string; save: (e: MouseEvent, f?: Format) => void; label: string; what: string }) {
+  const busy = state === 'busy'
+  return (
+    <div className="save" role="group" aria-label={`Save this ${what}`}>
+      <button type="button" onClick={save} disabled={busy}>{label}</button>
+      <button type="button" onClick={(e) => save(e, 'story')} disabled={busy} aria-label="Save as a 9:16 story">9:16</button>
+      <button type="button" onClick={(e) => save(e, 'post')} disabled={busy} aria-label="Save as a 4:5 post">4:5</button>
+    </div>
+  )
 }
 
 /** A pass: printed body on stock plus a torn-off stub. */
@@ -83,7 +96,7 @@ export function Pass({ children, stub, stripe = false, share = true, className =
         {children}
       </div>
       {stub && <aside className="stub">{stub}</aside>}
-      {share && <button type="button" className="save" onClick={save} disabled={state === 'busy'} aria-label="Save this pass as an image">{label}</button>}
+      {share && <SaveMenu state={state} save={save} label={label} what="pass" />}
     </article>
   )
 }
@@ -95,7 +108,7 @@ export function Bill({ children, tone, share = true, className = '', id }: { chi
   return (
     <section ref={ref} id={id} className={`bill ${tone ?? ''} ${className}`}>
       <div className="peel">{children}</div>
-      {share && <button type="button" className="save" onClick={save} disabled={state === 'busy'} aria-label="Save this bill as an image">{label}</button>}
+      {share && <SaveMenu state={state} save={save} label={label} what="bill" />}
     </section>
   )
 }
