@@ -12,3 +12,9 @@ test('homeAt falls back to the first home before every window', () => {
   const late = { ...a, from: 100 }
   expect(homeAt([late, b], 50)).toBe(late)
 })
+test('a home can recur as a later stint after someone else was home', () => {
+  const b2 = { ...b, to: 1_800_000_000 }
+  const again: Home = { ...a, from: 1_800_000_000, to: null }
+  expect(homeAt([a, b2, again], 1_750_000_000)).toBe(b2)
+  expect(homeAt([a, b2, again], 1_850_000_000)).toBe(again)
+})

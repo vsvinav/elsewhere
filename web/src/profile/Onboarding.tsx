@@ -124,16 +124,19 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
           )}
 
           {step === 'moved' && (
-            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => m.month).join(' and ')}. Tap a place to add it as a home, then set the month each one started.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
+            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => m.month).join(' and ')}. Tap a place to add it as a home, then set the month each one started. Give a home an until and it can be added again for a later stint.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
               <div className="ob-tags">
-                {sleep.filter((s) => !homes.some((h) => isSame(h, s))).map((s) => {
+                {sleep.map((s) => {
+                  // A place already used as a home can come back as a later stint once its earlier one has an "until".
+                  const last = homes.filter((h) => isSame(h, s)).sort((a, b) => b.from - a.from)[0]
+                  if (last && !last.to) return null
                   const mv = moves.find((m) => m.to === s.place_id)
-                  const from = mv ? Date.parse(mv.month + '-01') / 1000 : range[0]
+                  const from = last?.to ?? (mv ? Date.parse(mv.month + '-01') / 1000 : range[0])
                   return (
                     <button key={s.place_id} className="tag ob-tag" onClick={() => setHomes([...homes, asHome(s, from)])}>
-                      <span className="lab">{mv ? `from ${mv.month}` : s.cc || '—'}</span>
+                      <span className="lab">{last ? 'moved back' : mv ? `from ${mv.month}` : s.cc || '—'}</span>
                       <span className="name">{label(s)}</span>
-                      <span className="sub">{s.score} {s.score === 1 ? 'night' : 'nights'}{s.labels > 1 ? ` · ${s.labels} labels merged` : ''}</span>
+                      <span className="sub">{last ? `again, after ${monthOf(last.to!)}` : `${s.score} ${s.score === 1 ? 'night' : 'nights'}${s.labels > 1 ? ` · ${s.labels} labels merged` : ''}`}</span>
                     </button>
                   )
                 })}
@@ -196,7 +199,7 @@ function HomeList({ homes, setHomes, range, hint }: { homes: Home[]; setHomes: (
       {hint && <p className="ob-hint">{hint}</p>}
       <ol className="ob-homes" aria-label="Your homes">
         {[...homes].sort((a, b) => a.from - b.from).map((h) => (
-          <li key={`${h.lat},${h.lng}`}>
+          <li key={`${h.lat},${h.lng},${h.from}`}>
             <span className="name">{h.name ?? h.city ?? 'Home'}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
             <label className="ob-month"><span className="lab">home since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, from: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : 0 } : x))} aria-label={`${h.city} home since`} /></label>
             <label className="ob-month"><span className="lab">until</span><input type="month" value={h.to ? monthOf(h.to) : ''} min={h.from ? monthOf(h.from) : monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => setHomes(homes.map((x) => x === h ? { ...x, to: e.target.value ? Date.parse(e.target.value + '-01') / 1000 : null } : x))} aria-label={`${h.city} home until`} /></label>
