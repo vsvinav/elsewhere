@@ -3,14 +3,30 @@ import argparse
 import hashlib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .export import export_all
+from .models import Home
 from .parse import parse_bytes
 
 DEFAULT_OUT = Path("web/public/data")
 CACHE = Path("places_cache.json")
 MIN_PARSE_RATIO = 0.9
+
+
+def parse_home(spec: str) -> Home:
+    """lat,lng[,YYYY-MM] — the month this became home; omit it for the first home."""
+    parts = spec.split(",")
+    if len(parts) not in (2, 3):
+        raise argparse.ArgumentTypeError("expected lat,lng[,YYYY-MM]")
+    from_ts = int(datetime.strptime(parts[2], "%Y-%m").replace(tzinfo=timezone.utc).timestamp()) if len(parts) == 3 else 0
+    return Home(float(parts[0]), float(parts[1]), from_ts=from_ts)
+
+
+def parse_latlng(spec: str) -> tuple[float, float]:
+    lat, lng = spec.split(",")
+    return float(lat), float(lng)
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -23,7 +39,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
     cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
     export_all(parsed, Path(args.out), source_file=Path(args.file).name,
-               source_sha256=hashlib.sha256(raw).hexdigest(), places_cache=cache)
+               source_sha256=hashlib.sha256(raw).hexdigest(), places_cache=cache,
+               homes=args.home or None, work=args.work)
     print(f"wrote {args.out}")
     return 0
 
@@ -39,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("build", help="parse export and write data files")
     b.add_argument("file")
     b.add_argument("--out", default=str(DEFAULT_OUT))
+    b.add_argument("--home", action="append", type=parse_home, metavar="LAT,LNG[,YYYY-MM]",
+                   help="a home and the month it started; repeat for moves (default: longest-stayed place)")
+    b.add_argument("--work", type=parse_latlng, metavar="LAT,LNG", help="work place, optional")
     b.set_defaults(fn=cmd_build)
     e = sub.add_parser("enrich", help="fetch Google Places names for top places")
     e.add_argument("--top", type=int, default=200)

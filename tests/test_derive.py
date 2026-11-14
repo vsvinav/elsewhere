@@ -1,15 +1,21 @@
 from pipeline.geo import tag_geo
 from pipeline.derive import derive_places
+from pipeline.models import Home
+
+BOS = [Home(42.3632761, -71.0643721)]
+WORK = (42.3736, -71.1097)
 
 
 def test_derive_places_aggregates(parsed):
-    tag_geo(parsed)
-    places = derive_places(parsed)
+    tag_geo(parsed, BOS)
+    places = derive_places(parsed, BOS, WORK)
     home = places["HOME1"]
     assert home["n_visits"] == 4
     assert abs(home["total_hours"] - (8 + 14.333 + 11 + 7.483)) < 0.1
     assert home["label"] == "HOME"
-    assert home["semantic_type"] == "INFERRED_HOME"
+    assert home["role"] == "home"
+    assert places["WORK1"]["role"] == "work"
+    assert places["MTV1"]["role"] is None
     assert home["country_code"] == "US"
     assert places["MTV1"]["n_visits"] == 2
     assert places["LUNCH1"]["n_visits"] == 1
@@ -21,8 +27,8 @@ from pipeline.derive import derive_daily
 
 
 def test_derive_daily_rows(parsed):
-    home = tag_geo(parsed)
-    daily = derive_daily(parsed, home)
+    tag_geo(parsed, BOS)
+    daily = derive_daily(parsed, BOS, WORK)
     by_date = {d["date"]: d for d in daily}
     assert sorted(by_date) == ["2025-03-03", "2025-03-04", "2025-03-05", "2025-03-06", "2025-03-07", "2025-03-08", "2025-03-09"]
 
@@ -51,8 +57,8 @@ from pipeline.derive import derive_trips
 
 
 def test_derive_trips_detects_sf_trip(parsed):
-    home = tag_geo(parsed)
-    trips = derive_trips(parsed, home)
+    tag_geo(parsed, BOS)
+    trips = derive_trips(parsed, BOS)
     assert len(trips) == 2
     t = trips[0]
     flight_out = next(a for a in parsed.activities if a.mode == "FLYING")
@@ -86,12 +92,12 @@ def test_derive_trips_anchor_cities_distinct():
 
     def mk(i, start, city, far):
         return Visit(id=i, start=start, end=start + H, tz=0, place_id=f"P{i}",
-                     lat=0.0, lng=0.0, semantic_type="UNKNOWN", probability=0.9,
-                     city=city, dist_from_home_km=500.0 if far else 0.0)
+                     lat=5.0 if far else 0.0, lng=0.0, semantic_type="UNKNOWN", probability=0.9,
+                     city=city)
 
     visits = [mk(1, 0, "A", True), mk(2, 2 * H, "B", True), mk(3, 4 * H, "A", True),
               mk(4, 30 * H, "Home", False)]
-    trips = derive_trips(_mk_parsed(visits), (0.0, 0.0))
+    trips = derive_trips(_mk_parsed(visits), [Home(0.0, 0.0)])
     assert len(trips) == 1
     assert trips[0]["anchor_cities"] == ["A", "B"]
 
@@ -103,7 +109,7 @@ def test_derive_daily_splits_transit_across_midnight():
     start = 1741060800  # 2025-03-04T04:00:00Z
     a = Activity(id=1, start=start, end=start + 7200, tz=tz, s_lat=0.0, s_lng=0.0,
                  e_lat=0.0, e_lng=0.0, distance_m=1000.0, mode="WALKING", probability=0.9)
-    daily = derive_daily(_mk_parsed([], [a]), (0.0, 0.0))
+    daily = derive_daily(_mk_parsed([], [a]), [Home(0.0, 0.0)])
     by_date = {d["date"]: d for d in daily}
     assert abs(by_date["2025-03-03"]["hours_transit"] - 1.0) < 1e-6
     assert abs(by_date["2025-03-04"]["hours_transit"] - 1.0) < 1e-6

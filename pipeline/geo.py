@@ -1,10 +1,9 @@
 from __future__ import annotations
 import math
 
-from .models import Parsed, Visit
+from .models import Home, Parsed, Visit
 
-HOME_TYPES = {"INFERRED_HOME", "HOME"}
-HOME_CLUSTER_KM = 50.0
+ROLE_RADIUS_KM = 0.3
 
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -16,32 +15,35 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def home_centroid(visits: list[Visit]) -> tuple[float, float]:
-    """Duration-weighted centroid of home-typed visits (fallback: all visits).
+def home_at(homes: list[Home], ts: int) -> Home:
+    """The home current at `ts`: the last one whose start is at or before it."""
+    cur = homes[0]
+    for h in homes:
+        if h.from_ts <= ts:
+            cur = h
+    return cur
 
-    Anchors on the place_id with the most total duration and only averages pool
-    visits within HOME_CLUSTER_KM of it, so a secondary home cluster elsewhere
-    does not drag the centroid between the two.
-    """
-    pool = [v for v in visits if v.semantic_type in HOME_TYPES] or visits
-    if not pool:
-        return (0.0, 0.0)
 
-    def dur(v: Visit) -> int:
-        return max(v.end - v.start, 1)
+def role_of(v: Visit, homes: list[Home], work: tuple[float, float] | None) -> str | None:
+    """'home' within ROLE_RADIUS_KM of the dated home, 'work' within it of work, else None."""
+    h = home_at(homes, v.start)
+    if haversine_km(h.lat, h.lng, v.lat, v.lng) <= ROLE_RADIUS_KM:
+        return "home"
+    if work and haversine_km(work[0], work[1], v.lat, v.lng) <= ROLE_RADIUS_KM:
+        return "work"
+    return None
 
+
+def guess_home(visits: list[Visit]) -> Home:
+    """Fallback when no --home is given: the place with the most total stay time."""
     by_place: dict[str, int] = {}
-    for v in pool:
-        by_place[v.place_id] = by_place.get(v.place_id, 0) + dur(v)
-    anchor_id = max(by_place, key=by_place.get)
-    anchor = next(v for v in pool if v.place_id == anchor_id)
-    cluster = [v for v in pool
-               if haversine_km(anchor.lat, anchor.lng, v.lat, v.lng) <= HOME_CLUSTER_KM]
-
-    w = sum(dur(v) for v in cluster)
-    lat = sum(v.lat * dur(v) for v in cluster) / w
-    lng = sum(v.lng * dur(v) for v in cluster) / w
-    return (lat, lng)
+    for v in visits:
+        by_place[v.place_id] = by_place.get(v.place_id, 0) + max(v.end - v.start, 1)
+    if not by_place:
+        return Home(0.0, 0.0)
+    pid = max(by_place, key=by_place.get)
+    v = next(v for v in visits if v.place_id == pid)
+    return Home(v.lat, v.lng)
 
 
 def _reverse(coords: list[tuple[float, float]]) -> list[dict]:
@@ -51,9 +53,8 @@ def _reverse(coords: list[tuple[float, float]]) -> list[dict]:
     return rg.search(coords, mode=1)  # mode=1: single process, deterministic
 
 
-def tag_geo(parsed: Parsed) -> tuple[float, float]:
-    """Mutates visits/activities in place with city/country/distance. Returns home."""
-    home = home_centroid(parsed.visits)
+def tag_geo(parsed: Parsed, homes: list[Home]) -> None:
+    """Mutates visits/activities in place with city/country/distance from the dated home."""
     coords: list[tuple[float, float]] = []
     for v in parsed.visits:
         coords.append((v.lat, v.lng))
@@ -66,8 +67,11 @@ def tag_geo(parsed: Parsed) -> tuple[float, float]:
     for v in parsed.visits:
         h = hits[i]; i += 1
         v.city, v.country_code = h["name"], h["cc"]
-        v.dist_from_home_km = haversine_km(home[0], home[1], v.lat, v.lng)
+        h = home_at(homes, v.start)
+        v.dist_from_home_km = haversine_km(h.lat, h.lng, v.lat, v.lng)
     for a in parsed.activities:
         s, e = hits[i], hits[i + 1]; i += 2
         a.s_city, a.e_city, a.e_country_code = s["name"], e["name"], e["cc"]
-    return home
+    for h in homes:
+        hit = _reverse([(h.lat, h.lng)])[0]
+        h.city, h.cc = h.city or hit["name"], h.cc or hit["cc"]

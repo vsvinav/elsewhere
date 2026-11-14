@@ -1,4 +1,7 @@
-from pipeline.geo import haversine_km, home_centroid, tag_geo
+from pipeline.geo import guess_home, haversine_km, home_at, role_of, tag_geo
+from pipeline.models import Home, Visit
+
+BOS = Home(42.3632761, -71.0643721)
 
 
 def test_haversine_boston_to_sf():
@@ -6,14 +9,15 @@ def test_haversine_boston_to_sf():
     assert 4330 < d < 4350
 
 
-def test_home_centroid_uses_home_visits(parsed):
-    home = home_centroid(parsed.visits)
-    assert abs(home[0] - 42.3632761) < 1e-6
-    assert abs(home[1] + 71.0643721) < 1e-6
+def test_guess_home_picks_longest_stay(parsed):
+    home = guess_home(parsed.visits)
+    assert abs(home.lat - 42.3632761) < 1e-6
+    assert abs(home.lng + 71.0643721) < 1e-6
 
 
 def test_tag_geo_sets_city_country_and_distance(parsed):
-    tag_geo(parsed)
+    tag_geo(parsed, [BOS])
+    assert BOS.cc == "US"
     home_visit = parsed.visits[0]
     far_visit = next(v for v in parsed.visits if v.place_id == "MTV1")
     assert home_visit.country_code == "US"
@@ -25,18 +29,23 @@ def test_tag_geo_sets_city_country_and_distance(parsed):
     assert flight.e_city is not None
 
 
-def test_home_centroid_anchors_on_dominant_cluster():
-    from pipeline.models import Visit
+def test_home_at_follows_moves():
+    homes = [Home(0, 0, from_ts=0), Home(1, 1, from_ts=100)]
+    assert home_at(homes, 50) is homes[0]
+    assert home_at(homes, 100) is homes[1]
+    assert home_at(homes, 500) is homes[1]
 
-    def mk(i, place_id, lat, lng, hours):
-        return Visit(id=i, start=0, end=hours * 3600, tz=0, place_id=place_id,
-                     lat=lat, lng=lng, semantic_type="INFERRED_HOME", probability=0.9)
 
-    visits = [
-        mk(1, "BOS_A", 42.3601, -71.0589, 15),
-        mk(2, "BOS_A", 42.3620, -71.0600, 10),
-        mk(3, "BOS_C", 42.3580, -71.0570, 5),
-        mk(4, "SF", 37.7749, -122.4194, 20),
-    ]
-    home = home_centroid(visits)
-    assert haversine_km(home[0], home[1], 42.3601, -71.0589) < 1
+def test_role_of_uses_dated_home_and_work():
+    homes = [Home(42.3632761, -71.0643721, from_ts=0), Home(37.7749, -122.4194, from_ts=1000)]
+    work = (42.3736, -71.1097)
+
+    def mk(ts, lat, lng):
+        return Visit(id=1, start=ts, end=ts + 3600, tz=0, place_id="x", lat=lat, lng=lng,
+                     semantic_type="UNKNOWN", probability=0.9)
+
+    assert role_of(mk(10, 42.3632761, -71.0643721), homes, work) == "home"
+    assert role_of(mk(2000, 42.3632761, -71.0643721), homes, work) is None   # moved away
+    assert role_of(mk(2000, 37.7749, -122.4194), homes, work) == "home"
+    assert role_of(mk(10, 42.3736, -71.1097), homes, work) == "work"
+    assert role_of(mk(10, 42.3736, -71.1097), homes, None) is None

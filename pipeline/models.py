@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class Home:
+    lat: float
+    lng: float
+    city: str = ""
+    cc: str = ""
+    from_ts: int = 0          # utc epoch s this home became current; 0 = since the start
+    to_ts: int | None = None
+
+
+@dataclass
 class Visit:
     id: int
     start: int          # utc epoch s

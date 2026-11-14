@@ -5,8 +5,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .derive import derive_daily, derive_places, derive_trips
-from .geo import tag_geo
-from .models import Parsed
+from .geo import guess_home, tag_geo
+from .models import Home, Parsed
 
 
 STROKE_POINTS = 8000
@@ -17,9 +17,13 @@ def _dump(path: Path, obj) -> None:
 
 
 def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256: str,
-               places_cache: dict[str, dict]) -> None:
+               places_cache: dict[str, dict], homes: list[Home] | None = None,
+               work: tuple[float, float] | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    home = tag_geo(parsed)
+    homes = sorted(homes or [guess_home(parsed.visits)], key=lambda h: h.from_ts)
+    for h, nxt in zip(homes, homes[1:]):
+        h.to_ts = nxt.from_ts
+    tag_geo(parsed, homes)
 
     _dump(out_dir / "visits.json", [
         {"id": v.id, "start": v.start, "end": v.end, "tz": v.tz, "place_id": v.place_id,
@@ -45,7 +49,7 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
          "pts": [[q.ts, round(q.lat, 4), round(q.lng, 4)] for i, q in enumerate(p.pts) if i % k == 0 or i == len(p.pts) - 1]}
         for p in parsed.paths if len(p.pts) > 1])
 
-    places = derive_places(parsed)
+    places = derive_places(parsed, homes, work)
     for pid, cached in places_cache.items():
         if pid in places:
             places[pid]["name"] = cached.get("name")
@@ -54,11 +58,14 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
             places[pid]["primary_type"] = cached.get("primary_type")
     _dump(out_dir / "places.json", places)
 
-    _dump(out_dir / "daily.json", derive_daily(parsed, home))
-    _dump(out_dir / "trips.json", derive_trips(parsed, home))
+    _dump(out_dir / "daily.json", derive_daily(parsed, homes, work))
+    _dump(out_dir / "trips.json", derive_trips(parsed, homes))
 
+    last = homes[-1]
     _dump(out_dir / "profile.json", {
-        "home": {"lat": home[0], "lng": home[1]},
+        "home": {"lat": last.lat, "lng": last.lng},
+        "homes": [{"lat": h.lat, "lng": h.lng, "city": h.city, "cc": h.cc, "from": h.from_ts, "to": h.to_ts} for h in homes],
+        "work": {"lat": work[0], "lng": work[1], "place_id": ""} if work else None,
         "frequent_places": parsed.profile.frequent_places,
         "frequent_trips": parsed.profile.frequent_trips,
         "persona": parsed.profile.persona,

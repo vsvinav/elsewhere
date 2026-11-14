@@ -2,14 +2,14 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from .geo import HOME_TYPES, haversine_km
-from .models import Parsed
+from .geo import haversine_km, home_at, role_of
+from .models import Home, Parsed
 
-WORK_TYPES = {"INFERRED_WORK", "WORK"}
+Work = tuple[float, float] | None
 TRIP_RADIUS_KM = 50.0
 
 
-def derive_places(parsed: Parsed) -> dict[str, dict]:
+def derive_places(parsed: Parsed, homes: list[Home], work: Work = None) -> dict[str, dict]:
     labels = {p["place_id"]: p.get("label") for p in parsed.profile.frequent_places}
     out: dict[str, dict] = {}
     for v in parsed.visits:
@@ -17,7 +17,7 @@ def derive_places(parsed: Parsed) -> dict[str, dict]:
         if p is None:
             p = out[v.place_id] = {
                 "lat": v.lat, "lng": v.lng, "label": labels.get(v.place_id),
-                "semantic_type": v.semantic_type, "city": v.city,
+                "role": None, "city": v.city,
                 "country_code": v.country_code, "n_visits": 0, "total_hours": 0.0,
                 "first_ts": v.start, "last_ts": v.end, "name": None, "address": None,
             }
@@ -25,9 +25,14 @@ def derive_places(parsed: Parsed) -> dict[str, dict]:
         p["total_hours"] += (v.end - v.start) / 3600
         p["first_ts"] = min(p["first_ts"], v.start)
         p["last_ts"] = max(p["last_ts"], v.end)
-        if v.semantic_type != "UNKNOWN":
-            p["semantic_type"] = v.semantic_type
+        if p["role"] is None:
+            p["role"] = role_of(v, homes, work)
     return out
+
+
+def _dist_home(homes: list[Home], ts: int, lat: float, lng: float) -> float:
+    h = home_at(homes, ts)
+    return haversine_km(h.lat, h.lng, lat, lng)
 
 
 def _local_date(ts: int, tz_min: int) -> str:
@@ -46,7 +51,7 @@ def _split_by_local_day(start: int, end: int, tz_min: int):
         cur = chunk_end
 
 
-def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
+def derive_daily(parsed: Parsed, homes: list[Home], work: Work = None) -> list[dict]:
     days: dict[str, dict] = {}
 
     def day(d: str) -> dict:
@@ -64,14 +69,9 @@ def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
         if v.place_id not in seen:
             seen.add(v.place_id)
             row["n_new_places"] += 1
-        if v.semantic_type in HOME_TYPES:
-            bucket = "hours_home"
-        elif v.semantic_type in WORK_TYPES:
-            bucket = "hours_work"
-        else:
-            bucket = "hours_other"
-        dist = v.dist_from_home_km if v.dist_from_home_km is not None else \
-            haversine_km(home[0], home[1], v.lat, v.lng)
+        role = role_of(v, homes, work)
+        bucket = "hours_home" if role == "home" else "hours_work" if role == "work" else "hours_other"
+        dist = _dist_home(homes, v.start, v.lat, v.lng)
         # Nested visits (hierarchy_level > 0) lie inside a parent stay whose time is
         # already bucketed; adding theirs too would push a day past 24 h.
         count_hours = v.hierarchy_level == 0
@@ -89,7 +89,7 @@ def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
         row["km_by_mode"][a.mode] += a.distance_m / 1000
         for d, secs in _split_by_local_day(a.start, a.end, a.tz):
             day(d)["hours_transit"] += secs / 3600
-        dist = haversine_km(home[0], home[1], a.e_lat, a.e_lng)
+        dist = _dist_home(homes, a.start, a.e_lat, a.e_lng)
         row["max_dist_from_home_km"] = max(row["max_dist_from_home_km"], dist)
         if a.e_city:
             row["_cities"].add(a.e_city)
@@ -113,14 +113,13 @@ def _nights(start: int, end: int, tz_min: int) -> int:
     return (d1 - d0).days
 
 
-def derive_trips(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
+def derive_trips(parsed: Parsed, homes: list[Home]) -> list[dict]:
     flights = [a for a in parsed.activities if a.mode == "FLYING"]
     trips: list[dict] = []
     cur: dict | None = None
 
     for v in parsed.visits:
-        dist = v.dist_from_home_km if v.dist_from_home_km is not None else \
-            haversine_km(home[0], home[1], v.lat, v.lng)
+        dist = _dist_home(homes, v.start, v.lat, v.lng)
         away = dist > TRIP_RADIUS_KM
         if cur is None and away:
             start = v.start
