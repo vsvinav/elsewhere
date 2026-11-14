@@ -23,13 +23,13 @@ def test_strip_escapes_removes_terminal_sequences():
 
 
 def test_parse_bytes_counts(parsed):
-    assert len(parsed.visits) == 11
+    assert len(parsed.visits) == 12
     assert len(parsed.activities) == 8
     assert len(parsed.paths) == 1 and len(parsed.paths[0].pts) == 3
     assert len(parsed.memory_trips) == 1
     assert len(parsed.positions) == 2
-    assert parsed.report.segments_total == 22
-    assert parsed.report.parsed == 21
+    assert parsed.report.segments_total == 23
+    assert parsed.report.parsed == 22
     assert parsed.report.skipped_by_reason == {"bad_latlng": 1}
 
 
@@ -40,6 +40,12 @@ def test_parse_bytes_visit_fields(parsed):
     assert (v.lat, v.lng) == (42.3632761, -71.0643721)
     assert v.tz == -300
     assert v.end - v.start == 8 * 3600
+
+
+def test_parse_bytes_hierarchy_level(parsed):
+    nested = next(v for v in parsed.visits if v.place_id == "LUNCH1")
+    assert nested.hierarchy_level == 1
+    assert parsed.visits[0].hierarchy_level == 0
 
 
 def test_tz_prefers_segment_offset_field_over_string_offset(parsed):

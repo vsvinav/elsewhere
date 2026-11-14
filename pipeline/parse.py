@@ -49,7 +49,8 @@ def _visit(seg: dict, idx: int) -> Visit:
     lat, lng = parse_latlng(tc["placeLocation"]["latLng"])
     return Visit(id=idx, start=start, end=end, tz=tz, place_id=tc["placeId"],
                  lat=lat, lng=lng, semantic_type=tc.get("semanticType", "UNKNOWN"),
-                 probability=float(v.get("probability", tc.get("probability", 0.0))))
+                 probability=float(v.get("probability", tc.get("probability", 0.0))),
+                 hierarchy_level=int(v.get("hierarchyLevel", 0)))
 
 
 def _activity(seg: dict, idx: int) -> Activity:

@@ -12,6 +12,7 @@ def test_derive_places_aggregates(parsed):
     assert home["semantic_type"] == "INFERRED_HOME"
     assert home["country_code"] == "US"
     assert places["MTV1"]["n_visits"] == 2
+    assert places["LUNCH1"]["n_visits"] == 1
     assert "BAD1" not in places
     assert home["first_ts"] < home["last_ts"]
 
@@ -27,12 +28,12 @@ def test_derive_daily_rows(parsed):
 
     d3 = by_date["2025-03-03"]
     assert d3["km_by_mode"] == {"IN_SUBWAY": 10.4}
-    assert d3["n_visits"] == 3
-    assert d3["n_places"] == 2
-    assert d3["n_new_places"] == 2          # HOME1 and WORK1 first seen
+    assert d3["n_visits"] == 4              # includes nested LUNCH1
+    assert d3["n_places"] == 3
+    assert d3["n_new_places"] == 3          # HOME1, WORK1, LUNCH1 first seen
     assert abs(d3["hours_home"] - (8 + 6.333)) < 0.05   # 00:00-08:00 + 17:40-24:00
     assert abs(d3["hours_work"] - 8.5) < 0.01
-    assert d3["hours_other"] == 0
+    assert d3["hours_other"] == 0           # nested LUNCH1 hour not double-counted
     assert abs(d3["hours_transit"] - (0.5 + 0.667)) < 0.01
     assert d3["max_dist_from_home_km"] < 10
 

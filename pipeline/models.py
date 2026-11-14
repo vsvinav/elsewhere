@@ -13,6 +13,7 @@ class Visit:
     lng: float
     semantic_type: str  # UNKNOWN | INFERRED_HOME | HOME | INFERRED_WORK | WORK | SEARCHED_ADDRESS
     probability: float
+    hierarchy_level: int = 0  # 0 = top-level stay, >0 = sub-visit nested inside a parent stay
     city: str | None = None
     country_code: str | None = None
     dist_from_home_km: float | None = None

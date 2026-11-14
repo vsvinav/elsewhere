@@ -72,9 +72,13 @@ def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
             bucket = "hours_other"
         dist = v.dist_from_home_km if v.dist_from_home_km is not None else \
             haversine_km(home[0], home[1], v.lat, v.lng)
+        # Nested visits (hierarchy_level > 0) lie inside a parent stay whose time is
+        # already bucketed; adding theirs too would push a day past 24 h.
+        count_hours = v.hierarchy_level == 0
         for d, secs in _split_by_local_day(v.start, v.end, v.tz):
             r = day(d)
-            r[bucket] += secs / 3600
+            if count_hours:
+                r[bucket] += secs / 3600
             r["_places"].add(v.place_id)
             if v.city:
                 r["_cities"].add(v.city)
