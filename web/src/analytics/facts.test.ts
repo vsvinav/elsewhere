@@ -1,5 +1,6 @@
 import { bedStrip, longestRun } from './beds'
 import { facts } from './facts'
+import { filterData } from '../data/filter'
 import type { Data } from '../data/types'
 
 const H = 3600, D = 86400
@@ -67,4 +68,12 @@ test('facts: fires on a small record, converts to miles, and stays silent on an 
   expect(fig && fig.t === 'scale' && fig.unit).toBe('mi')
 
   expect(facts({ ...data, visits: [], activities: [], places: {} } as Data, 'km')).toEqual([])
+})
+
+test('facts: a cut range only counts what happened inside it, but keeps firsts from the whole record', () => {
+  const cut = filterData(data, [JAN + 7 * D, JAN + 10 * D])
+  const f = facts(cut, 'km', data)
+  expect(f.map((x) => x.id)).not.toContain('walked')
+  expect(f.map((x) => x.id)).not.toContain('countries')
+  expect(f.find((x) => x.id === 'furthest')?.detail).toMatch(/January 8, 2025/)
 })

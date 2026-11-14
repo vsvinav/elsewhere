@@ -29,7 +29,7 @@ export function Facts() {
   const raw = useRawData()
   const prof = useProfile()
   const units = prof?.units ?? 'km'
-  const all = useMemo(() => facts(raw, units, data.meta.range), [raw, units, data.meta.range])
+  const all = useMemo(() => facts(data, units, raw), [data, units, raw])
   const [seed, setSeed] = useState(0)
   const list = useMemo(() => arrange(all, seed), [all, seed])
   const kinds = ORDER.filter((k) => all.some((f) => f.kind === k))

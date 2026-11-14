@@ -9,7 +9,7 @@ page.on('pageerror', e => console.log('PAGEERROR', (e.stack ?? e.message).slice(
 page.on('requestfailed', r => console.log('REQFAIL', r.url().slice(0, 120), r.failure()?.errorText))
 if (process.env.LS) await page.evaluateOnNewDocument((ls) => { for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v) }, JSON.parse(process.env.LS))
 await page.goto(process.argv[2] ?? 'http://localhost:5173', { waitUntil: 'networkidle0', timeout: 60000 })
-if (process.argv[3]) { await page.click(process.argv[3]); }
+if (process.argv[3]) { await page.waitForSelector(process.argv[3], { timeout: 20000 }); await page.click(process.argv[3]); }
 await new Promise(r => setTimeout(r, +(process.argv[4] ?? 8000)))
 if (process.env.SCROLL) { await page.evaluate((sel) => { const el = isNaN(+sel) ? document.querySelector(sel) : null; if (el) el.scrollIntoView({ block: 'start' }); else scrollTo(0, +sel) }, process.env.SCROLL); await new Promise(r => setTimeout(r, 1200)) }
 const stats = await page.evaluate(() => {

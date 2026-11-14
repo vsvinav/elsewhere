@@ -34,7 +34,7 @@ const WALKS: [number, string][] = [
   [9_000, 'Cape Town to Cairo'], [14_000, 'Patagonia to Alaska'],
 ]
 
-interface Ctx { d: Data; u: Units; dist: (km: number) => string; cv: (km: number) => number; nights: Night[]; range: [number, number] }
+interface Ctx { d: Data; raw: Data; u: Units; dist: (km: number) => string; cv: (km: number) => number; nights: Night[]; range: [number, number]; isFirst: (v: Visit) => boolean }
 
 const sleeps = (d: Data) => d.visits.filter((v) => v.lvl === 0 && nightsIn(v) > 0)
 const kmOf = (d: Data, pred: (mode: string) => boolean) => d.activities.reduce((a, x) => a + (pred(x.mode) ? x.m / 1000 : 0), 0)
@@ -125,12 +125,12 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     return { id: 'owl', kind: 'habit', headline: share >= 15 ? `Night owl · ${share}% of legs after 10 pm` : `${share}% of your legs start after 10 pm`, detail: `${n0(late)} of ${n0(n)} journeys began between 22:00 and 04:00 local time.`, figure: { t: 'dial', hours } }
   },
   // 10 · Weekend explorer
-  ({ d }) => {
-    const seen = new Set<string>(), cells = Array<number>(7 * 24).fill(0)
+  ({ d, isFirst }) => {
+    const cells = Array<number>(7 * 24).fill(0)
     let firsts = 0, weekend = 0
     for (const v of nonRoutine(d)) {
-      if (seen.has(v.place_id)) continue
-      seen.add(v.place_id); firsts++
+      if (!isFirst(v)) continue
+      firsts++
       const dow = localDow(v.start, v.tz)
       cells[dow * 24 + localHour(v.start, v.tz)]++
       if (dow >= 5) weekend++
@@ -140,11 +140,10 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     return { id: 'weekend', kind: 'habit', headline: `${share}% of new places found on a weekend`, detail: `${n0(firsts)} first visits; ${n0(weekend)} were on a Saturday or Sunday. Two days of seven is ${Math.round(200 / 7)}%.`, figure: { t: 'week', cells } }
   },
   // 11 · New vs repeat
-  ({ d }) => {
+  ({ d, isFirst }) => {
     const vs = nonRoutine(d)
     if (vs.length < 20) return null
-    const seen = new Set<string>(); let fresh = 0
-    for (const v of vs) { if (!seen.has(v.place_id)) { seen.add(v.place_id); fresh++ } }
+    const fresh = vs.filter(isFirst).length
     const share = pct(fresh, vs.length)
     return { id: 'fresh', kind: 'habit', headline: `${share}% of stops were somewhere new`, detail: `${n0(fresh)} first-time places out of ${n0(vs.length)} stops away from home and work.`, figure: { t: 'ring', pct: share, label: 'new' } }
   },
@@ -224,11 +223,17 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
 
 const ORDER: Kind[] = ['explored', 'record', 'scale', 'habit']
 
-/** Every fact the record supports, explored → record → scale → habit. Units from the profile. */
-export function facts(data: Data, units: Units = 'km', range: [number, number] = data.meta.range): Fact[] {
+/**
+ * Every fact the range supports, explored → record → scale → habit. Units from the profile.
+ * `data` is the range-filtered record; `raw` the whole one, so firsts are judged over all time.
+ */
+export function facts(data: Data, units: Units = 'km', raw: Data = data): Fact[] {
+  const range = data.meta.range
   const dist = (km: number) => (units === 'mi' ? `${n0(km * MI)} mi` : `${n0(km)} km`)
   const cv = (km: number) => (units === 'mi' ? km * MI : km)
-  const ctx: Ctx = { d: data, u: units, dist, cv, nights: bedStrip(data, range), range }
+  // First visit ever to a place: the earliest raw visit starts no sooner than this one.
+  const isFirst = (v: Visit) => { const f = raw.places[v.place_id]?.first_ts; return f == null || v.start <= f }
+  const ctx: Ctx = { d: data, raw, u: units, dist, cv, nights: bedStrip(raw, range), range, isFirst }
   const out: Fact[] = []
   for (const g of GEN) { const f = g(ctx); if (f) out.push(f) }
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind))
