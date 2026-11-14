@@ -44,7 +44,6 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const deckRef = useRef<React.ComponentRef<typeof DeckGL>>(null)
-  const idle = useRef(true)
   const fitPasses = useRef(0)
   const [view, setView] = useState<MapViewState | GlobeViewState | null>(null)
   useEffect(() => { loadLand().then(setGeo) }, [])
@@ -58,7 +57,6 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [])
-  useEffect(() => { if (globe && idle.current && t) setView((v) => v && { ...v, longitude: ((v.longitude + 0.04 + 180) % 360) - 180 }) }, [t, globe])
   const maxN = hops.reduce((m, h) => Math.max(m, h.n), 1)
 
   useEffect(() => {
@@ -66,14 +64,18 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
     const lngs = ports.map((p) => p.p[0]), lats = ports.map((p) => p.p[1])
     const w = ref.current?.clientWidth ?? 1000, h = ref.current?.clientHeight ?? height
     if (globe) {
-      // Face the busiest airport; sized so the earth fills the sheet's shorter side.
-      setView({ longitude: ports[0].p[0], latitude: Math.max(-40, Math.min(40, ports[0].p[1] - 10)), zoom: 1, minZoom: 0, maxZoom: 5 })
+      // Face the centre of mass of every flight (endpoints weighted by times flown) so most routes are on the lit side; sized so the earth fills the sheet's shorter side.
+      const r = Math.PI / 180
+      let x = 0, y = 0, z = 0
+      for (const h of hops) for (const [lng, lat] of [h.s, h.t]) { x += h.n * Math.cos(lat * r) * Math.cos(lng * r); y += h.n * Math.cos(lat * r) * Math.sin(lng * r); z += h.n * Math.sin(lat * r) }
+      const c = hops.length ? [Math.atan2(y, x) / r, Math.atan2(z, Math.hypot(x, y)) / r] : ports[0].p
+      setView({ longitude: c[0], latitude: Math.max(-30, Math.min(30, c[1])), zoom: 1, minZoom: 0, maxZoom: 5 })
       fitPasses.current = 4
       return
     }
     const vp = new WebMercatorViewport({ width: w, height: h }).fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: w > 700 ? 90 : 48 })
     setView({ longitude: vp.longitude, latitude: vp.latitude, zoom: Math.min(vp.zoom, 5.5), pitch: 30, bearing: 0, minZoom: 0, maxZoom: 9, minPitch: 0, maxPitch: 60 })
-  }, [ports, height, globe])
+  }, [ports, hops, height, globe])
 
   const wide = (ref.current?.clientWidth ?? 1000) > 700
   // Labels are HTML tags projected through the live viewport; a tag that would overlap one already placed slides to another side of its dot.
@@ -137,7 +139,7 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
   return (
     <div ref={ref} className={`flightmap ${mode} ${className}`} style={{ height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
       {view && (
-        <DeckGL ref={deckRef} views={globe ? new GlobeView({ resolution: 10 }) : new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => { if (e.interactionState.isDragging || e.interactionState.isZooming) idle.current = false; setView(e.viewState as MapViewState) }}
+        <DeckGL ref={deckRef} views={globe ? new GlobeView({ resolution: 10 }) : new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => { setView(e.viewState as MapViewState) }}
           controller={{ scrollZoom: globe, dragRotate: !globe, touchRotate: !globe, keyboard: false, inertia: 300 }} layers={layers} style={{ position: 'absolute', inset: '0' }}
           getCursor={({ isDragging }) => (isDragging ? 'grabbing' : 'grab')} />
       )}
