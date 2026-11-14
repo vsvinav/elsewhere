@@ -101,11 +101,11 @@ function SaveMenu({ state, save, label, what, text }: { state: string; save: (e:
 }
 
 /** A pass: printed body on stock plus a torn-off stub. */
-export function Pass({ children, stub, stripe = false, share = true, className = '', text }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string; text?: () => string }) {
+export function Pass({ children, stub, stripe = false, share = true, className = '', id, text }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string; id?: string; text?: () => string }) {
   const ref = useRef<HTMLElement>(null)
   const { state, save, label } = useSave(ref)
   return (
-    <article ref={ref} className={`pass ${stub ? '' : 'one'} ${className}`}>
+    <article ref={ref} id={id} className={`pass ${stub ? '' : 'one'} ${className}`}>
       <div className={`body ${stub ? 'perf' : ''}`}>
         {stripe && <div className="stripe" />}
         {children}

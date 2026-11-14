@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useData, useRawData } from '../../data/DataContext'
 import { useProfile } from '../../profile/profile'
 import { facts, type Fact, type Kind } from '../../analytics/facts'
@@ -31,9 +31,21 @@ export function Facts() {
   const units = prof?.units ?? 'km'
   const all = useMemo(() => facts(data, units, raw), [data, units, raw])
   const [seed, setSeed] = useState(0)
-  const list = useMemo(() => arrange(all, seed), [all, seed])
+  const [only, setOnly] = useState<Kind | null>(null)
+  const list = useMemo(() => arrange(all, seed).filter((f) => !only || f.kind === only), [all, seed, only])
   const kinds = ORDER.filter((k) => all.some((f) => f.kind === k))
   const year = new Date(data.meta.range[1] * 1000).getUTCFullYear()
+  // One fact at a time up top, turning every few seconds unless the pointer rests on it.
+  const [at, setAt] = useState(0)
+  const [hold, setHold] = useState(false)
+  useEffect(() => { setAt(0) }, [list])
+  useEffect(() => {
+    if (hold || list.length < 2) return
+    const t = setInterval(() => setAt((i) => (i + 1) % list.length), 6000)
+    return () => clearInterval(t)
+  }, [hold, list.length])
+  const star = list[at]
+  const jump = (f: Fact) => document.getElementById(`fact-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 
   return (
     <>
@@ -44,12 +56,27 @@ export function Facts() {
               <h1 className="title"><span className="misreg">Fun</span><span className="misreg red">Facts</span></h1>
               <p className="lede sub">{all.length ? `${all.length} things your record says about you, read sideways. Firsts are judged over the whole record, so a January trip stays new when you cut the range down.` : 'Nothing to say yet. Widen the range, or wait for the record to fill in.'}</p>
             </div>
-            <div className="facts-kinds">
-              {kinds.map((k) => <Field key={k} label={KIND[k]} big>{all.filter((f) => f.kind === k).length}</Field>)}
-              {all.length > 1 && <button className="btn quiet" onClick={() => setSeed(Date.now() & 0xffff)}>Shuffle →</button>}
-            </div>
+            {star && (
+              <div className="feature" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}>
+                <div className="feature-top"><Field label={KIND[star.kind]}>{at + 1} of {list.length}</Field><span className="feature-bar" key={`${star.id}-${hold}`} data-hold={hold || undefined} /></div>
+                <button key={star.id} className="feature-card" onClick={() => jump(star)} aria-label={`Go to: ${star.headline}`}>
+                  {star.figure && <div className="feature-fig"><Fig f={star.figure} /></div>}
+                  <h2 className="fact-h">{star.headline}</h2>
+                </button>
+                <div className="feature-nav">
+                  <button className="btn quiet" onClick={() => setAt((at + list.length - 1) % list.length)} aria-label="Previous fact">←</button>
+                  <button className="btn quiet" onClick={() => setAt((at + 1) % list.length)} aria-label="Next fact">→</button>
+                  {all.length > 1 && <button className="btn quiet" onClick={() => setSeed(Date.now() & 0xffff)}>Shuffle</button>}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="foot"><span>{kinds.map((k) => KIND[k]).join(' · ')}</span><span>{units === 'mi' ? 'Miles' : 'Kilometres'}</span></div>
+          <div className="foot">
+            <span className="facts-kinds" role="group" aria-label="Show only">
+              {kinds.map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}>{KIND[k]} <b>{all.filter((f) => f.kind === k).length}</b></button>)}
+            </span>
+            <span>{units === 'mi' ? 'Miles' : 'Kilometres'}</span>
+          </div>
           <Stamp top="Fun facts" big={String(year)} bottom="live" />
         </Bill>
       </main>
@@ -59,7 +86,7 @@ export function Facts() {
             const wide = f.figure && WIDE.has(f.figure.t)
             const text = () => (f.figure?.t === 'beds' ? bedText(f.figure.nights, f.headline.toUpperCase()) : `${f.headline.toUpperCase()}\n${f.detail}\n${SITE}`)
             return (
-              <Pass key={f.id} className={`fact ${f.kind}`} text={text} stub={
+              <Pass key={f.id} id={`fact-${f.id}`} className={`fact ${f.kind}`} text={text} stub={
                 <PrintIn>
                   <Field label={KIND[f.kind]}>{i + 1} of {list.length}</Field>
                   {f.figure && !wide && <div className="fact-fig"><Fig f={f.figure} /></div>}
