@@ -104,9 +104,10 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
         { dx: 12, dy: -row, end: false }, { dx: 12, dy: row, end: false },
         { dx: -12, dy: -row, end: true }, { dx: -12, dy: row, end: true },
       ].map((sl) => ({ ...sl, bx: sl.end ? x + sl.dx - tw : x + sl.dx, by: y + sl.dy }))
-      const free = slots.find((sl) => !kept.some((b) => sl.bx < b.x + b.w && sl.bx + tw > b.x && Math.abs(sl.by - b.y) < row))
-      // The globe is the overview: a name with no room waits for its regional panel. Regions print every name.
-      if (!free && globe) continue
+      const inside = (sl: { bx: number; by: number }) => sl.bx >= 4 && sl.bx + tw <= vp.width - 4 && sl.by >= row && sl.by <= vp.height - row
+      const free = slots.find((sl) => inside(sl) && !kept.some((b) => sl.bx < b.x + b.w && sl.bx + tw > b.x && Math.abs(sl.by - b.y) < row))
+      // The globe is the overview: a name with no room waits for its regional panel. Regions print every name on desktop; phones drop collisions.
+      if (!free && (globe || !wide)) continue
       const sl = free ?? slots[0]
       kept.push({ x: sl.bx, y: sl.by, w: tw }); out.push({ key: p.p.join(), name: p.name, x: x + sl.dx, y: sl.by, end: sl.end })
     }
