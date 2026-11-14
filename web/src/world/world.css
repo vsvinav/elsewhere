@@ -73,6 +73,12 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .tourline .account .menu button { text-align: left; padding: 10px 14px; border: 0; background: none; color: var(--ink); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
 .tourline .account .menu button + button { border-top: 1px solid var(--ink-3); }
 .tourline .account .menu button:hover { background: var(--ink); color: var(--stock); }
+.tourline .account .usage { display: grid; gap: 4px; padding: 10px 14px 12px; border-top: 2px solid var(--ink); white-space: normal; width: 240px; }
+.tourline .account .usage .lab { font: 700 9px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
+.tourline .account .usage > span:nth-child(2) { font: 900 20px/1 var(--display); }
+.tourline .account .usage .fine { font: 500 11px/1.35 var(--body); color: var(--ink-2); }
+.tourline .account .usage button { padding: 6px 0 0; justify-self: start; border: 0; text-decoration: underline; }
+.tourline .account .usage button:hover { background: none; color: var(--red); }
 
 /* Ticket strip: perforated bottom nav */
 .ticket {

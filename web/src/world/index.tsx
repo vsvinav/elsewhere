@@ -1,3 +1,4 @@
+import { Photo } from '../usage/Meter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import type { Format } from '../share/saveCard'
 
@@ -140,7 +141,7 @@ export function Sticker({ photo, name, sub, tilt, children, onClick }: { photo?:
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag className="sticker" style={tilt != null ? ({ '--tilt': `${tilt}deg` } as CSSProperties) : undefined} onClick={onClick} type={onClick ? 'button' : undefined}>
-      {photo ? <img className="photo" src={photo} alt="" loading="lazy" /> : <div className="blank caps">no photo on record</div>}
+      {photo ? <Photo src={photo} /> : <div className="blank caps">no photo on record</div>}
       <div className="name">{name}</div>
       {sub && <div className="sub">{sub}</div>}
       {children}

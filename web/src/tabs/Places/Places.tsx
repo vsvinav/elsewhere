@@ -1,3 +1,4 @@
+import { Photo } from '../../usage/Meter'
 import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { placeName } from '../../analytics/home'
@@ -93,7 +94,7 @@ export function Places() {
       <div className="tags">
           {list.slice(0, limit).map(([id, p]) => (
             <button className="tag" key={id} onClick={() => { setOpen(id); scrollTo({ top: 0, behavior: 'smooth' }) }} aria-pressed={open === id}>
-              {p.photo && <img className="photo" src={p.photo} alt="" loading="lazy" />}
+              {p.photo && <Photo src={p.photo} />}
               <div>
                 <div className="lab">{kind(p) ?? (p.name ? 'place' : 'unnamed stop')}</div>
                 <div className="name">{placeName(p, id)}</div>

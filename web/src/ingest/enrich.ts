@@ -1,6 +1,7 @@
 import { isHome } from '../analytics/geo'
 import type { Data, Place } from '../data/types'
 import { kv } from './db'
+import { tally } from '../usage/usage'
 
 /** What Places API (New) tells us about a place, kept without the key so it survives a key change. */
 interface Cached { name: string | null; address: string | null; types: string[]; primary_type: string | null; photo: string | null }
@@ -26,6 +27,7 @@ function wanted(places: Record<string, Place>, cache: Record<string, Cached>): s
 }
 
 async function lookup(id: string, key: string): Promise<Cached> {
+  tally('details')
   const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`, { headers: { 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'displayName,formattedAddress,types,primaryType,photos' } })
   if (res.status === 404 || res.status === 400) return { name: null, address: null, types: [], primary_type: null, photo: null }
   if (!res.ok) {

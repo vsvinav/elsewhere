@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
+import { MapLoad } from '../usage/Meter'
 import { useSettings } from '../ingest/settings'
 import { MAP_STYLES } from '../map/style'
 import type { Data } from '../data/types'
@@ -39,6 +40,7 @@ export function TripMap({ data, range, height = 300 }: { data: Data; range: [num
         <APIProvider apiKey={mapsKey}>
           <Map style={{ position: 'absolute', inset: 0 }} defaultCenter={{ lat: 0, lng: 0 }} defaultZoom={3} styles={MAP_STYLES} disableDefaultUI gestureHandling="cooperative" keyboardShortcuts={false} clickableIcons={false}>
             <Route data={data} range={range} />
+            <MapLoad />
           </Map>
         </APIProvider>
       ) : <div className="nokey">Add a Google Maps key under Tour → Backstage to print this map</div>}

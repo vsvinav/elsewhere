@@ -3,6 +3,7 @@ import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data, Place } from '../data/types'
 import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
+import { dollars, LABEL, RATE, resetUsage, useUsage } from '../usage/usage'
 import { Onboarding } from '../profile/Onboarding'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
 import { enrichPlaces } from '../ingest/enrich'
@@ -99,14 +100,30 @@ export function App() {
         <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
         <details className="account">
           <summary aria-label="Account">▾</summary>
-          <div className="menu" onClick={(e) => (e.currentTarget.parentElement as HTMLDetailsElement).open = false}>
+          <div className="menu">
             <button onClick={ctx.editProfile}>Edit profile</button>
             <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
+            <UsageRow />
           </div>
         </details>
       </div>
       <StubNav />
       {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
+    </div>
+  )
+}
+
+/** What this browser has asked Google for, and roughly what that costs the key's owner. */
+function UsageRow() {
+  const u = useUsage()
+  const n = u.details + u.photos + u.maps
+  const since = new Date(u.since).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return (
+    <div className="usage" title={(['details', 'photos', 'maps'] as const).map((k) => `${LABEL[k]}: ${u[k]} × $${RATE[k]}/1k`).join('\n')}>
+      <span className="lab">Google API · since {since}</span>
+      <span>{n.toLocaleString('en-US')} calls · ~${dollars(u).toFixed(2)}</span>
+      <span className="fine">{(['details', 'photos', 'maps'] as const).filter((k) => u[k]).map((k) => `${u[k]} ${LABEL[k].toLowerCase()}`).join(' · ') || 'nothing yet'}. List prices, before the free tier.</span>
+      {n > 0 && <button onClick={resetUsage}>Reset</button>}
     </div>
   )
 }

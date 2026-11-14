@@ -1,3 +1,4 @@
+import { Photo } from '../usage/Meter'
 import { useEffect, useRef, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useStore, useThrottledPlayhead } from '../store/useStore'
@@ -38,7 +39,7 @@ export function ArrivalTags() {
         return (
           <div className="tag print on" key={t.key}>
             <div>
-              {p?.photo && <img className="photo" src={p.photo} alt="" />}
+              {p?.photo && <Photo src={p.photo} lazy={false} />}
               <div className="lab">{t.nth === 1 ? 'First visit' : `Visit nº ${t.nth}`}</div>
               <div className="name">{placeName(p, t.id)}</div>
               <div className="sub">{[p?.city, p?.country_code].filter(Boolean).join(', ') || 'city not on record'}</div>

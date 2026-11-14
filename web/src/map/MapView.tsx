@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
+import { MapLoad } from '../usage/Meter'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
@@ -84,6 +85,7 @@ export function MapView() {
         isFractionalZoomEnabled
       >
         <Deck />
+        <MapLoad />
       </Map>
     </APIProvider>
   )
