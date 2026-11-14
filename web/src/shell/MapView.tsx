@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { DeckGL, FlyToInterpolator, type MapViewState } from 'deck.gl'
+import { DeckGL, FlyToInterpolator, WebMercatorViewport, type MapViewState } from 'deck.gl'
 import { Map } from 'react-map-gl/maplibre'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -30,9 +30,22 @@ export function MapView() {
   const [view, setView] = useState<MapViewState>({ longitude: start.lng, latitude: start.lat, zoom: 11, pitch: 0, bearing: 0 })
   const lastFly = useRef(0)
 
-  const now = state.playhead ?? state.timeRange[1]
+  const camera = state.camera
   useEffect(() => {
-    if (!state.follow) return
+    if (!camera) return
+    const vp = new WebMercatorViewport({ width: window.innerWidth, height: window.innerHeight })
+    const [[x0, y0], [x1, y1]] = camera.bounds
+    const tiny = Math.abs(x1 - x0) < 1e-6 && Math.abs(y1 - y0) < 1e-6
+    const { longitude, latitude, zoom } = tiny
+      ? { longitude: x0, latitude: y0, zoom: 14 }
+      : vp.fitBounds(camera.bounds, { padding: { top: 120, bottom: 120, left: 420, right: 120 }, maxZoom: 15 })
+    setView((v) => ({ ...v, longitude, latitude, zoom, transitionDuration: 1500, transitionInterpolator: new FlyToInterpolator({ speed: 1.2 }) }))
+  }, [camera])
+
+  const now = state.playhead ?? state.timeRange[1]
+  const following = state.follow && state.activeInsight === 'replay'
+  useEffect(() => {
+    if (!following) return
     const t = performance.now()
     if (t - lastFly.current < FOLLOW_INTERVAL_MS) return
     const w = whereaboutsAt(data, now)
@@ -46,7 +59,7 @@ export function MapView() {
       return { ...v, longitude: w.lng, latitude: w.lat, zoom,
         transitionDuration: d > 500 ? 2500 : 1000, transitionInterpolator: new FlyToInterpolator({ speed: 1.5 }) }
     })
-  }, [data, now, state.follow])
+  }, [data, now, following])
 
   return (
     <DeckGL

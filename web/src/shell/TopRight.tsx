@@ -7,11 +7,12 @@ export function TopRight() {
   const toggle = useStore((s) => s.toggleBasemap)
   const follow = useStore((s) => s.follow)
   const setFollow = useStore((s) => s.setFollow)
+  const isReplay = useStore((s) => s.activeInsight === 'replay')
   const rep = meta.import_report
   return (
     <div className="topright">
       <div className="chips">
-        <button className={`chip ${follow ? 'on' : ''}`} onClick={() => setFollow(!follow)} title="Camera follows the replay">⌖ Follow</button>
+        {isReplay && <button className={`chip ${follow ? 'on' : ''}`} onClick={() => setFollow(!follow)} title="Camera follows the replay">⌖ Follow</button>}
         <button className="chip" onClick={toggle}>{basemap === 'dark' ? '☾ Dark' : '☀ Light'}</button>
       </div>
       <div className="card small">

@@ -46,16 +46,17 @@ export function App() {
 function Shell() {
   usePlayback()
   const active = useStore((s) => s.activeInsight)
-  const Panel = insightById[active]?.Panel
+  const insight = insightById[active]
+  const Panel = insight?.Panel
   return (
     <>
       <MapView />
       <div className="topleft">
         <Chips />
-        {Panel && <Panel />}
+        {Panel && !insight.fullscreen && <Panel />}
       </div>
       <TopRight />
-      <Scrubber />
+      {insight?.fullscreen ? <Panel /> : <Scrubber />}
     </>
   )
 }
