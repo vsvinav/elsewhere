@@ -8,8 +8,10 @@ import { placeName } from '../../analytics/home'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TripMap } from '../../world/TripMap'
 import { date, label, n0 } from '../../world/fmt'
+import { useUnits } from '../../profile/units'
 
 export function Trips() {
+  const { u, U, cv } = useUnits()
   const data = useData()
   const raw = useRawData()
   const [open, setOpen] = useState<number | null>(null)
@@ -32,7 +34,7 @@ export function Trips() {
         </PrintIn>
       }>
         <PrintIn>
-          <div className="fields"><Field label="Trips">Nights spent more than 100 km from home, newest first</Field></div>
+          <div className="fields"><Field label="Trips">Nights spent more than {n0(cv(100))} {u} from home, newest first</Field></div>
           <div className="big"><CountUp value={nights} /><small>NIGHTS AWAY</small></div>
           <div className="route">{[...new Set(trips.flatMap((t) => t.anchor_cities[0] ? [t.anchor_cities[0]] : []))].slice(0, 4).map((c, i) => <span key={c}>{i > 0 && <span className="arrow">→ </span>}{c}</span>)}</div>
         </PrintIn>
@@ -50,7 +52,7 @@ export function Trips() {
             <PrintIn>
               <Field label="Nights" big><CountUp value={t.nights} /></Field>
               <Field label="Flights" big>{flightsIn(t.start, t.end)}</Field>
-              <Field label="Farthest" big>{n0(t.max_dist_from_home_km)}<small style={{ fontSize: '0.4em' }}> KM</small></Field>
+              <Field label="Farthest" big>{n0(cv(t.max_dist_from_home_km))}<small style={{ fontSize: '0.4em' }}> {U}</small></Field>
               <Barcode text={`TRIP ${date(t.start).replace(/ /g, '')} ${t.nights}N ${n0(total).replace(',', '')}KM`} />
             </PrintIn>
           }>
@@ -59,7 +61,7 @@ export function Trips() {
                 <div className="fields">
                   <Field label="Departed">{date(t.start)}</Field>
                   <Field label="Returned">{date(t.end)}</Field>
-                  <Field label="Distance">{n0(total)} km</Field>
+                  <Field label="Distance">{n0(cv(total))} {u}</Field>
                 </div>
                 <div className="route" style={{ marginTop: 18 }}>
                   {dest.length ? dest.map((c, j) => <span key={c}>{j > 0 && <span className="arrow">→ </span>}{c}</span>) : <span className="ghost">destination not on record</span>}
@@ -70,7 +72,7 @@ export function Trips() {
                     <Beds nights={strip()} className="trip" />
                     <div className="bars">
                       {km.slice(0, 4).map(([m, v], j) => (
-                        <div className="bar" key={m}><span className="lab">{label(m)}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(v)} km</span></div>
+                        <div className="bar" key={m}><span className="lab">{label(m)}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(cv(v))} {u}</span></div>
                       ))}
                     </div>
                     <ol className="plist">

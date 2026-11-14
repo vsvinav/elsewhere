@@ -10,12 +10,14 @@ import { date, dateISO, label, n0 } from '../../world/fmt'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
 import { useProfile } from '../../profile/profile'
+import { useUnits } from '../../profile/units'
 
 const INK: Record<string, string> = { fly: 'red', foot: 'mustard', drive: '', transit: '' }
 const yearSpan = ([a, b]: [number, number]) => (a === b ? String(a) : `${a}–${b}`)
 
 /** Home is the poster: a stack of bills you peel through. */
 export function Home() {
+  const { u, cv } = useUnits()
   const data = useData()
   const f = useMemo(() => homeFacts(data), [data])
   const t = useMemo(() => tour(data), [data])
@@ -52,7 +54,7 @@ export function Home() {
         </div>
         <div className="foot">
           <span>{n0(f.cities)} cities · {n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}</span>
-          <span><CountUp value={f.totalKm} /> km</span>
+          <span><CountUp value={cv(f.totalKm)} /> {u}</span>
         </div>
         <Stamp top="Official record" big={String(t.years[1])} bottom="live" />
       </Bill>
@@ -65,7 +67,7 @@ export function Home() {
             <div>
               <div className="caps">Headline act · farthest from home</div>
               <h2 className="word">{act.city}</h2>
-              <p className="lede">{n0(act.km)} km from home. {act.nights} {act.nights === 1 ? 'night' : 'nights'}, {date(act.start)} → {date(act.end)}.</p>
+              <p className="lede">{n0(cv(act.km))} {u} from home. {act.nights} {act.nights === 1 ? 'night' : 'nights'}, {date(act.start)} → {date(act.end)}.</p>
               <ol className="dates" style={{ marginTop: 40 }}>
                 {f.longestTrip && <li><span className="where">Longest trip<small>{f.longestTrip.anchor_cities.slice(0, 2).join(' · ') || 'away'}</small></span><span className="n">{f.longestTrip.nights}<small>nights</small></span></li>}
                 <li><span className="where">Nights away</span><span className="n">{n0(t.nightsAway)}</span></li>
@@ -75,7 +77,7 @@ export function Home() {
             </div>
             <div style={{ display: 'grid', justifyItems: 'end', paddingTop: 24 }}>
               <Sticker photo={actPlace?.photo} name={placeName(actPlace, act.place_id)} sub={[actPlace?.address, act.country].filter(Boolean).join(' · ') || null} tilt={2} onClick={() => setTab('places')}>
-                <Stamp size="sm" top="" big={`${Math.round(act.km / 100) / 10}k`} bottom="km out" />
+                <Stamp size="sm" top="" big={`${Math.round(cv(act.km) / 100) / 10}k`} bottom={`${u} out`} />
               </Sticker>
             </div>
           </div>
@@ -83,14 +85,14 @@ export function Home() {
       )}
 
       <Bill>
-        <div className="caps">Setlist · kilometres by mode</div>
-        <div className="num"><CountUp value={f.totalKm} /><small>km</small></div>
-        <ol className="setlist" aria-label="Kilometres by mode">
+        <div className="caps">Setlist · {u === 'mi' ? 'miles' : 'kilometres'} by mode</div>
+        <div className="num"><CountUp value={cv(f.totalKm)} /><small>{u}</small></div>
+        <ol className="setlist" aria-label="Distance by mode">
           {f.kmByMode.map(([m, km]) => (
             <li key={m}>
               <span>{label(m)}</span>
               <span className="track"><i className={INK[lensOf(m)] ?? ''} style={{ width: `${(100 * km) / f.kmByMode[0][1]}%` }} /></span>
-              <span className="n">{n0(km)}<small>km</small></span>
+              <span className="n">{n0(cv(km))}<small>{u}</small></span>
             </li>
           ))}
         </ol>
@@ -118,14 +120,14 @@ export function Home() {
       <Bill>
         <div className="caps">Records · personal bests</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, alignItems: 'center' }}>
-          {f.records.longestDay && <Stamp top="Longest day" big={n0(f.records.longestDay.km)} bottom={`km · ${dateISO(f.records.longestDay.date).slice(0, 6)}`} tone="ink" />}
+          {f.records.longestDay && <Stamp top="Longest day" big={n0(cv(f.records.longestDay.km))} bottom={`${u} · ${dateISO(f.records.longestDay.date).slice(0, 6)}`} tone="ink" />}
           {f.records.busiestDay && <Stamp top="Busiest day" big={String(f.records.busiestDay.places)} bottom={`places · ${dateISO(f.records.busiestDay.date).slice(0, 6)}`} />}
-          {f.records.farthest && <Stamp top="Farthest" big={n0(f.records.farthest.km)} bottom={`km · ${f.records.farthest.city ?? 'away'}`} tone="ink" />}
+          {f.records.farthest && <Stamp top="Farthest" big={n0(cv(f.records.farthest.km))} bottom={`${u} · ${f.records.farthest.city ?? 'away'}`} tone="ink" />}
         </div>
         <table className="ptable">
-          <thead><tr><th>Year</th><th>km</th><th>Places</th><th>Trips</th><th>Flights</th></tr></thead>
+          <thead><tr><th>Year</th><th>{u}</th><th>Places</th><th>Trips</th><th>Flights</th></tr></thead>
           <tbody>
-            {f.years.map((y) => <tr key={y.year}><td>{y.year}</td><td>{n0(y.km)}</td><td>{n0(y.places)}</td><td>{y.trips}</td><td>{y.flights}</td></tr>)}
+            {f.years.map((y) => <tr key={y.year}><td>{y.year}</td><td>{n0(cv(y.km))}</td><td>{n0(y.places)}</td><td>{y.trips}</td><td>{y.flights}</td></tr>)}
           </tbody>
         </table>
       </Bill>

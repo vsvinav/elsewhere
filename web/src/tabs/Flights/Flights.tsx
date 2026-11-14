@@ -4,13 +4,12 @@ import { flights } from '../../world/flights'
 import { FlightMap } from '../../world/FlightMap'
 import { Bill, CountUp } from '../../world'
 import { n0 } from '../../world/fmt'
-import { useProfile } from '../../profile/profile'
+import { useUnits } from '../../profile/units'
 
 /** The air record as a poster page: the earth, then each neighbourhood of airports, then the ledger. */
 export function Flights() {
   const data = useData()
-  const units = useProfile()?.units ?? 'km'
-  const cv = (km: number) => (units === 'mi' ? km / 1.609 : km)
+  const { u: units, cv } = useUnits()
   const { hops, ports } = useMemo(() => flights(data), [data])
   const km = hops.reduce((s, h) => s + h.km * h.n, 0)
   const legs = hops.reduce((s, h) => s + h.n, 0)

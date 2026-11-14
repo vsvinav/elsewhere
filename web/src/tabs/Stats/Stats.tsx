@@ -5,12 +5,14 @@ import { commuteStats } from '../../analytics/commute'
 import { explorationScore } from '../../analytics/explore'
 import { CountUp, Field, Pass, PrintIn } from '../../world'
 import { date, hours, label, month, n0, WEEKDAYS } from '../../world/fmt'
+import { useUnits } from '../../profile/units'
 
 const TOP_MODES = 3
 const CLS = ['orange', 'blue', '']
 const Pct = ({ n }: { n: number }) => <>{n}<small style={{ fontSize: '0.5em' }}>%</small></>
 
 export function Stats() {
+  const { u, cv } = useUnits()
   const data = useData()
   const s = useMemo(() => stats(data), [data])
   const hasWork = !!data.profile.work
@@ -50,12 +52,12 @@ export function Stats() {
         <PrintIn>
           <div className="fields"><Field label="Distance by month">Top three modes in colour, the rest in grey</Field></div>
           <div className="big"><CountUp value={maxMonth} /><small>KM PEAK</small></div>
-          <div className="columns" role="img" aria-label="Kilometres per month, stacked by mode">
+          <div className="columns" role="img" aria-label="Distance per month, stacked by mode">
             {s.months.map((m) => {
               const other = m.total - modes.reduce((a, k) => a + (m.byMode[k] ?? 0), 0)
               return (
                 <div className="col" key={m.key} tabIndex={0}>
-                  <span className="tip">{month(m.key)} · {n0(m.total)} km</span>
+                  <span className="tip">{month(m.key)} · {n0(cv(m.total))} {u}</span>
                   <i className="ghost" style={{ height: `${(100 * other) / maxMonth}%` }} />
                   {[...modes].reverse().map((k, i) => <i key={k} className={CLS[modes.length - 1 - i]} style={{ height: `${(100 * (m.byMode[k] ?? 0)) / maxMonth}%` }} />)}
                 </div>
@@ -97,7 +99,7 @@ export function Stats() {
         </PrintIn>
       }>
         <PrintIn>
-          <div className="fields"><Field label="Kinds of days">Away = over 100 km from home · Work = 2 h+ at work · Out = 3 h+ elsewhere</Field></div>
+          <div className="fields"><Field label="Kinds of days">Away = over {n0(cv(100))} {u} from home · Work = 2 h+ at work · Out = 3 h+ elsewhere</Field></div>
           <div className="big"><CountUp value={s.dayTypes.away} /><small>DAYS AWAY</small></div>
           <div className="strip100" aria-hidden>
             <span className="other" style={{ width: `${pct(s.dayTypes.away)}%` }}>Away</span>
