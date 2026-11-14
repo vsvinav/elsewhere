@@ -1,3 +1,4 @@
+import { AIRPORTS } from './airports'
 import type { Data } from '../data/types'
 import { distanceKm } from '../analytics/position'
 
@@ -8,9 +9,13 @@ export interface Port { p: P; name: string; n: number }
 /** Routes flown (return legs merged) and the airports they join, named by the nearest visited city. */
 export function flights(data: Data): { hops: Hop[]; ports: Port[] } {
   const hops = new Map<string, Hop>(), ports = new Map<string, Port>()
-  const key = (p: P) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`
+  const hubOf = (lng: number, lat: number) => AIRPORTS.find(([, , alat, alng]) => Math.hypot((alng - lng) * Math.cos((lat * Math.PI) / 180), alat - lat) < 0.3)
+  // One dot per airport: a known hub keys by code, so legs that start on different runways still merge.
+  const key = (p: P) => hubOf(p[0], p[1])?.[0] ?? `${p[0].toFixed(1)},${p[1].toFixed(1)}`
   // The city most visited within ~100 km of the runway: the airport's town is rarely where you slept.
   const nearCity = (lng: number, lat: number) => {
+    const hub = hubOf(lng, lat)
+    if (hub) return hub[1]
     const n = new Map<string, number>()
     for (const v of data.visits) {
       if (v.lvl !== 0 || Math.hypot((v.lng - lng) * Math.cos((lat * Math.PI) / 180), v.lat - lat) > 1) continue

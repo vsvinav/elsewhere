@@ -33,7 +33,7 @@ export function Home() {
             <div className="caps">{name ? `${name} ·` : 'Your'} {yearSpan(t.years)} · live from {n0(f.days)} days of record</div>
             <h1 className="title"><span className="misreg">World</span><span className="misreg red">Tour</span></h1>
             <p className="lede sub">Everywhere your phone slept, every leg between. {n0(f.places)} places, {n0(f.cities)} cities, {n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}.</p>
-            <TrailMap data={data} className="map drift" />
+            <TrailMap data={data} stops={t.stops} className="map drift" />
           </div>
           <div>
             <ol className="dates" aria-label="Where you slept">

@@ -201,10 +201,11 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .sticker .stamp { position: absolute; right: -22px; bottom: -22px; }
 
 /* Halftone map: the trails as a red dot screen on the stock */
-.halftone { position: relative; width: 100%; }
-.halftone svg { display: block; width: 100%; height: auto; overflow: hidden; }
-.halftone .ring { fill: none; stroke: var(--red); stroke-width: 3; }
-.ink .halftone polyline { stroke: var(--stock); }
+.halftone { position: relative; width: 100%; border: var(--rule); background: #e2d6b8; overflow: hidden; }
+.halftone svg { display: block; width: 100%; height: auto; }
+.halftone .land { fill: var(--stock); stroke: #b9ae92; stroke-width: 0.8; transition: opacity 600ms ease-out; }
+.halftone .pins text { font: 800 15px/1 var(--display); letter-spacing: 0.04em; fill: var(--ink); paint-order: stroke; stroke: var(--stock); stroke-width: 4px; }
+@media (max-width: 760px) { .halftone .pins text { font-size: 20px; } }
 
 /* Cards (the other tabs): a bill cut to size, body on stock, ink stub */
 .pass { position: relative; display: grid; grid-template-columns: 1fr 300px; background: var(--stock); border-top: var(--rule); }
@@ -469,13 +470,17 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 /* Maps printed on the sheet: the 3D flight relief and a single stop's streets */
 .flightmap, .placemap { position: relative; margin-top: 40px; border: var(--rule); background: #d8cba9; overflow: hidden; }
 .flightmap canvas { outline: none; }
+.flightmap .tags { position: absolute; inset: 0; margin: 0; pointer-events: none; overflow: hidden; }
+.flightmap .tags span { position: absolute; transform: translateY(-50%); padding: 3px 6px 2px; font: 700 12px/1 var(--body); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink); background: var(--stock); border: 1.5px solid var(--ink); }
+.flightmap .tags span.end { transform: translate(-100%, -50%); }
+.flightmap.globe .tags span { color: var(--stock); background: var(--ink); border-color: var(--stock); }
+@media (max-width: 760px) { .flightmap .tags span { font-size: 11px; } }
 .flightmap .hint { position: absolute; right: 14px; bottom: 12px; font: 600 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
 .placemap { margin-top: 0; }
 .placemap .nokey { position: absolute; inset: 0; display: grid; place-items: center; padding: 32px; text-align: center; font: 500 14px/1.5 var(--body); color: var(--ink-2); }
 .placemap .stamp-ring { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 3px solid var(--red); border-radius: 50%; pointer-events: none; }
 .placemap .stamp-ring::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--red); border-radius: 50%; }
 .ink .placemap .stamp-ring { border-color: var(--red); }
-@media (max-width: 760px) { .flightmap:not(.fill) { height: 380px !important; } }
 
 /* Speed slider: a stretch of track with a red tab, the figure printed beside it */
 .hud-speed { display: flex; align-items: center; gap: 10px; color: var(--stock); }
@@ -488,8 +493,10 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .hud-speed input:focus-visible { outline-offset: 4px; }
 
 /* Flights screen */
-.flightmap.fill { position: absolute; inset: 0; margin: 0; border: 0; }
-.hud-flights { grid-template-columns: 1fr; width: fit-content; max-width: calc(100% - 2 * var(--gutter)); }
-.hud-flights .hud-stub { grid-template-columns: auto auto auto; }
-@media (max-width: 760px) { .hud-flights .hud-stub { grid-template-columns: 1fr; gap: 14px; } .hud-flights .hud-where { border-left: 0; padding-left: 0; } }
-@media (max-width: 760px) { .hud-flights { bottom: calc(var(--strip-h) + 76px); } .hud-flights .hud-stub { padding: 16px 20px; } .hud-flights .hud-date .day { font-size: 44px; } }
+.flightmap.globe { background: var(--ink); border-color: var(--stock); }
+.flightmap.big { height: min(72vh, 760px) !important; margin-top: 0; }
+.globe-row { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: center; }
+@media (max-width: 1000px) { .globe-row { grid-template-columns: 1fr; } }
+.flightmap.globe .hint { color: var(--stock-2, #b9ae92); }
+.ink .flightmap { margin-top: 0; }
+@media (max-width: 760px) { .flightmap { height: 380px !important; } .flightmap.globe.big { height: min(92vw, 520px) !important; } }

@@ -1,91 +1,149 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DeckGL, ArcLayer, GeoJsonLayer, ScatterplotLayer, TextLayer, MapView as DeckMapView, WebMercatorViewport, type MapViewState } from 'deck.gl'
-import { feature } from 'topojson-client'
-import type { Topology, GeometryCollection } from 'topojson-specification'
-import type { Data } from '../data/types'
-import { flights, type Hop, type Port } from './flights'
-
+import { DeckGL, GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TripsLayer, MapView as DeckMapView, _GlobeView as GlobeView, WebMercatorViewport, type MapViewState, type GlobeViewState, type Viewport } from 'deck.gl'
+import { loadLand } from './land'
+import type { Hop, Port } from './flights'
 
 type RGBA = [number, number, number, number]
-const INK: RGBA = [20, 20, 20, 255], RED: RGBA = [214, 60, 32, 255], STOCK: RGBA = [239, 230, 210, 255]
-
+const INK: RGBA = [20, 20, 20, 255], RED: RGBA = [214, 60, 32, 255], STOCK: RGBA = [239, 230, 210, 255], LAND: RGBA = [233, 223, 200, 255]
 // Ports and labels sit on the sheet but must not be hidden by the raised arcs.
 const FLAT = { depthCompare: 'always' as const, depthWriteEnabled: false }
 
-let land: Promise<GeoJSON.FeatureCollection> | null = null
-// Countries rather than land so Antarctica (id 010) can be dropped: under a tilt its polygon smears across the sheet.
-const loadLand = () => (land ??= import('world-atlas/countries-110m.json').then((m) => {
-  const topo = (m.default ?? m) as unknown as Topology<{ countries: GeometryCollection }>
-  const fc = feature(topo, topo.objects.countries) as GeoJSON.FeatureCollection
-  return { ...fc, features: fc.features.filter((f) => f.id !== '010') }
-}))
+/** Great circle lifted into a parabola (metres) so the routes stand off the sheet. */
+function sky(a: [number, number], b: [number, number], lift: number, n = 48): [number, number, number][] {
+  const r = Math.PI / 180, [l1, f1, l2, f2] = [a[0] * r, a[1] * r, b[0] * r, b[1] * r]
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((f2 - f1) / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin((l2 - l1) / 2) ** 2))
+  const alt = 6371e3 * d * lift, out: [number, number, number][] = []
+  for (let i = 0; i <= n; i++) {
+    const f = i / n, A = d < 1e-9 ? 1 - f : Math.sin((1 - f) * d) / Math.sin(d), B = d < 1e-9 ? f : Math.sin(f * d) / Math.sin(d)
+    const x = A * Math.cos(f1) * Math.cos(l1) + B * Math.cos(f2) * Math.cos(l2), y = A * Math.cos(f1) * Math.sin(l1) + B * Math.cos(f2) * Math.sin(l2), z = A * Math.sin(f1) + B * Math.sin(f2)
+    out.push([Math.atan2(y, x) / r, Math.atan2(z, Math.hypot(x, y)) / r, alt * 4 * f * (1 - f)])
+  }
+  return out
+}
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+// The sea as many small quads: one big polygon would project as two flat triangles, not a sphere.
+const OCEAN = (() => {
+  const q: [number, number][][] = []
+  for (let x = -180; x < 180; x += 10) for (let y = -90; y < 90; y += 10) q.push([[x, y], [x + 10, y], [x + 10, y + 10], [x, y + 10]])
+  return q
+})()
+const GRID = (() => {
+  const g: [number, number][][] = []
+  for (let lng = -180; lng < 180; lng += 15) g.push(Array.from({ length: 13 }, (_, i) => [lng, -90 + i * 15] as [number, number]))
+  for (let lat = -75; lat <= 75; lat += 15) g.push(Array.from({ length: 49 }, (_, i) => [-180 + i * 7.5, lat] as [number, number]))
+  return g
+})()
 
-/** Flights as raised great-circle arcs over a cream relief; the camera tilts and the visitor can orbit it. */
-export function FlightMap({ data, height = 520, fill = false }: { data: Data; height?: number; fill?: boolean }) {
-  const { hops, ports } = useMemo(() => flights(data), [data])
+type Props = { hops: Hop[]; ports: Port[]; mode?: 'globe' | 'region'; height?: number; className?: string }
+/**
+ * Globe: the whole record on a turning earth, ink ocean and cream land, routes raised off it.
+ * Region: a flat poster panel fitted to one cluster of airports, every name printed.
+ */
+export function FlightMap({ hops, ports, mode = 'region', height = 520, className = '' }: Props) {
+  const globe = mode === 'globe'
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  const [view, setView] = useState<MapViewState | null>(null)
+  const deckRef = useRef<React.ComponentRef<typeof DeckGL>>(null)
+  const idle = useRef(true)
+  const fitPasses = useRef(0)
+  const [view, setView] = useState<MapViewState | GlobeViewState | null>(null)
   useEffect(() => { loadLand().then(setGeo) }, [])
-  // Fit every airport once we know our width, then tilt.
+  const routes = useMemo(() => hops.map((h, i) => ({ ...h, path: sky(h.s, h.t, globe ? 0.12 : 0.18), ts: Array.from({ length: 49 }, (_, k) => k / 48 + ((i * 0.37) % 1)) })), [hops, globe])
+  const [t, setT] = useState(0)
   useEffect(() => {
-    const el = ref.current
-    if (!el || !ports.length) return
-    const w = el.clientWidth || 1000, h = el.clientHeight || height
+    if (REDUCED) return
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => { setT((now - start) / 1000); raf = requestAnimationFrame(tick) }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  useEffect(() => { if (globe && idle.current && t) setView((v) => v && { ...v, longitude: ((v.longitude + 0.04 + 180) % 360) - 180 }) }, [t, globe])
+  const maxN = hops.reduce((m, h) => Math.max(m, h.n), 1)
+
+  useEffect(() => {
+    if (!ports.length) return
     const lngs = ports.map((p) => p.p[0]), lats = ports.map((p) => p.p[1])
-    const vp = new WebMercatorViewport({ width: w, height: h }).fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: w > 700 ? { top: 60, bottom: fill ? 200 : 40, left: 60, right: 120 } : { top: 100, bottom: fill ? h * 0.5 : 24, left: 24, right: 24 } })
-    // Under pitch the ground sits low on a tall phone; aim the camera south so the routes clear the stub.
-    setView({ longitude: vp.longitude, latitude: vp.latitude - (fill && w <= 700 ? 22 : 0), zoom: Math.min(vp.zoom, 5) - 0.25, pitch: w > 700 ? 48 : 35, bearing: -8, minZoom: 0, maxZoom: 8, minPitch: 0, maxPitch: 65 })
-  }, [ports, height, fill])
+    const w = ref.current?.clientWidth ?? 1000, h = ref.current?.clientHeight ?? height
+    if (globe) {
+      // Face the busiest airport; sized so the earth fills the sheet's shorter side.
+      setView({ longitude: ports[0].p[0], latitude: Math.max(-40, Math.min(40, ports[0].p[1] - 10)), zoom: 1, minZoom: 0, maxZoom: 5 })
+      fitPasses.current = 4
+      return
+    }
+    const vp = new WebMercatorViewport({ width: w, height: h }).fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: w > 700 ? 90 : 48 })
+    setView({ longitude: vp.longitude, latitude: vp.latitude, zoom: Math.min(vp.zoom, 5.5), pitch: 30, bearing: 0, minZoom: 0, maxZoom: 9, minPitch: 0, maxPitch: 60 })
+  }, [ports, height, globe])
+
   const wide = (ref.current?.clientWidth ?? 1000) > 700
-  // Busiest airport wins its patch of sheet; boxes are measured in pixels at the current zoom.
-  const labelled = useMemo(() => {
-    if (!wide || !view) return []
-    const k = (256 * 2 ** view.zoom) / 360
-    const px = (p: Port) => [p.p[0] * k, -Math.log(Math.tan(Math.PI / 4 + (p.p[1] * Math.PI) / 360)) * (180 / Math.PI) * k]
-    const kept: { x: number; y: number; w: number }[] = [], out: Port[] = []
+  // Labels are HTML tags projected through the live viewport; a tag that would overlap one already placed slides to another side of its dot.
+  let vp: Viewport | undefined
+  try { vp = deckRef.current?.deck?.getViewports()[0] } catch { /* deck has not laid out yet; tags arrive next frame */ }
+  // Deck's globe radius is not a plain function of zoom (perspective), so measure it and nudge the zoom a few frames until the earth fills 96% of the sheet's short side.
+  useEffect(() => {
+    if (!globe || !fitPasses.current || !vp || !view) return
+    const c = vp.project([view.longitude, 0]), e = vp.project([view.longitude + 90, 0])
+    const r = Math.hypot(e[0] - c[0], e[1] - c[1])
+    if (!r) return
+    const ratio = (0.48 * Math.min(vp.width, vp.height)) / r
+    fitPasses.current = Math.abs(ratio - 1) < 0.01 ? 0 : fitPasses.current - 1
+    if (Math.abs(ratio - 1) >= 0.01) setView((v) => v && { ...v, zoom: v.zoom + Math.log2(ratio) })
+  }, [globe, vp, view])
+  const tags = useMemo(() => {
+    if (!view || !vp) return []
+    const size = wide ? 12 : 11, row = size + 14
+    const kept: { x: number; y: number; w: number }[] = [], out: { key: string; name: string; x: number; y: number; end: boolean }[] = []
+    const r = Math.PI / 180, lat0 = view.latitude * r, lng0 = view.longitude * r
     for (const p of ports) {
       if (!p.name) continue
-      const [x, y] = px(p), w = p.name.length * 9 + 24
-      if (kept.some((b) => x < b.x + b.w && x + w > b.x && Math.abs(y - b.y) < 20)) continue
-      kept.push({ x, y, w }); out.push(p)
+      // On the globe, skip airports past the horizon.
+      if (globe && Math.sin(lat0) * Math.sin(p.p[1] * r) + Math.cos(lat0) * Math.cos(p.p[1] * r) * Math.cos(p.p[0] * r - lng0) < 0.25) continue
+      const [x, y] = vp.project(p.p), tw = p.name.length * size * 0.66 + 16
+      const slots = [
+        { dx: 12, dy: 0, end: false }, { dx: -12, dy: 0, end: true },
+        { dx: 12, dy: -row, end: false }, { dx: 12, dy: row, end: false },
+        { dx: -12, dy: -row, end: true }, { dx: -12, dy: row, end: true },
+      ].map((sl) => ({ ...sl, bx: sl.end ? x + sl.dx - tw : x + sl.dx, by: y + sl.dy }))
+      const free = slots.find((sl) => !kept.some((b) => sl.bx < b.x + b.w && sl.bx + tw > b.x && Math.abs(sl.by - b.y) < row))
+      // The globe is the overview: a name with no room waits for its regional panel. Regions print every name.
+      if (!free && globe) continue
+      const sl = free ?? slots[0]
+      kept.push({ x: sl.bx, y: sl.by, w: tw }); out.push({ key: p.p.join(), name: p.name, x: x + sl.dx, y: sl.by, end: sl.end })
     }
-    return out.slice(0, 14)
-  }, [ports, wide, view?.zoom])
-  const maxN = hops.reduce((m, h) => Math.max(m, h.n), 1)
+    return out
+  }, [ports, wide, view, globe, vp])
+
   const layers = [
-    geo && new GeoJsonLayer({ id: 'land', data: geo, filled: true, stroked: true, wrapLongitude: true, getFillColor: [233, 223, 200, 255], getLineColor: [196, 186, 160, 255], lineWidthMinPixels: 0.8 }),
-    // Ground shadow first, then the route: the gap between them is what reads as height.
-    new ArcLayer<Hop>({
-      id: 'hop-shadows', data: hops, greatCircle: true, numSegments: 60,
-      getSourcePosition: (d) => d.s, getTargetPosition: (d) => d.t,
-      getSourceColor: [20, 20, 20, 26], getTargetColor: [20, 20, 20, 26], getWidth: 1.5, widthUnits: 'pixels', getHeight: 0,
+    globe && new SolidPolygonLayer({ id: 'ocean', data: OCEAN, getPolygon: (d) => d, getFillColor: [20, 20, 20, 255] }),
+    new PathLayer({ id: 'graticule', data: GRID, getPath: (d) => d, getColor: globe ? [239, 230, 210, 40] : [20, 20, 20, 22], getWidth: 1, widthUnits: 'pixels', wrapLongitude: !globe }),
+    geo && new GeoJsonLayer({ id: 'land', data: geo, filled: true, stroked: true, wrapLongitude: !globe, getFillColor: LAND, getLineColor: globe ? [20, 20, 20, 160] : [20, 20, 20, 110], lineWidthMinPixels: 0.9 }),
+    new PathLayer<(typeof routes)[number]>({
+      id: 'hop-shadows', data: routes, getPath: (d) => d.path.map(([x, y]) => [x, y, 0] as [number, number, number]), getColor: [20, 20, 20, globe ? 70 : 30], getWidth: 1.2, widthUnits: 'pixels',
     }),
-    new ArcLayer<Hop>({
-      id: 'hops', data: hops, greatCircle: true, numSegments: 80,
-      getSourcePosition: (d) => d.s, getTargetPosition: (d) => d.t,
-      getSourceColor: RED, getTargetColor: [150, 38, 20, 255],
-      getWidth: (d) => 1.6 + (2.4 * d.n) / maxN, widthUnits: 'pixels', getHeight: 0.5,
+    new PathLayer<(typeof routes)[number]>({
+      id: 'hops', data: routes, getPath: (d) => d.path, getColor: RED,
+      getWidth: (d) => 1.8 + (2.6 * d.n) / maxN, widthUnits: 'pixels', jointRounded: true, capRounded: true,
     }),
     new ScatterplotLayer<Port>({
       id: 'ports', data: ports, getPosition: (d) => d.p, radiusMinPixels: 4, radiusMaxPixels: 11, getRadius: (d) => 20000 * Math.sqrt(d.n),
       getFillColor: STOCK, stroked: true, getLineColor: INK, lineWidthMinPixels: 2.5, parameters: FLAT,
     }),
-    new TextLayer<Port>({
-      id: 'port-labels', data: labelled, getPosition: (d) => d.p, getText: (d) => d.name.toUpperCase(),
-      getColor: INK, getSize: 13, fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700,
-      fontSettings: { sdf: true, buffer: 3 }, outlineWidth: 3, outlineColor: [239, 230, 210, 240], getTextAnchor: 'start', getAlignmentBaseline: 'center', getPixelOffset: [12, 0],
-      characterSet: 'auto', parameters: FLAT,
+    !REDUCED && new TripsLayer<(typeof routes)[number]>({
+      id: 'pulses', data: routes, getPath: (d) => d.path, getTimestamps: (d) => d.ts, currentTime: (t / 7) % 2, trailLength: 0.16, fadeTrail: true,
+      getColor: [233, 181, 49, 255], getWidth: (d) => 3 + (2.6 * d.n) / maxN, widthUnits: 'pixels', capRounded: true,
     }),
   ].filter(Boolean)
   return (
-    <div ref={ref} className={`flightmap ${fill ? 'fill' : ''}`} style={fill ? undefined : { height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
+    <div ref={ref} className={`flightmap ${mode} ${className}`} style={{ height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
       {view && (
-        <DeckGL views={new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => setView(e.viewState as MapViewState)}
-          controller={{ scrollZoom: fill, dragRotate: true, touchRotate: true, keyboard: false }} layers={layers} style={{ position: 'absolute', inset: '0' }}
+        <DeckGL ref={deckRef} views={globe ? new GlobeView({ resolution: 10 }) : new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => { if (e.interactionState.isDragging || e.interactionState.isZooming) idle.current = false; setView(e.viewState as MapViewState) }}
+          controller={{ scrollZoom: globe, dragRotate: !globe, touchRotate: !globe, keyboard: false, inertia: 300 }} layers={layers} style={{ position: 'absolute', inset: '0' }}
           getCursor={({ isDragging }) => (isDragging ? 'grabbing' : 'grab')} />
       )}
-      <span className="hint">Drag to orbit</span>
+      <div className="tags" aria-hidden>
+        {tags.map((g) => <span key={g.key} className={g.end ? 'end' : ''} style={{ left: g.x, top: g.y }}>{g.name}</span>)}
+      </div>
+      <span className="hint">{globe ? 'Drag to turn · scroll to zoom' : 'Drag to orbit'}</span>
     </div>
   )
 }

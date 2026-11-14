@@ -36,7 +36,7 @@ export function App() {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch(setError)
   }, [adopt])
   const tab = useStore((s) => s.tab)
-  const onMap = tab === 'map' || tab === 'play' || tab === 'flights'
+  const onMap = tab === 'map' || tab === 'play'
   useEffect(() => {
     if (!onMap || !record || record.paths.length) return
     let live = true
