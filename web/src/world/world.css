@@ -18,7 +18,7 @@
   --rule: 6px solid var(--ink);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --gutter: clamp(20px, 5.5vw, 80px);
-  --strip-h: 64px;
+  --strip-h: calc(64px + env(safe-area-inset-bottom, 0px));
   color-scheme: only light;
 }
 
@@ -58,7 +58,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 @media (max-width: 760px) { .strip { margin-top: 112px; margin-bottom: calc(var(--strip-h) + 160px); } }
 
 /* Tour line: the small line at the top that names the sheet. */
-.tourline { position: fixed; top: 40px; left: var(--gutter); z-index: 6; display: flex; align-items: center; gap: 14px; color: var(--ink); background: var(--stock); border: 2px solid var(--ink); padding: 0 16px 0 0; height: 40px; }
+.tourline { position: fixed; top: calc(40px + env(safe-area-inset-top, 0px)); left: var(--gutter); z-index: 6; display: flex; align-items: center; gap: 14px; color: var(--ink); background: var(--stock); border: 2px solid var(--ink); padding: 0 16px 0 0; height: 40px; }
 .tourline, .rangebar { transition: transform 0.3s var(--ease, ease), opacity 0.3s; box-shadow: 0 0 0 2px var(--stock); } /* halo keeps the box readable over ink bills */
 body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: translateY(-140%); opacity: 0; pointer-events: none; }
 .tourline .mark { display: inline-grid; place-items: center; width: 36px; height: 36px; background: var(--ink); color: var(--stock); font: 900 18px/1 var(--display); }
@@ -89,7 +89,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .ticket {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; height: var(--strip-h);
   display: flex; background: var(--ink); color: var(--stock);
-  padding-top: 8px;
+  padding: 8px 0 env(safe-area-inset-bottom, 0px);
   mask: radial-gradient(circle at 10px 4px, transparent 5px, #000 5.5px) -10px 0 / 20px 100% repeat-x;
   -webkit-mask: radial-gradient(circle at 10px 4px, transparent 5px, #000 5.5px) -10px 0 / 20px 100% repeat-x;
 }
@@ -113,7 +113,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 }
 
 /* Date range: small printed chips in the top-right, the show dates */
-.rangebar { position: fixed; top: 40px; right: var(--gutter); z-index: 6; display: flex; align-items: stretch; border: 2px solid var(--ink); background: var(--stock); }
+.rangebar { position: fixed; top: calc(40px + env(safe-area-inset-top, 0px)); right: var(--gutter); z-index: 6; display: flex; align-items: stretch; border: 2px solid var(--ink); background: var(--stock); }
 .rangebar button, .rangebar label {
   color: var(--ink); height: 36px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border-right: 2px dashed var(--ink);
   font: 700 12px/1 var(--body); font-stretch: 85%; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;

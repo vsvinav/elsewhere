@@ -102,31 +102,33 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   const { singles, groups } = cl
   let labelled = c.shown.labels.get(zb)
   if (!labelled) c.shown.labels.set(zb, (labelled = labelDots(singles, zb)))
+  // Zoomed out, pins shrink with the map so a cluster never blankets an island.
+  const k = Math.max(0.45, Math.min(1, (zoom - 1) / 5))
   const weight = (d: Dot) => (o.sizeBy === 'visits' ? d.n_visits : d.total_hours / 3)
-  const size = (d: Dot) => 16 + Math.min(14, Math.sqrt(weight(d)) * 2.2)
+  const size = (d: Dot) => k * (16 + Math.min(14, Math.sqrt(weight(d)) * 2.2))
   const sel = o.selected ? c.all.find((d) => d.id === o.selected) : undefined
   const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 } } as const
   const layers: Layer[] = [
     // Groups: an ink disc sized by how many stops it holds, the count printed in stock.
     new ScatterplotLayer<Group<Dot>>({
       id: 'groups', data: groups, pickable: true, getPosition: (d) => [d.lng, d.lat],
-      radiusUnits: 'pixels', getRadius: (d) => 10 + Math.min(12, Math.log2(d.items.length) * 2.2),
+      radiusUnits: 'pixels', getRadius: (d) => k * (10 + Math.min(12, Math.log2(d.items.length) * 2.2)), updateTriggers: { getRadius: [k] },
       getFillColor: INK, stroked: true, getLineColor: STOCK, lineWidthUnits: 'pixels', getLineWidth: 2,
     }),
     new TextLayer<Group<Dot>>({
       id: 'group-counts', data: groups, getPosition: (d) => [d.lng, d.lat], getText: (d) => String(d.items.length),
-      getColor: STOCK, getSize: 12, ...font, getTextAnchor: 'middle', getAlignmentBaseline: 'center',
+      getColor: STOCK, getSize: Math.max(9, 12 * k), ...font, getTextAnchor: 'middle', getAlignmentBaseline: 'center',
     }),
     // Singles: a small pin in its category's ink over an ink outline.
-    new IconLayer<Dot>({ id: 'pin-back', data: singles, getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN_BACK, getColor: INK, getSize: (d) => size(d) + 4, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy] } }),
+    new IconLayer<Dot>({ id: 'pin-back', data: singles, getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN_BACK, getColor: INK, getSize: (d) => size(d) + 4 * k, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy, k] } }),
     new IconLayer<Dot>({
       id: 'places', data: singles, pickable: true,
       getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: (d) => d.ink,
-      getSize: size, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy] },
+      getSize: size, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy, k] },
     }),
     // Homes stay put whatever is toggled: a red house with an ink outline.
-    new IconLayer<Dot>({ id: 'home-back', data: c.homes, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: INK, getSize: 26, sizeUnits: 'pixels', billboard: false }),
-    new IconLayer<Dot>({ id: 'homes', data: c.homes, pickable: true, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: RED, getSize: 20, sizeUnits: 'pixels', billboard: false }),
+    new IconLayer<Dot>({ id: 'home-back', data: c.homes, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: INK, getSize: 26 * k, sizeUnits: 'pixels', billboard: false }),
+    new IconLayer<Dot>({ id: 'homes', data: c.homes, pickable: true, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: RED, getSize: 20 * k, sizeUnits: 'pixels', billboard: false }),
     new TextLayer<Dot>({
       id: 'labels', data: labelled, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
       getColor: INK, getSize: 11, ...font, outlineWidth: 2, outlineColor: [239, 230, 210, 235],

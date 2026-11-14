@@ -12,6 +12,7 @@ import './onboarding.css'
 type Step = 'start' | 'name' | 'home' | 'moved' | 'work' | 'units'
 const ORDER: Step[] = ['start', 'name', 'home', 'moved', 'work', 'units']
 const MILES = new Set(['US', 'GB', 'LR', 'MM'])
+const TOUCH = typeof window !== 'undefined' && ('Capacitor' in window || matchMedia('(pointer: coarse)').matches)
 
 interface Props {
   /** The loaded record, if any; suggestions come from it. */
@@ -94,7 +95,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
               <div>
               <label className={`dropzone ob-drop${stage ? ' busy' : ''}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) importFile(f) }}>
                 <input type="file" accept=".json,application/json" hidden disabled={!!stage} onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = '' }} />
-                <div className="dz-title">{stage ? `${STAGE_LABEL[stage] ?? stage}…` : 'Drop your Timeline.json here'}</div>
+                <div className="dz-title">{stage ? `${STAGE_LABEL[stage] ?? stage}…` : TOUCH ? 'Tap to choose your Timeline.json' : 'Drop your Timeline.json here'}</div>
                 <div className="dz-sub">{stage ? 'Big exports take a few seconds.' : <>Android: Settings → Location → Timeline → Export. iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.</>}</div>
                 {importError && <div className="ob-error" role="alert">{importError.message}</div>}
               </label>
