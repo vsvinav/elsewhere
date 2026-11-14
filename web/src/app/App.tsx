@@ -18,6 +18,7 @@ import { RangeBar } from './RangeBar'
 
 // deck.gl and Google Maps only ship when the map opens.
 const FlightScreen = lazy(() => import('../tabs/Flights/Flights').then((m) => ({ default: m.Flights })))
+const FactsScreen = lazy(() => import('../tabs/Facts/Facts').then((m) => ({ default: m.Facts })))
 const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: m.MapScreen })))
 
 export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void; editProfile(): void }
@@ -104,6 +105,7 @@ function Screen() {
   const tab = useStore((s) => s.tab)
   if (tab === 'map' || tab === 'play') return <Suspense fallback={<Printing />}><MapScreen /></Suspense>
   if (tab === 'flights') return <Suspense fallback={<Printing />}><FlightScreen /></Suspense>
+  if (tab === 'facts') return <Suspense fallback={<Printing />}><FactsScreen /></Suspense>
   if (tab === 'stats') return <Stats />
   if (tab === 'places') return <Places />
   if (tab === 'trips') return <Trips />

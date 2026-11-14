@@ -1,0 +1,27 @@
+.fig { display: block; }
+.fig .c-ink, .fig.c-ink { color: var(--ink); } .fig .c-red { color: var(--red); } .fig .c-mustard { color: var(--mustard); }
+.fig .c-ghost { color: var(--ghost); } .fig .c-stock { color: var(--stock); }
+.fig i { background: currentColor; }
+.fig text { font: 700 11px/1 var(--body); fill: var(--ink); letter-spacing: 0.12em; text-transform: uppercase; }
+.fig text.n { font: 900 30px/1 var(--display); letter-spacing: -0.01em; }
+.fig text.n .u { font-size: 0.5em; }
+.fig text.l { fill: var(--ink-3); font-size: 9px; }
+.fig.ring, .fig.dial, .fig.globe { width: 100%; max-width: 220px; aspect-ratio: 1; margin: 0 auto; }
+
+.fig.scale { display: grid; gap: 14px; }
+.fig.scale .row { display: grid; grid-template-columns: 150px 1fr auto; gap: 14px; align-items: center; }
+.fig.scale .lab, .fig.scale .val { font: 700 12px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.fig.scale .lab { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fig.scale i { display: block; height: 22px; }
+
+.fig.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; height: 150px; align-items: end; }
+.fig.week .col { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 6px; }
+.fig.week i { display: block; }
+.fig.week span { font: 700 11px/1 var(--body); letter-spacing: 0.12em; color: var(--ink-3); text-align: center; }
+
+.fig.beds { width: 100%; height: auto; max-height: 84px; }
+.fig.beds.tall { max-height: 140px; }
+
+@media (max-width: 640px) {
+  .fig.scale .row { grid-template-columns: 76px 1fr auto; }
+}

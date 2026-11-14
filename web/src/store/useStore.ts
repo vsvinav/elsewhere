@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import type { Lens } from '../analytics/lens'
 
-export type Tab = 'home' | 'stats' | 'places' | 'trips' | 'flights' | 'map' | 'play'
-export const TABS: Tab[] = ['home', 'stats', 'places', 'trips', 'flights', 'map', 'play']
+export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 'map' | 'play'
+export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play']
 /** Replay pace: multiplier on the per-segment timing (each leg plays for a few seconds, each stay for about one). */
 
 export interface Store {

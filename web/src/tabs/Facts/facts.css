@@ -1,0 +1,23 @@
+.facts-head .hero .title { font-size: clamp(96px, 14vw, 200px); }
+.facts-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px 32px; align-content: start; padding-top: 48px; }
+.facts-kinds .btn { grid-column: 1 / -1; justify-self: start; }
+.facts-head.bills { padding-bottom: 0; }
+.strip.facts { margin-top: 64px; }
+
+.pass.fact .fact-h { margin: 0; font: 900 clamp(40px, 5.2vw, 76px)/0.9 var(--display); text-transform: uppercase; letter-spacing: -0.01em; text-wrap: balance; max-width: 14ch; }
+.pass.fact.explored .fact-h, .pass.fact.record .fact-h { color: var(--red); }
+.pass.fact .fact-p { margin: 20px 0 0; font: 500 clamp(16px, 1.4vw, 19px)/1.4 var(--body); max-width: 52ch; color: var(--ink-2); }
+.pass.fact .fact-wide { margin-top: 28px; }
+.pass.fact .fact-fig { margin-top: auto; }
+
+/* Figures on the ink stub swap ink for stock. */
+.pass .stub .fig text { fill: var(--stock); }
+.pass .stub .fig text.l { fill: var(--stock-3); }
+.pass .stub .fig .c-ink { color: var(--stock); }
+.pass .stub .fig .c-ghost { color: var(--ink-3); }
+.pass .stub .fig.globe .c-ink { color: var(--ink-2); }
+.pass .stub .fig.week span { color: var(--stock-3); }
+@media (max-width: 760px) {
+  .facts-kinds { padding-top: 0; }
+  .pass.fact .fact-h { max-width: none; }
+}
