@@ -31,9 +31,19 @@ def parse_ts(s: str) -> tuple[int, int]:
     return int(dt.timestamp()), int(dt.utcoffset().total_seconds() // 60)
 
 
+def _seg_tz(seg: dict, string_tz: int) -> int:
+    """True local offset: the export's string offset is the exporting phone's zone,
+    while startTimeTimezoneUtcOffsetMinutes carries the segment's local zone."""
+    off = seg.get("startTimeTimezoneUtcOffsetMinutes")
+    if isinstance(off, int) and not isinstance(off, bool):
+        return off
+    return string_tz
+
+
 def _visit(seg: dict, idx: int) -> Visit:
-    start, tz = parse_ts(seg["startTime"])
+    start, string_tz = parse_ts(seg["startTime"])
     end, _ = parse_ts(seg["endTime"])
+    tz = _seg_tz(seg, string_tz)
     v = seg["visit"]
     tc = v["topCandidate"]
     lat, lng = parse_latlng(tc["placeLocation"]["latLng"])
@@ -43,8 +53,9 @@ def _visit(seg: dict, idx: int) -> Visit:
 
 
 def _activity(seg: dict, idx: int) -> Activity:
-    start, tz = parse_ts(seg["startTime"])
+    start, string_tz = parse_ts(seg["startTime"])
     end, _ = parse_ts(seg["endTime"])
+    tz = _seg_tz(seg, string_tz)
     a = seg["activity"]
     tc = a["topCandidate"]
     s_lat, s_lng = parse_latlng(a["start"]["latLng"])
@@ -90,9 +101,10 @@ def _profile(up: dict) -> Profile:
     for p in up.get("frequentPlaces", []):
         try:
             lat, lng = parse_latlng(p["placeLocation"])
+            place_id = p["placeId"]
         except (KeyError, ValueError):
             continue
-        fp.append({"place_id": p["placeId"], "lat": lat, "lng": lng, "label": p.get("label")})
+        fp.append({"place_id": place_id, "lat": lat, "lng": lng, "label": p.get("label")})
     return Profile(frequent_places=fp, frequent_trips=up.get("frequentTrips", []),
                    persona=up.get("persona", {}))
 
@@ -121,7 +133,13 @@ def parse_bytes(raw: bytes) -> Parsed:
                 continue
             report.parsed += 1
         except ValueError as e:
-            report.skip("bad_latlng" if "latlng" in str(e) else "bad_timestamp")
+            msg = str(e)
+            if "latlng" in msg:
+                report.skip("bad_latlng")
+            elif "timestamp" in msg or "isoformat" in msg:
+                report.skip("bad_timestamp")
+            else:
+                report.skip("bad_number")
         except (KeyError, TypeError):
             report.skip("missing_field")
 

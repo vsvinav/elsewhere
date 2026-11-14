@@ -23,13 +23,13 @@ def test_strip_escapes_removes_terminal_sequences():
 
 
 def test_parse_bytes_counts(parsed):
-    assert len(parsed.visits) == 10
+    assert len(parsed.visits) == 11
     assert len(parsed.activities) == 8
     assert len(parsed.paths) == 1 and len(parsed.paths[0].pts) == 3
     assert len(parsed.memory_trips) == 1
     assert len(parsed.positions) == 2
-    assert parsed.report.segments_total == 21
-    assert parsed.report.parsed == 20
+    assert parsed.report.segments_total == 22
+    assert parsed.report.parsed == 21
     assert parsed.report.skipped_by_reason == {"bad_latlng": 1}
 
 
@@ -40,6 +40,17 @@ def test_parse_bytes_visit_fields(parsed):
     assert (v.lat, v.lng) == (42.3632761, -71.0643721)
     assert v.tz == -300
     assert v.end - v.start == 8 * 3600
+
+
+def test_tz_prefers_segment_offset_field_over_string_offset(parsed):
+    v = next(v for v in parsed.visits if v.place_id == "INDIA1")
+    assert v.tz == 330
+    assert v.start == parse_ts("2025-03-08T10:00:00.000-07:00")[0]
+
+
+def test_tz_falls_back_to_string_offset_without_field(parsed):
+    v = parsed.visits[1]  # WORK visit segment has no offset field
+    assert v.tz == -300
 
 
 def test_parse_bytes_activity_missing_probability_defaults(parsed):

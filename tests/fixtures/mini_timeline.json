@@ -43,7 +43,9 @@
     {"startTime": "2025-03-07T20:00:00.000-05:00", "endTime": "2025-03-07T20:30:00.000-05:00",
      "visit": {"hierarchyLevel": 0, "probability": 0.5, "topCandidate": {"placeId": "BAD1", "semanticType": "UNKNOWN", "probability": 0.5, "placeLocation": {"latLng": "not-a-coordinate"}}}},
     {"startTime": "2025-03-05T07:30:00.000-05:00", "endTime": "2025-03-07T15:30:00.000-05:00",
-     "timelineMemory": {"trip": {"distanceFromOriginKms": 4340, "destinations": [{"identifier": {"placeId": "MTV1"}}]}}}
+     "timelineMemory": {"trip": {"distanceFromOriginKms": 4340, "destinations": [{"identifier": {"placeId": "MTV1"}}]}}},
+    {"startTime": "2025-03-08T10:00:00.000-07:00", "endTime": "2025-03-08T12:00:00.000-07:00", "startTimeTimezoneUtcOffsetMinutes": 330, "endTimeTimezoneUtcOffsetMinutes": 330,
+     "visit": {"hierarchyLevel": 0, "probability": 0.9, "topCandidate": {"placeId": "INDIA1", "semanticType": "UNKNOWN", "probability": 0.8, "placeLocation": {"latLng": "12.9715987°, 77.5945627°"}}}}
   ],
   "rawSignals": [
     {"position": {"LatLng": "42.3632761°, -71.0643721°", "accuracyMeters": 11, "altitudeMeters": 5.0, "source": "WIFI", "timestamp": "2025-03-03T07:00:00.000-05:00", "speedMetersPerSecond": 0.0}},

@@ -7,7 +7,7 @@ class Visit:
     id: int
     start: int          # utc epoch s
     end: int
-    tz: int             # offset minutes from timestamp string
+    tz: int             # local offset minutes (segment UTC-offset field, else timestamp string)
     place_id: str
     lat: float
     lng: float
