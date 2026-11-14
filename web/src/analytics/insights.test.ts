@@ -86,7 +86,7 @@ test('homeFacts totals the export, excludes home/work from third places, and rol
   const f = homeFacts(data)
   expect(f.totalKm).toBeCloseTo(512)
   expect(f.kmByMode[0]).toEqual(['FLYING', 500])
-  expect(f.places).toBe(4)
+  expect(f.places).toBe(5)
   expect(f.countries).toBe(2)
   expect(f.topCities[0]).toBe('Boston')
   expect(f.thirdPlaces.map((p) => p.name)).toEqual(['Gym', 'Cafe', 'Louvre'])

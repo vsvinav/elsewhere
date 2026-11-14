@@ -1,3 +1,4 @@
+import { isHome } from '../analytics/geo'
 import type { Data, Place } from '../data/types'
 import { kv } from './db'
 
@@ -20,7 +21,7 @@ function apply(places: Record<string, Place>, cache: Record<string, Cached>, key
 /** Which places deserve a lookup: the most visited ones that still lack a name or a photo, home excluded. */
 function wanted(places: Record<string, Place>, cache: Record<string, Cached>): string[] {
   return Object.entries(places)
-    .filter(([id, p]) => p.semantic_type !== 'INFERRED_HOME' && !(id in cache) && (!p.name || !p.photo))
+    .filter(([id, p]) => !isHome(p.semantic_type) && !(id in cache) && (!p.name || !p.photo))
     .sort((a, b) => b[1].n_visits - a[1].n_visits).slice(0, LIMIT).map(([id]) => id)
 }
 
@@ -43,12 +44,13 @@ export function enrichPlaces(data: Data, key: string, onPlaces: (p: Record<strin
   let stopped = false
   ;(async () => {
     const cache = (await kv.get<Record<string, Cached>>('places').catch(() => undefined)) ?? {}
+    if (stopped) return
     onPlaces(apply(data.places, cache, key))
     if (!key) return
     const queue = wanted(data.places, cache)
     if (!queue.length) return
     let landed = 0
-    const flush = async () => { await kv.set('places', cache); onPlaces(apply(data.places, cache, key)) }
+    const flush = async () => { await kv.set('places', cache); if (!stopped) onPlaces(apply(data.places, cache, key)) }
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       while (queue.length && !stopped) {
         const id = queue.shift()!

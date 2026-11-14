@@ -5,7 +5,8 @@ export interface Settings { mapsKey: string; mapId: string }
 const LS = 'elsewhere.settings'
 const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '' }
 
-let cur: Settings = { ...ENV, ...(JSON.parse(localStorage.getItem(LS) ?? '{}') as Partial<Settings>) }
+const stored = (): Partial<Settings> => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}') } catch { return {} } }
+let cur: Settings = { ...ENV, ...stored() }
 const subs = new Set<() => void>()
 export const settings = {
   get: () => cur,

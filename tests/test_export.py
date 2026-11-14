@@ -6,7 +6,7 @@ def test_export_writes_all_files(parsed, tmp_path):
     export_all(parsed, tmp_path, source_file="mini_timeline.json", source_sha256="abc", places_cache={})
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == ["activities.json", "daily.json", "meta.json", "paths.json", "places.json",
-                     "positions.json", "profile.json", "trips.json", "visits.json"]
+                     "profile.json", "strokes.json", "trips.json", "visits.json"]
     visits = json.loads((tmp_path / "visits.json").read_text())
     assert visits[0] == {"id": 0, "start": visits[0]["start"], "end": visits[0]["end"], "tz": -300,
                          "place_id": "HOME1", "lat": 42.3632761, "lng": -71.0643721,

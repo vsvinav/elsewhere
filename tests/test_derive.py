@@ -76,7 +76,7 @@ def test_derive_trips_detects_sf_trip(parsed):
 
 def _mk_parsed(visits, activities=()):
     from pipeline.models import Parsed, Profile, ImportReport
-    return Parsed(visits=list(visits), activities=list(activities), paths=[], positions=[],
+    return Parsed(visits=list(visits), activities=list(activities), paths=[],
                   memory_trips=[], profile=Profile([], [], {}), report=ImportReport())
 
 

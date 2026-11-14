@@ -52,17 +52,6 @@ class Path:
 
 
 @dataclass
-class Position:
-    ts: int
-    lat: float
-    lng: float
-    acc: float
-    alt: float | None
-    spd: float | None
-    src: str
-
-
-@dataclass
 class MemoryTrip:
     start: int
     end: int
@@ -92,7 +81,6 @@ class Parsed:
     visits: list[Visit]
     activities: list[Activity]
     paths: list[Path]
-    positions: list[Position]
     memory_trips: list[MemoryTrip]
     profile: Profile
     report: ImportReport

@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 
 from .models import (Activity, ImportReport, MemoryTrip, Parsed, Path, PathPoint,
-                     Position, Profile, Visit)
+                     Profile, Visit)
 
 _ESC = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 _LATLNG = re.compile(r"^\s*(-?\d+(?:\.\d+)?)°?\s*,\s*(-?\d+(?:\.\d+)?)°?\s*$")
@@ -89,13 +89,6 @@ def _memory(seg: dict) -> MemoryTrip:
                       destination_place_ids=dests)
 
 
-def _position(p: dict) -> Position:
-    lat, lng = parse_latlng(p["LatLng"])
-    ts, _ = parse_ts(p["timestamp"])
-    return Position(ts=ts, lat=lat, lng=lng, acc=float(p.get("accuracyMeters", 0.0)),
-                    alt=p.get("altitudeMeters"), spd=p.get("speedMetersPerSecond"),
-                    src=p.get("source", "UNKNOWN"))
-
 
 def _profile(up: dict) -> Profile:
     fp = []
@@ -144,19 +137,10 @@ def parse_bytes(raw: bytes) -> Parsed:
         except (KeyError, TypeError):
             report.skip("missing_field")
 
-    positions: list[Position] = []
-    for r in doc.get("rawSignals", []):
-        if "position" in r:
-            try:
-                positions.append(_position(r["position"]))
-            except (KeyError, ValueError, TypeError):
-                report.skip("bad_position")
-
     visits.sort(key=lambda x: x.start)
     activities.sort(key=lambda x: x.start)
-    positions.sort(key=lambda x: x.ts)
     paths.sort(key=lambda p: p.start)
 
-    return Parsed(visits=visits, activities=activities, paths=paths, positions=positions,
+    return Parsed(visits=visits, activities=activities, paths=paths,
                   memory_trips=memories, profile=_profile(doc.get("userLocationProfile", {})),
                   report=report)

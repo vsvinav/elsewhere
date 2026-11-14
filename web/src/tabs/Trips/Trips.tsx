@@ -1,3 +1,4 @@
+import { isHome } from '../../analytics/geo'
 import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { placeName } from '../../analytics/home'
@@ -13,7 +14,7 @@ export function Trips() {
   const flightsIn = (s: number, e: number) => data.activities.filter((a) => a.mode === 'FLYING' && a.start >= s && a.start <= e).length
   const visitedIn = (s: number, e: number) => {
     const seen = new Map<string, number>()
-    for (const v of data.visits) if (v.lvl === 0 && v.start >= s && v.start <= e && v.type !== 'INFERRED_HOME') seen.set(v.place_id, (seen.get(v.place_id) ?? 0) + 1)
+    for (const v of data.visits) if (v.lvl === 0 && v.start >= s && v.start <= e && !isHome(v.type)) seen.set(v.place_id, (seen.get(v.place_id) ?? 0) + 1)
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
   }
 

@@ -27,7 +27,6 @@ def test_parse_bytes_counts(parsed):
     assert len(parsed.activities) == 8
     assert len(parsed.paths) == 1 and len(parsed.paths[0].pts) == 3
     assert len(parsed.memory_trips) == 1
-    assert len(parsed.positions) == 2
     assert parsed.report.segments_total == 23
     assert parsed.report.parsed == 22
     assert parsed.report.skipped_by_reason == {"bad_latlng": 1}
@@ -63,11 +62,6 @@ def test_parse_bytes_activity_missing_probability_defaults(parsed):
     a = parsed.activities[1]  # second activity has no top-level probability
     assert a.probability == 0.7  # falls back to topCandidate.probability
     assert a.mode == "IN_SUBWAY"
-
-
-def test_parse_bytes_position_optional_fields(parsed):
-    p = parsed.positions[1]
-    assert p.alt is None and p.spd is None and p.src == "GPS"
 
 
 def test_parse_bytes_profile(parsed):

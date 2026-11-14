@@ -39,12 +39,12 @@ export function homeFacts(data: Data): HomeFacts {
   const kmByMode = Object.entries(km).sort((a, b) => b[1] - a[1])
   const totalKm = kmByMode.reduce((s, [, v]) => s + v, 0)
 
+  // Places, cities and countries count the whole place book, the same rule the Stops tab prints.
   const cityVisits = new Map<string, number>()
   const countries = new Set<string>()
-  for (const v of visits) {
-    const p = data.places[v.place_id]
-    if (p?.city) cityVisits.set(p.city, (cityVisits.get(p.city) ?? 0) + 1)
-    if (p?.country_code) countries.add(p.country_code)
+  for (const p of Object.values(data.places)) {
+    if (p.city) cityVisits.set(p.city, (cityVisits.get(p.city) ?? 0) + p.n_visits)
+    if (p.country_code) countries.add(p.country_code)
   }
   const topCities = [...cityVisits.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c]) => c)
 
@@ -91,7 +91,7 @@ export function homeFacts(data: Data): HomeFacts {
     days: Math.round((r1 - r0) / 86400),
     range: [r0, r1],
     totalKm, kmByMode,
-    places: new Set(visits.map((v) => v.place_id)).size,
+    places: Object.keys(data.places).length,
     cities: cityVisits.size,
     countries: countries.size,
     topCities, thirdPlaces, hours,

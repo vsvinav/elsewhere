@@ -1,3 +1,4 @@
+import { isHome } from '../analytics/geo'
 import { IconLayer, PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Layer } from 'deck.gl'
 import type { Data, Place } from '../data/types'
 import { whereaboutsAt } from '../analytics/position'
@@ -37,7 +38,7 @@ function prepared(data: Data) {
   if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], labels: new Map(), active: [], activeIdx: [], activeOf: null }
   if (cache.places !== data.places) {
     cache.places = data.places
-    cache.dots = Object.entries(data.places).filter(([, p]) => p.semantic_type !== 'INFERRED_HOME' && p.n_visits >= 2)
+    cache.dots = Object.entries(data.places).filter(([, p]) => !isHome(p.semantic_type) && p.n_visits >= 2)
       .map(([id, p]) => ({ ...p, id, title: (p.name ?? p.label ?? '').trim() })).sort((a, b) => b.n_visits - a.n_visits)
     cache.labels = new Map()
   }

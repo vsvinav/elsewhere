@@ -36,7 +36,8 @@ export function geocoder(c: Cities) {
   c.lat.forEach((la, i) => { const k = key(la, c.lng[i]); let b = grid.get(k); if (!b) grid.set(k, (b = [])); b.push(i) })
   return (lat: number, lng: number): { name: string; cc: string } => {
     let best = -1, bd = Infinity
-    for (let ring = 0; ring <= 3 && best < 0; ring++) {
+    // The nearest city can sit in the neighbouring cell, so always look one ring past the first hit.
+    for (let ring = 0; ring <= 3 && (best < 0 || ring < 2); ring++) {
       for (let dy = -ring; dy <= ring; dy++) for (let dx = -ring; dx <= ring; dx++) {
         if (Math.max(Math.abs(dy), Math.abs(dx)) !== ring) continue
         for (const i of grid.get(key(lat + dy, lng + dx)) ?? []) { const d = haversineKm(lat, lng, c.lat[i], c.lng[i]); if (d < bd) { bd = d; best = i } }

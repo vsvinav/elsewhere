@@ -27,8 +27,7 @@ export function ingestFile(file: File, onStage: (stage: string) => void): Promis
 
 export async function saveRecord(data: Data): Promise<void> {
   const { paths, ...rest } = data
-  await kv.set('record', { ...rest, paths: [] })
-  await kv.set('paths', paths)
+  await kv.setAll([['record', { ...rest, paths: [] }], ['paths', paths]])
 }
 export const loadRecord = () => kv.get<Data>('record')
 export const loadRecordPaths = async () => (await kv.get<Path[]>('paths')) ?? []
