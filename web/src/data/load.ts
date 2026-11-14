@@ -1,4 +1,5 @@
 import type { Data, Path } from './types'
+import { loadRecord, loadRecordPaths } from '../ingest'
 
 const FILES = ['visits', 'activities', 'strokes', 'places', 'daily', 'trips', 'profile', 'meta'] as const
 
@@ -15,13 +16,18 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json()
 }
 
+/** The visitor's own record if one was imported, else the sample shipped with the site. */
 export async function loadData(base = '/data'): Promise<Data> {
+  const mine = await loadRecord().catch(() => undefined)
+  if (mine) return mine
   const out: Record<string, unknown> = { paths: [] }
   await Promise.all(FILES.map(async (f) => { out[f] = await fetchJson(`${base}/${f}.json`) }))
   return out as unknown as Data
 }
 
 /** The full GPS record (the largest file); only the map needs it. */
-export function loadPaths(base = '/data'): Promise<Path[]> {
+export async function loadPaths(data: Data, base = '/data'): Promise<Path[]> {
+  const mine = await loadRecord().catch(() => undefined)
+  if (mine?.meta.source_sha256 === data.meta.source_sha256) return loadRecordPaths()
   return fetchJson(`${base}/paths.json`) as Promise<Path[]>
 }

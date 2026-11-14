@@ -6,13 +6,12 @@ import { useStore } from '../store/useStore'
 import { positionAt } from '../analytics/position'
 import { denseBounds } from '../analytics/geo'
 import { mapLayers } from './layers'
+import { useSettings } from '../ingest/settings'
 import { useFollow } from './useFollow'
 import { Field, Pass } from '../world'
 import { MAP_STYLES } from './style'
 
-const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined
 // A Map ID switches Google to the vector renderer (smooth fractional zoom, far less tile memory); its style then lives in Cloud Console.
-const MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined
 
 function Deck() {
   const map = useMap()
@@ -62,18 +61,19 @@ function Deck() {
 export function MapView() {
   const data = useData()
   const basemap = useStore((s) => s.basemap)
+  const { mapsKey: KEY, mapId: MAP_ID } = useSettings()
   const start = useMemo(() => positionAt(data, useStore.getState().playhead ?? data.meta.range[0]) ?? data.profile.home, [data])
   if (!KEY) {
     return (
       <main className="strip">
-        <Pass stripe><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Put VITE_GOOGLE_MAPS_KEY=… in web/.env.local and reload</Field></div></Pass>
+        <Pass stripe><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Add your key under Home → Your record</Field></div></Pass>
       </main>
     )
   }
   return (
     <APIProvider apiKey={KEY}>
       <Map
-        key={basemap}
+        key={basemap + MAP_ID}
         style={{ position: 'absolute', inset: 0 }}
         defaultCenter={{ lat: start.lat, lng: start.lng }}
         defaultZoom={12}

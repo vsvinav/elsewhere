@@ -4,6 +4,7 @@ import { homeFacts } from '../../analytics/home'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TrailMap } from '../../world/TrailMap'
 import { date, dateISO, label, n0 } from '../../world/fmt'
+import { YourRecord } from '../../app/YourRecord'
 
 export function Home() {
   const data = useData()
@@ -158,6 +159,8 @@ export function Home() {
           </table>
         </PrintIn>
       </Pass>
+
+      <YourRecord />
     </main>
   )
 }
