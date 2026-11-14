@@ -41,6 +41,8 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
         if pid in places:
             places[pid]["name"] = cached.get("name")
             places[pid]["address"] = cached.get("address")
+            places[pid]["types"] = cached.get("types", [])
+            places[pid]["primary_type"] = cached.get("primary_type")
     _dump(out_dir / "places.json", places)
 
     _dump(out_dir / "daily.json", derive_daily(parsed, home))

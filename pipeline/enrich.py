@@ -1,12 +1,24 @@
 from __future__ import annotations
 import json
 import os
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
-TRANSIENT_ERRORS = {"OVER_QUERY_LIMIT", "UNKNOWN_ERROR", "REQUEST_DENIED"}
+DETAILS_URL = "https://places.googleapis.com/v1/places/"
+FIELDS = "displayName,formattedAddress,types,primaryType"
+# HTTP statuses where continuing would only burn quota or repeat the same failure.
+TRANSIENT_ERRORS = {403, 500, 503}
+RATE_LIMIT = 429
+MAX_RETRIES = 6
+
+try:  # use the OS trust store when available (corporate proxies re-sign TLS)
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
 
 
 def select_top(places: dict[str, dict], top: int) -> list[str]:
@@ -14,13 +26,22 @@ def select_top(places: dict[str, dict], top: int) -> list[str]:
 
 
 def fetch_place(place_id: str, key: str) -> dict:
-    q = urllib.parse.urlencode({"place_id": place_id, "fields": "name,formatted_address,types", "key": key})
-    with urllib.request.urlopen(f"{DETAILS_URL}?{q}", timeout=15) as r:
-        body = json.loads(r.read())
-    if body.get("status") != "OK":
-        return {"name": None, "address": None, "error": body.get("status")}
-    res = body["result"]
-    return {"name": res.get("name"), "address": res.get("formatted_address"), "types": res.get("types", [])}
+    """Places API (New) details lookup."""
+    req = urllib.request.Request(
+        DETAILS_URL + urllib.parse.quote(place_id),
+        headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": FIELDS},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return {"name": None, "address": None, "error": e.code}
+    return {
+        "name": (res.get("displayName") or {}).get("text"),
+        "address": res.get("formattedAddress"),
+        "types": res.get("types", []),
+        "primary_type": res.get("primaryType"),
+    }
 
 
 def enrich(places_json: Path, cache_path: Path, *, top: int) -> int:
@@ -34,7 +55,12 @@ def enrich(places_json: Path, cache_path: Path, *, top: int) -> int:
     print(f"enriching {len(todo)} places ({len(cache)} cached)")
     for pid in todo:
         res = fetch_place(pid, key)
-        if res.get("error") in TRANSIENT_ERRORS:
+        for attempt in range(MAX_RETRIES):
+            if res.get("error") != RATE_LIMIT:
+                break
+            time.sleep(2 ** attempt)
+            res = fetch_place(pid, key)
+        if res.get("error") in TRANSIENT_ERRORS or res.get("error") == RATE_LIMIT:
             print(f"stopping: {res['error']}")
             return 1
         cache[pid] = res

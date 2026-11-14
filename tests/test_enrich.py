@@ -35,7 +35,7 @@ def test_enrich_skips_cached_and_writes_cache(tmp_path, monkeypatch):
 def test_enrich_stops_on_transient_error_without_caching(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "k")
     monkeypatch.setattr("pipeline.enrich.fetch_place",
-                        lambda pid, key: {"name": None, "address": None, "error": "OVER_QUERY_LIMIT"})
+                        lambda pid, key: {"name": None, "address": None, "error": 429})
     pj = tmp_path / "places.json"
     pj.write_text(json.dumps({"a": {"n_visits": 3, "total_hours": 1}}))
     cache = tmp_path / "cache.json"
