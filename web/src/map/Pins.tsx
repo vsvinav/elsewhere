@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { CATS, CAT_COLOR, CAT_LABEL, categoryOf } from '../analytics/category'
@@ -37,11 +37,19 @@ export function PinHud() {
     setPin(id); setQ('')
     liveCam.get()?.move({ lng: p.lng, lat: p.lat }, 15)
   }
-  const fit = () => {
+  const fit = useCallback(() => {
     if (!shown.length) return
     const lngs = shown.map((s) => s.p.lng), lats = shown.map((s) => s.p.lat)
     liveCam.get()?.fit([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)], PAD)
-  }
+  }, [shown])
+  // Opening the tab, or changing the range, frames every pin; the camera may be a beat behind on first mount.
+  const fitted = useRef('')
+  useEffect(() => {
+    const key = `${data.meta.range[0]}-${data.meta.range[1]}`
+    if (fitted.current === key) return
+    const t = setTimeout(() => { if (liveCam.get()) { fitted.current = key; fit() } }, 150)
+    return () => clearTimeout(t)
+  }, [data, fit])
 
   return (
     <div className="hud pins">

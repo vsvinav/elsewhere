@@ -59,9 +59,9 @@ export function Facts() {
             {star && (
               <div className="feature" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}>
                 <div className="feature-top"><Field label={KIND[star.kind]}>{at + 1} of {list.length}</Field><span className="feature-bar" key={`${star.id}-${hold}`} data-hold={hold || undefined} /></div>
-                <button key={star.id} className="feature-card" onClick={() => jump(star)} aria-label={`Go to: ${star.headline}`}>
+                <button key={star.id} className="feature-card" onClick={() => jump(star)} aria-label={`Go to: ${star.headline}`} title={star.headline}>
                   {star.figure && <div className="feature-fig"><Fig f={star.figure} /></div>}
-                  <h2 className="fact-h">{star.headline}</h2>
+                  <h2 className="fact-h quip">{star.quip ?? star.headline}</h2>
                 </button>
                 <div className="feature-nav">
                   <button className="btn quiet" onClick={() => setAt((at + list.length - 1) % list.length)} aria-label="Previous fact">←</button>
