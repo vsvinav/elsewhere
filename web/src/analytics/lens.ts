@@ -11,3 +11,5 @@ const GROUP: Record<string, Lens> = {
 }
 export const lensOf = (mode: string): Lens => GROUP[mode] ?? 'drive'
 export const inLens = (mode: string, lens: Lens) => lens === 'all' || lensOf(mode) === lens
+/** Ink per kind of movement. Transit takes a deep blue, the one colour outside the poster's four. */
+export const LENS_COLOR: Record<Lens, string> = { all: '#141414', fly: '#d63c20', drive: '#141414', transit: '#1e4f8f', foot: '#e9b531' }

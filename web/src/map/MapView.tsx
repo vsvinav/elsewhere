@@ -28,7 +28,7 @@ function Deck() {
     const attach = () => { overlay.setMap(null); if (map.getRenderingType() !== 'UNINITIALIZED') overlay.setMap(map) }
     attach()
     const l = map.addListener('renderingtype_changed', attach)
-    return () => { l.remove(); overlay.setMap(null) }
+    return () => { l.remove(); overlay.finalize() }
   }, [map, overlay])
   const tab = useStore((s) => s.tab)
   // Layers update straight from the store on an animation frame; React never renders for the playhead.

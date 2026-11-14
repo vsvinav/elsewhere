@@ -31,3 +31,11 @@ test('whereaboutsAt reports movement mode', () => {
   expect(whereaboutsAt(d, 5)?.mode).toBe('STILL')
   expect(whereaboutsAt(d, 20)?.mode).toBe('FLYING')
 })
+
+test('inside a traced activity follows the GPS path and reports heading', () => {
+  const d = { visits: [], activities: [{ start: 0, end: 100, s_lng: 0, s_lat: 0, e_lng: 0, e_lat: 2, mode: 'IN_PASSENGER_VEHICLE' }],
+    paths: [{ start: 0, end: 100, pts: [[0, 0, 0], [50, 1, 1], [100, 2, 0]] }] } as unknown as Data
+  const w = whereaboutsAt(d, 25)!
+  expect(w.lng).toBeCloseTo(0.5); expect(w.lat).toBeCloseTo(0.5)
+  expect(w.heading).toBeCloseTo(45, 0)
+})

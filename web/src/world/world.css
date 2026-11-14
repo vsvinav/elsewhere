@@ -383,6 +383,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
   background: var(--stock); color: var(--ink-2);
 }
 .hud-lens button:hover { color: var(--ink); }
+.hud .ink { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 0; border: 2px solid var(--stock); box-shadow: 0 0 0 1px var(--ink-3); }
+.hud-where .lab .ink { width: 8px; height: 8px; margin-right: 7px; border-color: var(--stock); box-shadow: none; }
 .hud-lens button.on { background: var(--ink); color: var(--stock); }
 .hud-lens button:focus-visible { outline-offset: -4px; }
 .hud-stub { background: var(--ink); color: var(--stock); padding: 14px 24px 14px 22px; display: grid; grid-template-columns: auto minmax(160px, 300px) auto; gap: 0 28px; align-items: center; }

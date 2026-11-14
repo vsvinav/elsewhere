@@ -5,7 +5,7 @@ import { whereaboutsAt } from '../analytics/position'
 import { placeName } from '../analytics/home'
 import { fmtTime } from '../analytics/format'
 import { label } from '../world/fmt'
-import { LENSES, LENS_LABEL } from '../analytics/lens'
+import { LENSES, LENS_LABEL, LENS_COLOR, lensOf } from '../analytics/lens'
 
 const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MONTH = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -35,7 +35,7 @@ export function Hud() {
   return (
     <div className="hud">
       <div className="hud-lens" role="radiogroup" aria-label="Kind of movement">
-        {LENSES.map((l) => <button key={l} role="radio" aria-checked={l === lens} className={l === lens ? 'on' : ''} onClick={() => setLens(l)}>{LENS_LABEL[l]}</button>)}
+        {LENSES.map((l) => <button key={l} role="radio" aria-checked={l === lens} className={l === lens ? 'on' : ''} onClick={() => setLens(l)}>{l !== 'all' && <i className="ink" style={{ background: LENS_COLOR[l] }} />}{LENS_LABEL[l]}</button>)}
       </div>
       <div className="hud-stub">
         <div className="hud-date">
@@ -45,7 +45,7 @@ export function Hud() {
           <span className="time">{fmtTime(playhead, tz)}</span>
         </div>
         <div className="hud-where">
-          <div className="lab">{visit ? 'At' : 'Now'}</div>
+          <div className="lab">{visit ? 'At' : <><i className="ink" style={{ background: w ? LENS_COLOR[lensOf(w.mode)] : 'transparent' }} />Now</>}</div>
           <div className="val">{where}</div>
           <div className="sub">{sub}</div>
         </div>
