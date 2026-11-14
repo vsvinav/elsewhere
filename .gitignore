@@ -2,7 +2,7 @@ timeline*.json
 .superpowers/
 places_cache.json
 .env
-web/public/data/
+web/public/data*/
 node_modules/
 __pycache__/
 .venv/

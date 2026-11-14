@@ -7,7 +7,8 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 ## What you get
 
 - **Tour** — your years in one poster: cities ranked by nights slept, places, countries, a route map.
-- **Flights** — a spinning globe with every route you've flown, airports labelled, miles totalled.
+- **Flights** — a globe turned to show every route you've flown, airports labelled, distance totalled; pick an airport to see where it took you.
+- **Facts** — nineteen things your record says about you, each with a figure, each shareable as text.
 - **Replay** — press play and watch yourself move through time. Planes, cars, trains and walks each get their own colour and marker; a speed slider goes from real-time to years-in-seconds.
 - **Stops, Dates, Numbers, Map** — the places you keep returning to, a calendar of where you were, the stats, and the full trail.
 - **Pick any range** — a year, the last 90 days, or any two dates. Everything updates.
@@ -18,9 +19,11 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 <img src="docs/screenshots/replay.png" width="400" alt="Replay: a car marker leading its trail across a map">
 </p>
 <p align="center">
+<img src="docs/screenshots/facts.png" width="400" alt="Facts: 4 of 195 countries, with a ring figure">
 <img src="docs/screenshots/stops.png" width="400" alt="Stops: the places you return to">
-<img src="docs/screenshots/map.png" width="400" alt="Map: every trail at once">
 </p>
+
+Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Make it yourself with `python3 scripts/make_sample.py --out web/public/data` (needs the Python setup below).
 
 Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are Google's map tiles.
 
@@ -37,7 +40,7 @@ Open the local URL. The front door asks for two things, then five quick question
    Android: Settings → Location → Timeline → Export.
    iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.
 2. **Paste a Google Maps key** (free tier is plenty) so the Map and Replay pages can draw tiles. Get one at [console.cloud.google.com](https://console.cloud.google.com/google/maps-apis), enable *Maps JavaScript API*, and restrict it to `localhost` / your domain.
-3. **Name, home, moves, work, units.** Home candidates are ranked by where your phone sleeps; tap one. Every question can be changed later from *Edit profile* on the Tour page.
+3. **Name, home, moves, work, units.** Home candidates are ranked by where your phone sleeps; tap one. Every question can be changed later from the ▾ menu by the masthead, which also starts you over.
 
 Everything lives in your browser's local storage. Nothing is committed, nothing is uploaded.
 
