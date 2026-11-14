@@ -4,6 +4,7 @@ import type { Data, Place } from '../data/types'
 import { whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
 import { legsOf } from '../analytics/legs'
+import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
 
 type RGBA = [number, number, number, number]
 const STOCK: RGBA = [239, 230, 210, 255]
@@ -25,7 +26,8 @@ const ICON: Record<Lens | 'still', { url: string; width: number; height: number;
   all: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
   still: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
 }
-interface Dot extends Place { id: string; title: string }
+interface Dot extends Place { id: string; title: string; cat: Cat; ink: RGBA }
+const CAT_INK = Object.fromEntries(Object.entries(CAT_COLOR).map(([k, v]) => [k, rgba(v)])) as Record<Cat, RGBA>
 
 // TripsLayer keeps timestamps in float32; offset by t0 to keep precision.
 export function buildTrails(data: Data, t0: number): Trail[] {
@@ -33,13 +35,16 @@ export function buildTrails(data: Data, t0: number): Trail[] {
 }
 
 // Trails key on the record's geometry and dots on its places, so a place-name flush never re-uploads 80k points.
-let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null } | null = null
+let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; all: Dot[]; shown: { key: string; dots: Dot[]; labels: Map<number, Dot[]> }; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null } | null = null
 function prepared(data: Data) {
-  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], labels: new Map(), active: [], activeIdx: [], activeOf: null }
+  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], all: [], shown: { key: '', dots: [], labels: new Map() }, labels: new Map(), active: [], activeIdx: [], activeOf: null }
   if (cache.places !== data.places) {
     cache.places = data.places
-    cache.dots = Object.entries(data.places).filter(([, p]) => !isHome(p) && p.n_visits >= 2)
-      .map(([id, p]) => ({ ...p, id, title: (p.name ?? p.label ?? '').trim() })).sort((a, b) => b.n_visits - a.n_visits)
+    // Replay dots are the places you kept going back to; the Map tab pins every stop.
+    cache.all = Object.entries(data.places).filter(([, p]) => !isHome(p))
+      .map(([id, p]) => { const cat = categoryOf(p); return { ...p, id, title: (p.name ?? p.label ?? '').trim(), cat, ink: CAT_INK[cat] } }).sort((a, b) => b.n_visits - a.n_visits)
+    cache.dots = cache.all.filter((d) => d.n_visits >= 2)
+    cache.shown = { key: '', dots: [], labels: new Map() }
     cache.labels = new Map()
   }
   return cache
@@ -77,9 +82,14 @@ function labelDots(dots: Dot[], zoom: number): Dot[] {
   return out
 }
 
-export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
+export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all', hidden: Cat[] = [], pinAll = false): Layer[] {
   const c = prepared(data)
-  const { dots, labels } = c
+  let { dots, labels } = c
+  if (pinAll) {
+    const key = hidden.slice().sort().join()
+    if (c.shown.key !== key || c.shown.dots.length === 0) c.shown = { key, dots: hidden.length ? c.all.filter((d) => !hidden.includes(d.cat)) : c.all, labels: new Map() }
+    dots = c.shown.dots; labels = c.shown.labels
+  }
   const trails = lensTrails(c, lens)
   const zb = Math.floor(zoom * 2) / 2
   let labelled = labels.get(zb)
@@ -104,9 +114,9 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
       id: 'places', data: dots, pickable: true,
       getPosition: (d) => [d.lng, d.lat],
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
-      getFillColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 200 : 0],
+      getFillColor: (d) => { const k = pinAll ? d.ink : INK; return [k[0], k[1], k[2], d.first_ts <= reveal ? 220 : 0] },
       stroked: true, getLineColor: (d) => [STOCK[0], STOCK[1], STOCK[2], d.first_ts <= reveal ? 255 : 0], lineWidthMinPixels: 2,
-      updateTriggers: { getFillColor: [Math.floor(reveal / 86400)], getLineColor: [Math.floor(reveal / 86400)] },
+      updateTriggers: { getFillColor: [Math.floor(reveal / 86400), pinAll], getLineColor: [Math.floor(reveal / 86400)] },
     }),
     new TextLayer<Dot>({
       id: 'labels', data: labelled,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import type { Lens } from '../analytics/lens'
+import type { Cat } from '../analytics/category'
 
 export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 'map' | 'play'
 export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play']
@@ -19,6 +20,10 @@ export interface Store {
   /** Movement lens; Play cuts between matching legs, the map draws only that ink. */
   lens: Lens
   setLens(l: Lens): void
+  /** Kinds of stop switched off on the Map tab. */
+  hiddenCats: Cat[]
+  toggleCat(c: Cat): void
+  setHiddenCats(c: Cat[]): void
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
   setRange(r: [number, number] | null): void
@@ -59,6 +64,9 @@ export const useStore = create<Store>((set) => ({
   follow: true,
   lens: 'all',
   setLens: (lens) => set({ lens }),
+  hiddenCats: [],
+  toggleCat: (c) => set((s) => ({ hiddenCats: s.hiddenCats.includes(c) ? s.hiddenCats.filter((x) => x !== c) : [...s.hiddenCats, c] })),
+  setHiddenCats: (hiddenCats) => set({ hiddenCats }),
   range: null,
   setRange: (range) => set({ range, playhead: range ? range[0] : null }),
   hoverPlace: null,

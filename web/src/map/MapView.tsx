@@ -36,7 +36,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, cam.zoom(), s.lens) })
+      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, cam.zoom(), s.lens, s.hiddenCats, s.tab === 'map') })
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()

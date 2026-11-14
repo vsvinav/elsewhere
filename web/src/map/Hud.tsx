@@ -6,6 +6,8 @@ import { placeName } from '../analytics/home'
 import { fmtTime } from '../analytics/format'
 import { label } from '../world/fmt'
 import { LENSES, LENS_LABEL, LENS_COLOR, lensOf } from '../analytics/lens'
+import { CATS, CAT_COLOR, CAT_LABEL, categoryOf } from '../analytics/category'
+import { isHome } from '../analytics/geo'
 
 const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MONTH = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -18,7 +20,10 @@ export function Hud() {
   const speed = useStore((s) => s.speed)
   const follow = useStore((s) => s.follow)
   const lens = useStore((s) => s.lens)
-  const { setPlayhead, setPlaying, setSpeed, setFollow, setLens } = useStore.getState()
+  const tab = useStore((s) => s.tab)
+  const hidden = useStore((s) => s.hiddenCats)
+  const counts = useMemo(() => { const n = Object.fromEntries(CATS.map((c) => [c, 0])) as Record<string, number>; for (const p of Object.values(data.places)) if (!isHome(p)) n[categoryOf(p)]++; return n }, [data.places])
+  const { setPlayhead, setPlaying, setSpeed, setFollow, setLens, toggleCat, setHiddenCats } = useStore.getState()
 
   const w = whereaboutsAt(data, playhead)
   const visit = w?.mode === 'STILL' ? data.visits.find((v) => v.lvl === 0 && v.start <= playhead && playhead <= v.end) : null
@@ -34,6 +39,20 @@ export function Hud() {
 
   return (
     <div className="hud">
+      {tab === 'map' && (
+        <div className="hud-cats" aria-label="Kinds of stop">
+          {CATS.filter((c) => counts[c]).map((c) => {
+            const on = !hidden.includes(c)
+            return (
+              <button key={c} aria-pressed={on} className={on ? 'on' : ''} onClick={() => toggleCat(c)}
+                onDoubleClick={() => setHiddenCats(CATS.filter((x) => x !== c))} title="Click to toggle · double-click for only this">
+                <i className="ink" style={{ background: CAT_COLOR[c] }} />{CAT_LABEL[c]}<small>{counts[c].toLocaleString('en-US')}</small>
+              </button>
+            )
+          })}
+          {hidden.length > 0 && <button className="all" onClick={() => setHiddenCats([])}>Show all</button>}
+        </div>
+      )}
       <div className="hud-lens" role="radiogroup" aria-label="Kind of movement">
         {LENSES.map((l) => <button key={l} role="radio" aria-checked={l === lens} className={l === lens ? 'on' : ''} onClick={() => setLens(l)}>{l !== 'all' && <i className="ink" style={{ background: LENS_COLOR[l] }} />}{LENS_LABEL[l]}</button>)}
       </div>
