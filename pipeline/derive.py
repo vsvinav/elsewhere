@@ -87,7 +87,8 @@ def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
     for a in parsed.activities:
         row = day(_local_date(a.start, a.tz))
         row["km_by_mode"][a.mode] += a.distance_m / 1000
-        row["hours_transit"] += (a.end - a.start) / 3600
+        for d, secs in _split_by_local_day(a.start, a.end, a.tz):
+            day(d)["hours_transit"] += secs / 3600
         dist = haversine_km(home[0], home[1], a.e_lat, a.e_lng)
         row["max_dist_from_home_km"] = max(row["max_dist_from_home_km"], dist)
         if a.e_city:
@@ -129,7 +130,7 @@ def derive_trips(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
             cur = {"start": start, "tz": v.tz, "_cities": [], "max_dist_from_home_km": 0.0}
         if cur is not None:
             if away:
-                if v.city and (not cur["_cities"] or cur["_cities"][-1] != v.city):
+                if v.city and v.city not in cur["_cities"]:
                     cur["_cities"].append(v.city)
                 cur["max_dist_from_home_km"] = max(cur["max_dist_from_home_km"], dist)
             else:

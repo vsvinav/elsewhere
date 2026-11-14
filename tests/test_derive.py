@@ -72,3 +72,40 @@ def test_derive_trips_detects_sf_trip(parsed):
     assert t2["end"] == india.end
     assert t2["nights"] == 1
     assert t2["memory"] is None
+
+
+def _mk_parsed(visits, activities=()):
+    from pipeline.models import Parsed, Profile, ImportReport
+    return Parsed(visits=list(visits), activities=list(activities), paths=[], positions=[],
+                  memory_trips=[], profile=Profile([], [], {}), report=ImportReport())
+
+
+def test_derive_trips_anchor_cities_distinct():
+    from pipeline.models import Visit
+    H = 3600
+
+    def mk(i, start, city, far):
+        return Visit(id=i, start=start, end=start + H, tz=0, place_id=f"P{i}",
+                     lat=0.0, lng=0.0, semantic_type="UNKNOWN", probability=0.9,
+                     city=city, dist_from_home_km=500.0 if far else 0.0)
+
+    visits = [mk(1, 0, "A", True), mk(2, 2 * H, "B", True), mk(3, 4 * H, "A", True),
+              mk(4, 30 * H, "Home", False)]
+    trips = derive_trips(_mk_parsed(visits), (0.0, 0.0))
+    assert len(trips) == 1
+    assert trips[0]["anchor_cities"] == ["A", "B"]
+
+
+def test_derive_daily_splits_transit_across_midnight():
+    from pipeline.models import Activity
+    tz = -300
+    # 2025-03-03 23:00 local (UTC-5) -> 2025-03-04 01:00 local
+    start = 1741060800  # 2025-03-04T04:00:00Z
+    a = Activity(id=1, start=start, end=start + 7200, tz=tz, s_lat=0.0, s_lng=0.0,
+                 e_lat=0.0, e_lng=0.0, distance_m=1000.0, mode="WALKING", probability=0.9)
+    daily = derive_daily(_mk_parsed([], [a]), (0.0, 0.0))
+    by_date = {d["date"]: d for d in daily}
+    assert abs(by_date["2025-03-03"]["hours_transit"] - 1.0) < 1e-6
+    assert abs(by_date["2025-03-04"]["hours_transit"] - 1.0) < 1e-6
+    assert by_date["2025-03-03"]["km_by_mode"] == {"WALKING": 1.0}
+    assert "km_by_mode" not in by_date["2025-03-04"] or by_date["2025-03-04"]["km_by_mode"] == {}

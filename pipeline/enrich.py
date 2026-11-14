@@ -35,7 +35,7 @@ def enrich(places_json: Path, cache_path: Path, *, top: int) -> int:
     for pid in todo:
         res = fetch_place(pid, key)
         if res.get("error") in TRANSIENT_ERRORS:
-            print(f"stopping: {res['error']} (retry later)")
+            print(f"stopping: {res['error']}")
             return 1
         cache[pid] = res
         cache_path.write_text(json.dumps(cache, indent=1, ensure_ascii=False))
