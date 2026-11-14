@@ -73,11 +73,26 @@ function useSave(ref: RefObject<HTMLElement | null>) {
   return { state, save, label }
 }
 
+/** Text share: the share sheet or the clipboard, with a short confirmation in the button itself. */
+function useShareText(text?: () => string) {
+  const [note, setNote] = useState<string | null>(null)
+  if (!text) return null
+  const share = async (e: MouseEvent) => {
+    e.stopPropagation()
+    const r = await (await import('../share/text')).shareText(text())
+    setNote({ shared: 'Shared', copied: 'Copied', failed: "Couldn't copy" }[r])
+    setTimeout(() => setNote(null), 2000)
+  }
+  return { share, label: note ?? 'Text' }
+}
+
 /** Save as-is, or letterboxed for a story (9:16) or a post (4:5). */
-function SaveMenu({ state, save, label, what }: { state: string; save: (e: MouseEvent, f?: Format) => void; label: string; what: string }) {
+function SaveMenu({ state, save, label, what, text }: { state: string; save: (e: MouseEvent, f?: Format) => void; label: string; what: string; text?: () => string }) {
   const busy = state === 'busy'
+  const t = useShareText(text)
   return (
     <div className="save" role="group" aria-label={`Save this ${what}`}>
+      {t && <button type="button" onClick={t.share} aria-label="Share as text">{t.label}</button>}
       <button type="button" onClick={save} disabled={busy}>{label}</button>
       <button type="button" onClick={(e) => save(e, 'story')} disabled={busy} aria-label="Save as a 9:16 story">9:16</button>
       <button type="button" onClick={(e) => save(e, 'post')} disabled={busy} aria-label="Save as a 4:5 post">4:5</button>
@@ -86,7 +101,7 @@ function SaveMenu({ state, save, label, what }: { state: string; save: (e: Mouse
 }
 
 /** A pass: printed body on stock plus a torn-off stub. */
-export function Pass({ children, stub, stripe = false, share = true, className = '' }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string }) {
+export function Pass({ children, stub, stripe = false, share = true, className = '', text }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string; text?: () => string }) {
   const ref = useRef<HTMLElement>(null)
   const { state, save, label } = useSave(ref)
   return (
@@ -96,19 +111,19 @@ export function Pass({ children, stub, stripe = false, share = true, className =
         {children}
       </div>
       {stub && <aside className="stub">{stub}</aside>}
-      {share && <SaveMenu state={state} save={save} label={label} what="pass" />}
+      {share && <SaveMenu state={state} save={save} label={label} what="pass" text={text} />}
     </article>
   )
 }
 
 /** A bill: one full-bleed poster chapter. Peels off the stack as it scrolls in. */
-export function Bill({ children, tone, share = true, className = '', id }: { children: ReactNode; tone?: 'ink' | 'red'; share?: boolean; className?: string; id?: string }) {
+export function Bill({ children, tone, share = true, className = '', id, text }: { children: ReactNode; tone?: 'ink' | 'red'; share?: boolean; className?: string; id?: string; text?: () => string }) {
   const ref = useRef<HTMLElement>(null)
   const { state, save, label } = useSave(ref)
   return (
     <section ref={ref} id={id} className={`bill ${tone ?? ''} ${className}`}>
       <div className="peel">{children}</div>
-      {share && <SaveMenu state={state} save={save} label={label} what="bill" />}
+      {share && <SaveMenu state={state} save={save} label={label} what="bill" text={text} />}
     </section>
   )
 }

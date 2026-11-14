@@ -506,3 +506,6 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .flightmap.globe .hint { color: var(--stock-2, #b9ae92); }
 .ink .flightmap { margin-top: 0; }
 @media (max-width: 760px) { .flightmap { height: 380px !important; } .flightmap.globe.big { height: min(92vw, 520px) !important; } }
+.bill.nights .two { align-items: end; }
+.bill.nights .num { text-align: right; }
+.bill.nights .beds { margin-top: 40px; }

@@ -4,6 +4,7 @@ import { useProfile } from '../../profile/profile'
 import { facts, type Fact, type Kind } from '../../analytics/facts'
 import { Bill, Field, Pass, PrintIn, Stamp } from '../../world'
 import { Fig } from '../../world/figures/Figures'
+import { bedText, SITE } from '../../share/text'
 import './facts.css'
 
 const KIND: Record<Kind, string> = { explored: 'Explored', record: 'Record', scale: 'Scale', habit: 'Habit' }
@@ -56,8 +57,9 @@ export function Facts() {
         <main className="strip dense facts">
           {list.map((f, i) => {
             const wide = f.figure && WIDE.has(f.figure.t)
+            const text = () => (f.figure?.t === 'beds' ? bedText(f.figure.nights, f.headline.toUpperCase()) : `${f.headline.toUpperCase()}\n${f.detail}\n${SITE}`)
             return (
-              <Pass key={f.id} className={`fact ${f.kind}`} stub={
+              <Pass key={f.id} className={`fact ${f.kind}`} text={text} stub={
                 <PrintIn>
                   <Field label={KIND[f.kind]}>{i + 1} of {list.length}</Field>
                   {f.figure && !wide && <div className="fact-fig"><Fig f={f.figure} /></div>}

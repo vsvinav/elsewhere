@@ -1,6 +1,9 @@
 import { isHome } from '../../analytics/geo'
 import { useMemo, useState } from 'react'
-import { useData } from '../../data/DataContext'
+import { useData, useRawData } from '../../data/DataContext'
+import { bedStrip } from '../../analytics/beds'
+import { bedText } from '../../share/text'
+import { Beds } from '../../world/figures/Figures'
 import { placeName } from '../../analytics/home'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TripMap } from '../../world/TripMap'
@@ -8,6 +11,7 @@ import { date, label, n0 } from '../../world/fmt'
 
 export function Trips() {
   const data = useData()
+  const raw = useRawData()
   const [open, setOpen] = useState<number | null>(null)
   const trips = useMemo(() => [...data.trips].sort((a, b) => b.start - a.start), [data])
   const nights = trips.reduce((a, t) => a + t.nights, 0)
@@ -39,8 +43,10 @@ export function Trips() {
         const km = Object.entries(t.total_km_by_mode).sort((a, b) => b[1] - a[1])
         const total = km.reduce((a, [, v]) => a + v, 0)
         const dest = t.anchor_cities.slice(0, 3)
+        const strip = () => bedStrip(raw, [t.start, t.end])
+        const text = () => bedText(strip(), `${dest.join(' → ') || 'TRIP'} · ${date(t.start)}`.toUpperCase())
         return (
-          <Pass key={t.start} className={`click ${isOpen ? 'open' : ''}`} stub={
+          <Pass key={t.start} className={`click ${isOpen ? 'open' : ''}`} text={text} stub={
             <PrintIn>
               <Field label="Nights" big><CountUp value={t.nights} /></Field>
               <Field label="Flights" big>{flightsIn(t.start, t.end)}</Field>
@@ -61,6 +67,7 @@ export function Trips() {
                 {isOpen ? (
                   <>
                     <TripMap data={data} range={[t.start, t.end]} />
+                    <Beds nights={strip()} className="trip" />
                     <div className="bars">
                       {km.slice(0, 4).map(([m, v], j) => (
                         <div className="bar" key={m}><span className="lab">{label(m)}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(v)} km</span></div>

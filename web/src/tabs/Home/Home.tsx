@@ -5,6 +5,7 @@ import { tour } from '../../analytics/tour'
 import { lensOf } from '../../analytics/lens'
 import { Bill, CountUp, Field, Stamp, Sticker } from '../../world'
 import { TrailMap } from '../../world/TrailMap'
+import { Nights } from '../../world/Nights'
 import { date, dateISO, label, n0 } from '../../world/fmt'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
@@ -55,6 +56,8 @@ export function Home() {
         </div>
         <Stamp top="Official record" big={String(t.years[1])} bottom="live" />
       </Bill>
+
+      <Nights range={data.meta.range} name={name} />
 
       {act && (
         <Bill tone="ink">
