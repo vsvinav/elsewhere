@@ -1,4 +1,6 @@
 import { Photo } from '../usage/Meter'
+import { PlacePhoto } from './PlacePhoto'
+import type { Place } from '../data/types'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import type { Format } from '../share/saveCard'
 
@@ -137,11 +139,11 @@ export function Stamp({ top, big, bottom, tone, size, style }: { top: string; bi
 }
 
 /** A place slapped on the sheet: photo (or blank stock), name, where. */
-export function Sticker({ photo, name, sub, tilt, children, onClick }: { photo?: string | null; name: string; sub?: string | null; tilt?: number; children?: ReactNode; onClick?(): void }) {
+export function Sticker({ photo, place, name, sub, tilt, children, onClick }: { photo?: string | null; place?: Place; name: string; sub?: string | null; tilt?: number; children?: ReactNode; onClick?(): void }) {
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag className="sticker" style={tilt != null ? ({ '--tilt': `${tilt}deg` } as CSSProperties) : undefined} onClick={onClick} type={onClick ? 'button' : undefined}>
-      {photo ? <Photo src={photo} /> : <div className="blank caps">no photo on record</div>}
+      {place ? <PlacePhoto place={place} /> : photo ? <Photo src={photo} /> : <div className="blank caps">no photo on record</div>}
       <div className="name">{name}</div>
       {sub && <div className="sub">{sub}</div>}
       {children}

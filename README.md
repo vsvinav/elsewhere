@@ -25,7 +25,18 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 
 Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Make it yourself with `python3 scripts/make_sample.py --out web/public/data` (needs the Python setup below).
 
-Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are map tiles, a handful of free OpenStreetMap address lookups for your home picks, and — only with your key, only for your own record — Google Places names and photos for your hundred busiest stops. Without a key, or when Google refuses it, maps fall back to OpenStreetMap. The ▾ menu shows a running count of paid calls and a rough dollar figure.
+Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are map tiles, a handful of free OpenStreetMap address lookups for your home picks, and — only with your key, only for your own record — Google Places names and photos for your hundred busiest stops. Landmarks, stations and hotels try Wikimedia Commons for a picture first, free; only food and shops use Google photos. Without a key, or when Google refuses it, maps fall back to OpenStreetMap. The ▾ menu shows a running count of paid calls and a rough dollar figure.
+
+What costs what, per browser, against Google's monthly free allowance (roughly 5,000 Pro calls and 10,000 map loads):
+
+| Feature | Source | Paid? |
+| --- | --- | --- |
+| Parsing, stats, facts, tour, dates | your export, in the browser | no |
+| Street addresses for home/work picks | OpenStreetMap Nominatim | no |
+| Photos of landmarks, stations, hotels | Wikimedia Commons | no |
+| Map tiles | Google Maps JS, falling back to OpenFreeMap | 1 map load per visit |
+| Names, types, photos for your 100 busiest stops | Google Places Details, cached forever | ≤100 Pro calls, once |
+| Photos of restaurants and shops | Google Place Photos, loaded only when shown | ~$7 per 1,000 past free |
 
 ## Run it
 

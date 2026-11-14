@@ -1,3 +1,4 @@
+import { PlacePhoto } from '../world/PlacePhoto'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
@@ -6,7 +7,6 @@ import { isHome } from '../analytics/geo'
 import { placeName } from '../analytics/home'
 import { fmtDate } from '../analytics/format'
 import { useUnits } from '../profile/units'
-import { Photo } from '../usage/Meter'
 import { liveCam } from './live'
 
 const PAD = { top: 80, bottom: 260, left: 60, right: 60 }
@@ -99,7 +99,7 @@ function PinCard({ id, onClose }: { id: string; onClose(): void }) {
     <div className="tag pin-card">
       <button className="close" onClick={onClose} aria-label="Close">×</button>
       <div>
-        {p.photo && <Photo src={p.photo} />}
+        <PlacePhoto place={p} />
         <div className="lab"><i className="ink" style={{ background: CAT_COLOR[cat] }} />{p.primary_type?.replace(/_/g, ' ') ?? CAT_LABEL[cat]}</div>
         <div className="name">{placeName(p, id)}</div>
         <div className="sub">{[p.address ?? p.city, p.country_code].filter(Boolean).join(' · ') || 'city not on record'}</div>

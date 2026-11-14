@@ -1,4 +1,4 @@
-import { Photo } from '../../usage/Meter'
+import { PlacePhoto } from '../../world/PlacePhoto'
 import { useMemo, useState } from 'react'
 import { useData } from '../../data/DataContext'
 import { placeName } from '../../analytics/home'
@@ -59,7 +59,7 @@ export function Places() {
             <div className="big" style={{ fontSize: 'clamp(44px, 7vw, 96px)', lineHeight: 0.9 }}>{placeName(sel, open)}</div>
             <div className="two" style={{ marginTop: 32 }}>
               <PlaceMap place={sel} height={360} />
-              <Sticker photo={sel.photo} name={placeName(sel, open)} sub={[sel.city, sel.country_code].filter(Boolean).join(', ') || 'city not on record'} tilt={1.5} />
+              <Sticker place={sel} name={placeName(sel, open)} sub={[sel.city, sel.country_code].filter(Boolean).join(', ') || 'city not on record'} tilt={1.5} />
             </div>
             <button className="btn quiet" onClick={() => setOpen(null)}>Back to all places</button>
           </PrintIn>
@@ -94,7 +94,7 @@ export function Places() {
       <div className="tags">
           {list.slice(0, limit).map(([id, p]) => (
             <button className="tag" key={id} onClick={() => { setOpen(id); scrollTo({ top: 0, behavior: 'smooth' }) }} aria-pressed={open === id}>
-              {p.photo && <Photo src={p.photo} />}
+              <PlacePhoto place={p} />
               <div>
                 <div className="lab">{kind(p) ?? (p.name ? 'place' : 'unnamed stop')}</div>
                 <div className="name">{placeName(p, id)}</div>

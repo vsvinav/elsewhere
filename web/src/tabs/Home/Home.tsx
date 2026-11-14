@@ -76,7 +76,7 @@ export function Home() {
               </ol>
             </div>
             <div style={{ display: 'grid', justifyItems: 'end', paddingTop: 24 }}>
-              <Sticker photo={actPlace?.photo} name={placeName(actPlace, act.place_id)} sub={[actPlace?.address, act.country].filter(Boolean).join(' · ') || null} tilt={2} onClick={() => setTab('places')}>
+              <Sticker place={actPlace} name={placeName(actPlace, act.place_id)} sub={[actPlace?.address, act.country].filter(Boolean).join(' · ') || null} tilt={2} onClick={() => setTab('places')}>
                 <Stamp size="sm" top="" big={`${Math.round(cv(act.km) / 100) / 10}k`} bottom={`${u} out`} />
               </Sticker>
             </div>

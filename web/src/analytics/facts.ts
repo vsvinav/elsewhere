@@ -17,7 +17,7 @@ export type Figure =
 export interface Fact { id: string; kind: Kind; headline: string; detail: string; figure?: Figure; quip?: string }
 export type Units = 'km' | 'mi'
 
-const EARTH_KM = 40_075, COUNTRIES = 195, MI = 0.621371
+const EARTH_KM = 40_075, MI = 0.621371
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US')
 const long = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
 const longTs = (ts: number) => long(new Date(ts * 1000).toISOString().slice(0, 10))
