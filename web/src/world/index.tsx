@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 
 /** Content prints in top-down, line by line, the first time it scrolls into view. */
 export function PrintIn({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -52,14 +52,33 @@ export function Field({ label, children, ghost = false, big = false }: { label: 
 }
 
 /** A pass: printed body on stock plus a torn-off stub. */
-export function Pass({ children, stub, stripe = false, className = '' }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; className?: string }) {
+export function Pass({ children, stub, stripe = false, share = true, className = '' }: { children: ReactNode; stub?: ReactNode; stripe?: boolean; share?: boolean; className?: string }) {
+  const ref = useRef<HTMLElement>(null)
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+  const save = async (e: MouseEvent) => {
+    e.stopPropagation()
+    const el = ref.current
+    if (!el || state === 'busy') return
+    setState('busy')
+    try {
+      const name = el.querySelector('h1, h2, h3, .val')?.textContent ?? 'card'
+      await (await import('../share/saveCard')).saveCard(el, name)
+      setState('idle')
+    } catch (err) {
+      console.error(err)
+      setState('failed')
+      setTimeout(() => setState('idle'), 2500)
+    }
+  }
+  const label = { idle: 'Save', busy: 'Saving…', failed: "Couldn't save" }[state]
   return (
-    <article className={`pass ${stub ? '' : 'one'} ${className}`}>
+    <article ref={ref} className={`pass ${stub ? '' : 'one'} ${className}`}>
       <div className={`body ${stub ? 'perf' : ''}`}>
         {stripe && <div className="stripe" />}
         {children}
       </div>
       {stub && <aside className="stub">{stub}</aside>}
+      {share && <button type="button" className="save" onClick={save} disabled={state === 'busy'} aria-label="Save this pass as an image">{label}</button>}
     </article>
   )
 }

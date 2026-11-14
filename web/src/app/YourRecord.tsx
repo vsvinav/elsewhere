@@ -29,7 +29,7 @@ export function YourRecord() {
   }
 
   return (
-    <Pass className={over ? 'drop-over' : ''} stub={
+    <Pass share={false} className={over ? 'drop-over' : ''} stub={
       <PrintIn>
         <Field label="Source">{rec.mine ? 'Your export' : 'Sample record'}</Field>
         <Field label="File">{data.meta.source_file}</Field>

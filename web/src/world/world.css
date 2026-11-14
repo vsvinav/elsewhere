@@ -424,3 +424,18 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fields.keys { margin-top: 28px; }
 .fields.keys input.val { width: 26ch; font-family: var(--mono); font-size: 14px; letter-spacing: 0.04em; }
 .fine { font: 400 12.5px/1.5 var(--body); color: var(--ink-3); margin: 18px 0 0; max-width: 70ch; }
+
+/* Save: a small printed mark in the pass corner; shows on hover or keyboard focus, always on touch */
+.pass .save {
+  position: absolute; right: 12px; bottom: 10px; z-index: 3;
+  font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3); padding: 6px 8px; border: 1px solid transparent;
+  opacity: 0; transition: opacity 160ms ease-out, color 160ms ease-out, border-color 160ms ease-out;
+}
+.pass:hover .save, .pass .save:focus-visible, .pass .save:disabled { opacity: 1; }
+.pass .save:hover { color: var(--ink); border-color: var(--ink-3); }
+.pass .save:disabled { cursor: progress; color: var(--ink-2); }
+.pass:not(.one) .save { color: var(--blue-2); }
+.pass:not(.one) .save:hover { color: #fff; border-color: var(--blue-2); }
+@media (hover: none) { .pass .save { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pass .save { transition: none; } }

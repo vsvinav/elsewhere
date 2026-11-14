@@ -82,7 +82,7 @@ function Screen() {
 function Printing() {
   return (
     <main className="strip">
-      <Pass stripe><div className="fields"><Field label="Status">Printing your record…</Field></div></Pass>
+      <Pass stripe share={false}><div className="fields"><Field label="Status">Printing your record…</Field></div></Pass>
     </main>
   )
 }
@@ -90,7 +90,7 @@ function Printing() {
 function LoadFailed({ error }: { error: Error }) {
   return (
     <main className="strip">
-      <Pass stripe>
+      <Pass stripe share={false}>
         <div className="fields">
           <Field label="Status">Couldn't load the record</Field>
           <Field label="Detail">{error instanceof DataLoadError ? error.url : error.message}</Field>

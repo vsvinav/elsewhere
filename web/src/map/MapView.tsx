@@ -66,7 +66,7 @@ export function MapView() {
   if (!KEY) {
     return (
       <main className="strip">
-        <Pass stripe><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Add your key under Home → Your record</Field></div></Pass>
+        <Pass stripe share={false}><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Add your key under Home → Your record</Field></div></Pass>
       </main>
     )
   }
