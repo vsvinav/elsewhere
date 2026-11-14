@@ -38,21 +38,25 @@ async function lookup(id: string, key: string): Promise<Cached> {
   return { name: j.displayName?.text ?? null, address: j.formattedAddress ?? null, types: j.types ?? [], primary_type: j.primaryType ?? null, photo: j.photos?.[0]?.name ?? null }
 }
 
+/** `lookup` pays for Details calls (empty = none); `photo` only builds URLs for photos already cached. */
+export interface Keys { lookup: string; photo: string }
+
 /**
  * Names and photographs places with the visitor's key. Calls `onPlaces` first with what is cached,
  * then again as lookups land. Returns a stop function.
  */
-export function enrichPlaces(data: Data, key: string, onPlaces: (p: Record<string, Place>) => void, onError: (e: Error) => void): () => void {
+export function enrichPlaces(data: Data, keys: Keys, onPlaces: (p: Record<string, Place>) => void, onError: (e: Error) => void): () => void {
   let stopped = false
+  const key = keys.lookup
   ;(async () => {
     const cache = (await kv.get<Record<string, Cached>>('places').catch(() => undefined)) ?? {}
     if (stopped) return
-    onPlaces(apply(data.places, cache, key))
+    onPlaces(apply(data.places, cache, keys.photo))
     if (!key) return
     const queue = wanted(data.places, cache)
     if (!queue.length) return
     let landed = 0
-    const flush = async () => { await kv.set('places', cache); if (!stopped) onPlaces(apply(data.places, cache, key)) }
+    const flush = async () => { await kv.set('places', cache); if (!stopped) onPlaces(apply(data.places, cache, keys.photo)) }
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       while (queue.length && !stopped) {
         const id = queue.shift()!

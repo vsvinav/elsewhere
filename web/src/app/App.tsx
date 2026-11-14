@@ -33,6 +33,8 @@ export function App() {
   const [mine, setMine] = useState(false)
   const [places, setPlaces] = useState<Record<string, Place> | null>(null)
   const [error, setError] = useState<Error | null>(null)
+  // No sample shipped with this build (the data folder is not in git): the front door still takes an import.
+  const [noDemo, setNoDemo] = useState(false)
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
@@ -41,7 +43,7 @@ export function App() {
   const { mapsKey } = useSettings()
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setPlaces(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
-    loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch(setError)
+    loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
   }, [adopt])
   // The record follows the profile: when home or work moves, trips and days are worked out again.
   const homesKey = JSON.stringify([prof?.homes ?? null, prof?.works ?? null])
@@ -63,12 +65,12 @@ export function App() {
   }, [onMap, record])
   // Names and photos land on top of the record, from cache first and then from Places with the visitor's key.
   const sha = record?.meta.source_sha256
-  // Paid lookups only for the visitor's own record once onboarding is done; the demo and the questions stay free.
-  const spend = mine && !!prof
+  // Lookups wait until onboarding is done (the questions stay free); the baked record counts as yours, so it is named too.
+  const spend = !!prof
   useEffect(() => {
     if (!record) return
     setEnrichError(null)
-    return enrichPlaces(record, spend ? mapsKey : '', setPlaces, setEnrichError)
+    return enrichPlaces(record, { lookup: spend ? mapsKey : '', photo: mapsKey }, setPlaces, setEnrichError)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sha, mapsKey, spend])
   const data = useMemo(() => (record && places ? { ...record, places } : record), [record, places])
@@ -92,6 +94,7 @@ export function App() {
 
   const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
+  if (!record && noDemo) return <Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} />
   if (!record) return <div className="tray"><Printing /></div>
   if (!prof || editing) {
     return <Onboarding key={editing ? 'edit' : 'new'} data={data} demo={!mine} stage={stage} importError={importError} importFile={ctx.importFile} initial={editing ? prof : null} onClose={editing ? () => setEditing(false) : undefined} />

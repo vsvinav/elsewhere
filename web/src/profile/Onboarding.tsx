@@ -57,7 +57,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
     const put = (id: string, n: string | null) => { if (live && n) setNames((m) => (m[id] ? m : { ...m, [id]: n })) }
     for (const s of [...sleep.slice(0, 8), ...weekday.slice(0, 6)]) {
       if (!data) break
-      clusterName(s.members, data.places, demo ? '' : mapsKey).then((n) => {
+      clusterName(s.members, data.places, mapsKey).then((n) => {
         if (n) return put(s.place_id, n)
         if (!data.places[s.place_id]?.name) return address(s.lat, s.lng).then((a) => put(s.place_id, a))
       })

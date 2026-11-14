@@ -16,8 +16,10 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json()
 }
 
+const DATA = `${import.meta.env.BASE_URL}data`
+
 /** The visitor's own record if one was imported, else the sample shipped with the site. */
-export async function loadData(base = '/data'): Promise<Data> {
+export async function loadData(base = DATA): Promise<Data> {
   const mine = await loadRecord().catch(() => undefined)
   if (mine) return mine
   const out: Record<string, unknown> = { paths: [] }
@@ -26,7 +28,7 @@ export async function loadData(base = '/data'): Promise<Data> {
 }
 
 /** The full GPS record (the largest file); only the map needs it. */
-export async function loadPaths(data: Data, base = '/data'): Promise<Path[]> {
+export async function loadPaths(data: Data, base = DATA): Promise<Path[]> {
   const mine = await loadRecord().catch(() => undefined)
   if (mine?.meta.source_sha256 === data.meta.source_sha256) return loadRecordPaths()
   return fetchJson(`${base}/paths.json`) as Promise<Path[]>

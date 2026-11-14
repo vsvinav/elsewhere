@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  // GitHub Pages serves from /<repo>/; the workflow sets VITE_BASE, local dev stays at /.
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   // MapLibre finds its worker next to itself via import.meta.url; pre-bundling would move it.
   optimizeDeps: { exclude: ['maplibre-gl'] },

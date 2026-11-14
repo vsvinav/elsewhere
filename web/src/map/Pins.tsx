@@ -37,11 +37,13 @@ export function PinHud() {
     setPin(id); setQ('')
     liveCam.get()?.move({ lng: p.lng, lat: p.lat }, 15)
   }
+  const homes = useMemo(() => Object.values(data.places).filter(isHome), [data])
   const fit = useCallback(() => {
-    if (!shown.length) return
-    const lngs = shown.map((s) => s.p.lng), lats = shown.map((s) => s.p.lat)
+    const pts = [...shown.map((s) => s.p), ...homes]
+    if (!pts.length) return
+    const lngs = pts.map((p) => p.lng), lats = pts.map((p) => p.lat)
     liveCam.get()?.fit([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)], PAD)
-  }, [shown])
+  }, [shown, homes])
   // Opening the tab, or changing the range, frames every pin; the camera may be a beat behind on first mount.
   const fitted = useRef('')
   useEffect(() => {
