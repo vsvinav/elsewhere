@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react'
 
 /** Keys the visitor types in; they never leave the browser. Env values are the deploy's defaults. */
-export interface Settings { mapsKey: string; mapId: string }
+export type MapProvider = 'auto' | 'google' | 'osm'
+export interface Settings { mapsKey: string; mapId: string; mapProvider: MapProvider }
 const LS = 'elsewhere.settings'
-const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '' }
+const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '', mapProvider: 'auto' }
 
 const stored = (): Partial<Settings> => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}') } catch { return {} } }
 let cur: Settings = { ...ENV, ...stored() }

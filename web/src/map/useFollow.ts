@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useMap } from '@vis.gl/react-google-maps'
+import type { Cam } from './cam'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt, segmentAt } from '../analytics/position'
@@ -16,8 +16,7 @@ const MIN_ZOOM = 3
  * (so a flight shows the arc, a walk shows the street), settling to a town view on stays.
  * Dragging detaches; wheel zoom becomes an offset that is kept.
  */
-export function useFollow() {
-  const map = useMap()
+export function useFollow(map: Cam | null) {
   const data = useData()
   const spr = useRef<{ lng: Spring; lat: Spring; zoom: Spring } | null>(null)
   const zoomOffset = useRef(0)
@@ -25,20 +24,20 @@ export function useFollow() {
 
   useEffect(() => {
     if (!map) return
-    const detach = map.addListener('dragstart', () => useStore.getState().setFollow(false))
+    const detach = map.on('dragstart', () => useStore.getState().setFollow(false))
     const userZoom = { current: false }
     const onWheel = () => { userZoom.current = true }
-    const idle = map.addListener('idle', () => {
+    const idle = map.on('idle', () => {
       if (userZoom.current && spr.current) {
-        const z = map.getZoom() ?? spr.current.zoom.x
+        const z = map.zoom()
         zoomOffset.current += z - spr.current.zoom.x
         spr.current.zoom.x = z; spr.current.zoom.v = 0
         userZoom.current = false
       }
     })
-    const div = map.getDiv()
+    const div = map.div
     div.addEventListener('wheel', onWheel, { passive: true })
-    return () => { detach.remove(); idle.remove(); div.removeEventListener('wheel', onWheel) }
+    return () => { detach(); idle(); div.removeEventListener('wheel', onWheel) }
   }, [map])
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export function useFollow() {
       const here = positionAt(data, now)
       if (!here) return
       const seg = segmentAt(data, now)
-      const div = map.getDiv()
+      const div = map.div
       // Faster replay: a quicker camera and a wider frame, so the subject stays on screen instead of being chased.
       const fast = Math.max(1, s.speed)
       const quick = 1 / Math.sqrt(fast)
@@ -61,8 +60,8 @@ export function useFollow() {
       const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, legZoom - Math.log2(fast) * 0.8)) + zoomOffset.current
 
       if (!spr.current) {
-        const c = map.getCenter()
-        spr.current = { lng: { x: c?.lng() ?? here.lng, v: 0 }, lat: { x: c?.lat() ?? here.lat, v: 0 }, zoom: { x: map.getZoom() ?? zTarget, v: 0 } }
+        const c = map.center()
+        spr.current = { lng: { x: c.lng, v: 0 }, lat: { x: c.lat, v: 0 }, zoom: { x: map.zoom(), v: 0 } }
       }
       const sp = spr.current
       step(sp.lng, here.lng, dt, POS_PERIOD_S * quick); step(sp.lat, here.lat, dt, POS_PERIOD_S * quick)
@@ -71,7 +70,7 @@ export function useFollow() {
       const moved = Math.abs(sp.lng.v) + Math.abs(sp.lat.v) > 1e-7 || Math.abs(sp.zoom.v) > 1e-4
       if (moved || t - lastTarget.current > 500) {
         lastTarget.current = t
-        map.moveCamera({ center: { lat: sp.lat.x, lng: sp.lng.x }, zoom: sp.zoom.x })
+        map.move({ lat: sp.lat.x, lng: sp.lng.x }, sp.zoom.x)
       }
     }
     raf = requestAnimationFrame(tick)

@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent } from 'react'
 import { useData } from '../data/DataContext'
 import { useRecord } from './App'
 import { STAGE_LABEL } from '../ingest'
-import { settings, useSettings } from '../ingest/settings'
+import { settings, useSettings, type MapProvider } from '../ingest/settings'
 import { Field } from '../world'
 import { date, n0 } from '../world/fmt'
 
@@ -10,7 +10,7 @@ import { date, n0 } from '../world/fmt'
 export function YourRecord() {
   const data = useData()
   const rec = useRecord()
-  const { mapsKey, mapId } = useSettings()
+  const { mapsKey, mapId, mapProvider } = useSettings()
   const [over, setOver] = useState(false)
   const [key, setKey] = useState(mapsKey)
   const [id, setId] = useState(mapId)
@@ -68,7 +68,15 @@ export function YourRecord() {
             <div className="lab">Map ID (optional, vector tiles)</div>
             <input className="val" value={id} onChange={(e) => setId(e.target.value)} onBlur={saveKeys} placeholder="none" aria-label="Google Map ID" spellCheck={false} autoComplete="off" />
           </div>
-          <Field label="Used for">Map tiles · place names · photos</Field>
+          <div className="field">
+            <div className="lab">Map tiles</div>
+            <select className="val" value={mapProvider} onChange={(e) => settings.set({ mapProvider: e.target.value as MapProvider })} aria-label="Map provider">
+              <option value="auto">Google if the key works, else OpenStreetMap</option>
+              <option value="google">Google Maps</option>
+              <option value="osm">OpenStreetMap (free, no key)</option>
+            </select>
+          </div>
+          <Field label="Key used for">Map tiles · place names · photos</Field>
         </div>
         {rec.enrichError && <div className="dz-err">Places lookups stopped: {rec.enrichError.message}</div>}
         <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; restrict it to this site's address. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>

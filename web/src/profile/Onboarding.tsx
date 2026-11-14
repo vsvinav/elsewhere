@@ -81,7 +81,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 {importError && <div className="ob-error" role="alert">{importError.message}</div>}
               </label>
               <div className="ob-key">
-                <Field label="Google Maps key · optional, for the map pages">
+                <Field label="Google Maps key · optional: names and photos for your stops. Maps print on OpenStreetMap without one">
                   <input className="val" type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => settings.set({ mapsKey: key.trim() })} placeholder="AIza…" aria-label="Google Maps API key" spellCheck={false} autoComplete="off" />
                 </Field>
               </div>

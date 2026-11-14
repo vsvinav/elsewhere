@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
-import { MapLoad } from '../usage/Meter'
 import { GoogleMapsOverlay } from '@deck.gl/google-maps'
+import { MapLibreOverlay } from '@deck.gl/maplibre'
+import type { Layer } from 'deck.gl'
+import { MapLoad } from '../usage/Meter'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt } from '../analytics/position'
@@ -9,20 +11,52 @@ import { denseBounds } from '../analytics/geo'
 import { mapLayers } from './layers'
 import { useSettings } from '../ingest/settings'
 import { useFollow } from './useFollow'
-import { Field, Pass } from '../world'
 import { MAP_STYLES } from './style'
+import { googleCam, libreCam, type Cam } from './cam'
+import { markGoogleDown, useProvider } from './provider'
+import { LibreMap, useLibre } from './osm/Libre'
 
 // A Map ID switches Google to the vector renderer (smooth fractional zoom, far less tile memory); its style then lives in Cloud Console.
 
-function Deck() {
-  const map = useMap()
+interface Overlay { setProps(p: { layers: Layer[] }): void }
+
+const onHover = (info: { object?: unknown; x: number; y: number }) => {
+  const o = info.object as { id: string } | undefined
+  useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
+}
+
+/** Layers update straight from the store on an animation frame; React never renders for the playhead. Map tab opens on the whole record; Play follows the playhead. */
+function useDeck(cam: Cam | null, overlay: Overlay | null) {
   const data = useData()
-  const overlay = useMemo(() => new GoogleMapsOverlay({
-    onHover: (info) => {
-      const o = info.object as { id: string } | undefined
-      useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
-    },
-  }), [])
+  const tab = useStore((s) => s.tab)
+  useEffect(() => {
+    if (!cam || !overlay) return
+    let raf = 0
+    const render = () => {
+      raf = 0
+      const s = useStore.getState()
+      const now = s.playhead ?? data.meta.range[0]
+      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, cam.zoom(), s.lens) })
+    }
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
+    render()
+    const unsub = useStore.subscribe(schedule)
+    const off = cam.on('zoom', schedule)
+    return () => { unsub(); off(); cancelAnimationFrame(raf) }
+  }, [cam, overlay, data])
+  useFollow(cam)
+  useEffect(() => {
+    if (!cam || tab !== 'map') return
+    useStore.getState().setFollow(false)
+    const b = denseBounds(data.visits.filter((v) => v.lvl === 0).map((v) => ({ lng: v.lng, lat: v.lat })))
+    if (b) cam.fit(b[0], b[1], { top: 60, bottom: 220, left: 220, right: 60 })
+  }, [cam, tab, data])
+}
+
+function GoogleDeck() {
+  const map = useMap()
+  const cam = useMemo(() => (map ? googleCam(map) : null), [map])
+  const overlay = useMemo(() => new GoogleMapsOverlay({ onHover }), [])
   // Google may fall back from vector to raster after load; (re)attach deck once the type is settled.
   useEffect(() => {
     if (!map) return
@@ -31,47 +65,35 @@ function Deck() {
     const l = map.addListener('renderingtype_changed', attach)
     return () => { l.remove(); overlay.finalize() }
   }, [map, overlay])
-  const tab = useStore((s) => s.tab)
-  // Layers update straight from the store on an animation frame; React never renders for the playhead.
+  useDeck(cam, overlay)
+  return null
+}
+
+function LibreDeck() {
+  const map = useLibre()
+  const cam = useMemo(() => (map ? libreCam(map) : null), [map])
+  const [overlay, setOverlay] = useState<MapLibreOverlay | null>(null)
   useEffect(() => {
     if (!map) return
-    let raf = 0
-    const render = () => {
-      raf = 0
-      const s = useStore.getState()
-      const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10, s.lens) })
-    }
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
-    render()
-    const unsub = useStore.subscribe(schedule)
-    const zl = map.addListener('zoom_changed', schedule)
-    return () => { unsub(); zl.remove(); cancelAnimationFrame(raf) }
-  }, [map, overlay, data])
-  useFollow()
-  // Map tab opens on the whole record; Play follows the playhead.
-  useEffect(() => {
-    if (!map || tab !== 'map') return
-    useStore.getState().setFollow(false)
-    const b = denseBounds(data.visits.filter((v) => v.lvl === 0).map((v) => ({ lng: v.lng, lat: v.lat })))
-    if (b) map.fitBounds(new google.maps.LatLngBounds({ lng: b[0][0], lat: b[0][1] }, { lng: b[1][0], lat: b[1][1] }), { top: 60, bottom: 220, left: 220, right: 60 })
-  }, [map, tab, data])
+    const o = new MapLibreOverlay({ interleaved: false, onHover })
+    map.addControl(o)
+    setOverlay(o)
+    return () => { setOverlay(null); if (map.hasControl(o)) map.removeControl(o) }
+  }, [map])
+  useDeck(cam, overlay)
   return null
 }
 
 export function MapView() {
   const data = useData()
   const { mapsKey: KEY, mapId: MAP_ID } = useSettings()
+  const provider = useProvider()
   const start = useMemo(() => positionAt(data, useStore.getState().playhead ?? data.meta.range[0]) ?? data.profile.home, [data])
-  if (!KEY) {
-    return (
-      <main className="strip">
-        <Pass stripe share={false}><div className="fields"><Field label="Map">Missing Google Maps key</Field><Field label="Fix">Add your key under Home → Your record</Field></div></Pass>
-      </main>
-    )
+  if (provider === 'osm') {
+    return <LibreMap center={start} zoom={12}><LibreDeck /></LibreMap>
   }
   return (
-    <APIProvider apiKey={KEY}>
+    <APIProvider apiKey={KEY} onError={markGoogleDown}>
       <Map
         key={MAP_ID}
         style={{ position: 'absolute', inset: 0 }}
@@ -84,7 +106,7 @@ export function MapView() {
         clickableIcons={false}
         isFractionalZoomEnabled
       >
-        <Deck />
+        <GoogleDeck />
         <MapLoad />
       </Map>
     </APIProvider>

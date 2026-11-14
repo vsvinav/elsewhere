@@ -74,6 +74,10 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .tourline .account .menu button { text-align: left; padding: 10px 14px; border: 0; background: none; color: var(--ink); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
 .tourline .account .menu button + button { border-top: 1px solid var(--ink-3); }
 .tourline .account .menu button:hover { background: var(--ink); color: var(--stock); }
+.libre .maplibregl-ctrl-attrib { font: 500 10px/1.2 var(--body); background: rgba(239, 230, 210, 0.9); }
+.libre .maplibregl-ctrl-attrib a { color: var(--ink); }
+.screen > .libre .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 180px); }
+.screen > .libre .maplibregl-ctrl-bottom-left { display: none; }
 .tourline .account .usage { display: grid; gap: 4px; padding: 10px 14px 12px; border-top: 2px solid var(--ink); white-space: normal; width: 240px; }
 .tourline .account .usage .lab { font: 700 9px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
 .tourline .account .usage > span:nth-child(2) { font: 900 20px/1 var(--display); }
@@ -502,7 +506,6 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 @media (max-width: 760px) { .flightmap .tags span { font-size: 11px; } }
 .flightmap .hint { position: absolute; right: 14px; bottom: 12px; font: 600 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
 .placemap { margin-top: 0; }
-.placemap .nokey { position: absolute; inset: 0; display: grid; place-items: center; padding: 32px; text-align: center; font: 500 14px/1.5 var(--body); color: var(--ink-2); }
 .placemap .stamp-ring { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 3px solid var(--red); border-radius: 50%; pointer-events: none; }
 .placemap .stamp-ring::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--red); border-radius: 50%; }
 .ink .placemap .stamp-ring { border-color: var(--red); }
