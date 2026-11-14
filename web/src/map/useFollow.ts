@@ -3,11 +3,11 @@ import type { Cam } from './cam'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt, segmentAt } from '../analytics/position'
-import { fitZoom, step, type Spring } from './camera'
+import { step, type Spring } from './camera'
+import { frameFor } from './frame'
 
-const POS_PERIOD_S = 2.4
-const ZOOM_PERIOD_S = 4.5
-const STAY_ZOOM = 14
+const POS_PERIOD_S = 1.8
+const ZOOM_PERIOD_S = 2.6
 const MAX_ZOOM = 15.5
 const MIN_ZOOM = 3
 
@@ -52,19 +52,20 @@ export function useFollow(map: Cam | null) {
       const here = positionAt(data, now)
       if (!here) return
       const seg = segmentAt(data, now)
+      const next = segmentAt(data, seg.end + 2)
       const div = map.div
+      const f = frameFor(seg, next.start > seg.start ? next : null, here, now, s.rate, div.clientWidth, div.clientHeight)
       // Faster replay: a quicker camera and a wider frame, so the subject stays on screen instead of being chased.
       const fast = Math.max(1, s.speed)
       const quick = 1 / Math.sqrt(fast)
-      const legZoom = seg.kind === 'visit' || !s.playing ? STAY_ZOOM : fitZoom(seg.s, seg.e, div.clientWidth * 0.7, div.clientHeight * 0.7)
-      const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, legZoom - Math.log2(fast) * 0.8)) + zoomOffset.current
+      const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, f.zoom - Math.log2(fast) * 0.8)) + zoomOffset.current
 
       if (!spr.current) {
         const c = map.center()
         spr.current = { lng: { x: c.lng, v: 0 }, lat: { x: c.lat, v: 0 }, zoom: { x: map.zoom(), v: 0 } }
       }
       const sp = spr.current
-      step(sp.lng, here.lng, dt, POS_PERIOD_S * quick); step(sp.lat, here.lat, dt, POS_PERIOD_S * quick)
+      step(sp.lng, f.center.lng, dt, POS_PERIOD_S * quick); step(sp.lat, f.center.lat, dt, POS_PERIOD_S * quick)
       step(sp.zoom, zTarget, dt, ZOOM_PERIOD_S * quick)
 
       const moved = Math.abs(sp.lng.v) + Math.abs(sp.lat.v) > 1e-7 || Math.abs(sp.zoom.v) > 1e-4
