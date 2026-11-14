@@ -87,6 +87,7 @@ export function App() {
     return () => removeEventListener('hashchange', onHash)
   }, [])
 
+  const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
   if (!record) return <div className="tray"><Printing /></div>
   if (!prof || editing) {
@@ -94,7 +95,16 @@ export function App() {
   }
   return (
     <div className="tray">
-      <div className="tourline" aria-hidden><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></div>
+      <div className="tourline">
+        <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
+        <details className="account">
+          <summary aria-label="Account">▾</summary>
+          <div className="menu" onClick={(e) => (e.currentTarget.parentElement as HTMLDetailsElement).open = false}>
+            <button onClick={ctx.editProfile}>Edit profile</button>
+            <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
+          </div>
+        </details>
+      </div>
       <StubNav />
       {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
     </div>

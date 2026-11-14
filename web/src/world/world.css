@@ -63,6 +63,16 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .tourline .mark { display: inline-grid; place-items: center; width: 36px; height: 36px; background: var(--ink); color: var(--stock); font: 900 18px/1 var(--display); }
 .tourline .caps { font-size: 13px; letter-spacing: 0.26em; }
 .tourline .caps b { color: var(--red); font-weight: 800; }
+.tourline .home { display: flex; align-items: center; gap: 14px; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.tourline .home:hover .caps { color: var(--red); }
+.tourline .account { position: relative; }
+.tourline:has(.account[open]) { z-index: 12; }
+.tourline .account summary { list-style: none; cursor: pointer; padding: 0 2px 0 10px; border-left: 2px dashed var(--ink-3); font: 700 12px/40px var(--body); color: var(--ink); }
+.tourline .account summary::-webkit-details-marker { display: none; }
+.tourline .account .menu { position: absolute; right: -18px; top: 44px; z-index: 9; display: grid; min-width: 200px; white-space: nowrap; background: var(--stock); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+.tourline .account .menu button { text-align: left; padding: 10px 14px; border: 0; background: none; color: var(--ink); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
+.tourline .account .menu button + button { border-top: 1px solid var(--ink-3); }
+.tourline .account .menu button:hover { background: var(--ink); color: var(--stock); }
 
 /* Ticket strip: perforated bottom nav */
 .ticket {
@@ -82,7 +92,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .ticket button[aria-current='page'] { color: var(--red); }
 .ticket button[aria-current='page']::after { content: ''; position: absolute; left: 20%; right: 20%; bottom: 0; height: 5px; background: var(--red); }
 .ticket button:focus-visible { outline-offset: -4px; outline-color: var(--mustard); }
-.ticket .brand { flex: 0 0 auto; padding: 0 28px; display: grid; place-items: center; color: var(--stock); font: 900 22px/1 var(--display); letter-spacing: 0.02em; text-transform: uppercase; border-right: 2px dashed var(--ink-3); }
+.ticket .brand { flex: 0 0 auto; padding: 0 28px; display: grid; place-items: center; color: var(--stock); background: none; border: 0; cursor: pointer; font: 900 22px/1 var(--display); letter-spacing: 0.02em; text-transform: uppercase; border-right: 2px dashed var(--ink-3); }
+.ticket .brand:hover { color: var(--red); }
 .ticket .brand i { color: var(--red); font-style: normal; }
 @media (max-width: 760px) {
   .ticket .brand { display: none; }
