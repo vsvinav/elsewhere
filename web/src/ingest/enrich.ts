@@ -5,7 +5,7 @@ import { tally } from '../usage/usage'
 
 /** What Places API (New) tells us about a place, kept without the key so it survives a key change. */
 interface Cached { name: string | null; address: string | null; types: string[]; primary_type: string | null; photo: string | null }
-const LIMIT = 160, CONCURRENCY = 4
+const LIMIT = 100, CONCURRENCY = 4
 
 const photoUrl = (name: string, key: string) => `https://places.googleapis.com/v1/${name}/media?maxWidthPx=900&key=${key}`
 
@@ -19,10 +19,10 @@ function apply(places: Record<string, Place>, cache: Record<string, Cached>, key
   return out
 }
 
-/** Which places deserve a lookup: the most visited ones that still lack a name or a photo, home excluded. */
+/** Which places deserve a lookup: the most visited ones (twice or more) that still lack a name or a photo, home excluded. */
 function wanted(places: Record<string, Place>, cache: Record<string, Cached>): string[] {
   return Object.entries(places)
-    .filter(([id, p]) => !isHome(p) && !(id in cache) && (!p.name || !p.photo))
+    .filter(([id, p]) => !isHome(p) && !(id in cache) && p.n_visits >= 2 && (!p.name || !p.photo))
     .sort((a, b) => b[1].n_visits - a[1].n_visits).slice(0, LIMIT).map(([id]) => id)
 }
 
@@ -63,4 +63,35 @@ export function enrichPlaces(data: Data, key: string, onPlaces: (p: Record<strin
     await flush()
   })()
   return () => { stopped = true }
+}
+
+const ADDRESS_TYPES = new Set(['street_address', 'premise', 'subpremise', 'route', 'plus_code', 'postal_code', 'locality', 'sublocality', 'sublocality_level_1', 'neighborhood', 'political', 'geocode', 'intersection'])
+/** Is this a proper name ("Savoy Apartments"), not an address Google gave back as the display name? */
+export function properName(c: { name: string | null; types?: string[]; primary_type?: string | null }): boolean {
+  if (!c.name || /^\d/.test(c.name.trim())) return false
+  if (c.primary_type && !ADDRESS_TYPES.has(c.primary_type)) return true
+  return !!c.types?.some((t) => !ADDRESS_TYPES.has(t) && t !== 'point_of_interest' && t !== 'establishment')
+}
+
+/** The best name for a cluster of place ids; only pays for lookups that are not cached yet, at most `max` of them. */
+export async function clusterName(ids: string[], places: Record<string, Place>, key: string, max = 3): Promise<string | null> {
+  const cache = (await kv.get<Record<string, Cached>>('places').catch(() => undefined)) ?? {}
+  const known = (id: string): Cached | undefined => {
+    const p = places[id]
+    return id in cache ? cache[id] : p?.name ? { name: p.name, address: p.address ?? null, types: p.types ?? [], primary_type: p.primary_type ?? null, photo: p.photo ?? null } : undefined
+  }
+  let got = ids.map(known)
+  if (got.some((c) => c && properName(c))) return got.find((c) => c && properName(c))!.name
+  if (key) {
+    let paid = 0
+    for (let i = 0; i < ids.length && paid < max; i++) {
+      if (got[i]) continue
+      try { cache[ids[i]] = await lookup(ids[i], key); paid++ } catch { break }
+      if (properName(cache[ids[i]])) break
+    }
+    if (paid) await kv.set('places', cache)
+    got = ids.map(known)
+  }
+  const named = got.filter((c): c is Cached => !!c?.name)
+  return named.find(properName)?.name ?? null
 }

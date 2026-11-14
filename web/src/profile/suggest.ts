@@ -1,9 +1,16 @@
 import type { Data } from '../data/types'
 import { haversineKm, ROLE_RADIUS_KM } from '../ingest/derive'
 
-export interface Suggestion { place_id: string; lat: number; lng: number; city: string | null; cc: string | null; score: number; last: number; labels: number }
+export interface Suggestion {
+  place_id: string; lat: number; lng: number; city: string | null; cc: string | null; score: number; last: number
+  /** Every Google place id folded into this one. */
+  members: string[]
+  /** Nights here over all nights slept anywhere in the months this place was slept at, 0–1. Sleep places only. */
+  share: number
+}
 
 const SLEEP_H = 3
+const monthOf = (day: number) => new Date(day * 86400000).toISOString().slice(0, 7)
 /** Local-day index → the visit covers 03:00 local that day. */
 function* sleptNights(v: { start: number; end: number; tz: number }): Generator<number> {
   const off = v.tz * 60
@@ -16,7 +23,7 @@ function fold(list: Suggestion[]): Suggestion[] {
   const out: Suggestion[] = []
   for (const s of list) {
     const hit = out.find((o) => haversineKm(o.lat, o.lng, s.lat, s.lng) <= ROLE_RADIUS_KM)
-    if (hit) { hit.score += s.score; hit.last = Math.max(hit.last, s.last); hit.labels++ } else out.push({ ...s })
+    if (hit) { hit.score += s.score; hit.last = Math.max(hit.last, s.last); hit.members.push(...s.members) } else out.push({ ...s, members: [...s.members] })
   }
   return out
 }
@@ -24,15 +31,28 @@ function fold(list: Suggestion[]): Suggestion[] {
 /** Places ranked by nights slept (the lvl-0 visit covering 03:00 local). */
 export function sleepPlaces(d: Data, max = 6): Suggestion[] {
   const by = new Map<string, Suggestion>()
+  const nights = new Map<string, Map<string, number>>() // place → month → nights
+  const total = new Map<string, number>() // month → nights anywhere
   for (const v of d.visits) {
     if (v.lvl !== 0) continue
     const p = d.places[v.place_id]; if (!p) continue
-    let n = 0; for (const _ of sleptNights(v)) n++
+    let n = 0
+    for (const day of sleptNights(v)) {
+      n++
+      const m = monthOf(day), pm = nights.get(v.place_id) ?? new Map<string, number>()
+      pm.set(m, (pm.get(m) ?? 0) + 1); nights.set(v.place_id, pm); total.set(m, (total.get(m) ?? 0) + 1)
+    }
     if (!n) continue
-    const s = by.get(v.place_id) ?? { place_id: v.place_id, lat: p.lat, lng: p.lng, city: p.city, cc: p.country_code, score: 0, last: 0, labels: 1 }
+    const s = by.get(v.place_id) ?? { place_id: v.place_id, lat: p.lat, lng: p.lng, city: p.city, cc: p.country_code, score: 0, last: 0, members: [v.place_id], share: 0 }
     s.score += n; s.last = Math.max(s.last, v.end); by.set(v.place_id, s)
   }
-  return fold([...by.values()].sort((a, b) => b.score - a.score || b.last - a.last)).sort((a, b) => b.score - a.score || b.last - a.last).slice(0, max)
+  const out = fold([...by.values()].sort((a, b) => b.score - a.score || b.last - a.last)).sort((a, b) => b.score - a.score || b.last - a.last).slice(0, max)
+  for (const s of out) {
+    const months = new Set(s.members.flatMap((id) => [...(nights.get(id)?.keys() ?? [])]))
+    const all = [...months].reduce((n, m) => n + (total.get(m) ?? 0), 0)
+    s.share = all ? s.score / all : 0
+  }
+  return out
 }
 
 /** Weekday 09:00–17:00 local hours per place, excluding sleep places. */
@@ -44,7 +64,7 @@ export function weekdayPlaces(d: Data, max = 4): Suggestion[] {
     const p = d.places[v.place_id]; if (!p) continue
     const local = new Date((v.start + v.tz * 60) * 1000), dow = local.getUTCDay(), h = local.getUTCHours()
     if (dow === 0 || dow === 6 || h < 7 || h > 17) continue
-    const s = by.get(v.place_id) ?? { place_id: v.place_id, lat: p.lat, lng: p.lng, city: p.city, cc: p.country_code, score: 0, last: 0, labels: 1 }
+    const s = by.get(v.place_id) ?? { place_id: v.place_id, lat: p.lat, lng: p.lng, city: p.city, cc: p.country_code, score: 0, last: 0, members: [v.place_id], share: 0 }
     s.score += (v.end - v.start) / 3600; s.last = Math.max(s.last, v.end); by.set(v.place_id, s)
   }
   return fold([...by.values()].sort((a, b) => b.score - a.score)).sort((a, b) => b.score - a.score).slice(0, max)
@@ -56,7 +76,7 @@ export function moveMonths(d: Data): { month: string; from: string; to: string }
   for (const v of d.visits) {
     if (v.lvl !== 0) continue
     for (const day of sleptNights(v)) {
-      const m = new Date(day * 86400000).toISOString().slice(0, 7)
+      const m = monthOf(day)
       const b = perMonth.get(m) ?? new Map<string, number>(); b.set(v.place_id, (b.get(v.place_id) ?? 0) + 1); perMonth.set(m, b)
     }
   }

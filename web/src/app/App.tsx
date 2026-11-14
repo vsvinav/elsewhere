@@ -63,12 +63,14 @@ export function App() {
   }, [onMap, record])
   // Names and photos land on top of the record, from cache first and then from Places with the visitor's key.
   const sha = record?.meta.source_sha256
+  // Paid lookups only for the visitor's own record once onboarding is done; the demo and the questions stay free.
+  const spend = mine && !!prof
   useEffect(() => {
     if (!record) return
     setEnrichError(null)
-    return enrichPlaces(record, mapsKey, setPlaces, setEnrichError)
+    return enrichPlaces(record, spend ? mapsKey : '', setPlaces, setEnrichError)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sha, mapsKey])
+  }, [sha, mapsKey, spend])
   const data = useMemo(() => (record && places ? { ...record, places } : record), [record, places])
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,

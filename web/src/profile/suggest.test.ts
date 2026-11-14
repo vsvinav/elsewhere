@@ -23,3 +23,11 @@ test('weekdayPlaces excludes sleep places', () => {
 test('moveMonths finds the month the modal sleep place changes', () => {
   expect(moveMonths(fx)).toEqual([{ month: '2025-01', from: 'H1', to: 'H2' }])
 })
+test('sleepPlaces keeps folded members and a share of nights', () => {
+  const twin = { ...fx, visits: [...fx.visits, ...Array.from({ length: 5 }, (_, i) => v(300 + i, T0 + (45 + i) * D + 20 * H, T0 + (46 + i) * D + 7 * H, 'H1b'))], places: { ...fx.places, H1b: { ...place(1, 'Boston'), lat: 1.0001 } } } as unknown as Data
+  const s = sleepPlaces(twin)[0]
+  expect(s.members.sort()).toEqual(['H1', 'H1b'])
+  expect(s.score).toBe(45)
+  expect(s.share).toBe(1)
+  expect(sleepPlaces(fx)[1].share).toBe(1)
+})

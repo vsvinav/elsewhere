@@ -25,7 +25,7 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 
 Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Make it yourself with `python3 scripts/make_sample.py --out web/public/data` (needs the Python setup below).
 
-Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are Google's map tiles.
+Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are map tiles, a handful of free OpenStreetMap address lookups for your home picks, and — only with your key, only for your own record — Google Places names and photos for your hundred busiest stops. Without a key, or when Google refuses it, maps fall back to OpenStreetMap. The ▾ menu shows a running count of paid calls and a rough dollar figure.
 
 ## Run it
 
@@ -40,7 +40,7 @@ Open the local URL. The front door asks for two things, then five quick question
    Android: Settings → Location → Timeline → Export.
    iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.
 2. **Paste a Google Maps key** (free tier is plenty) so the Map and Replay pages can draw tiles. Get one at [console.cloud.google.com](https://console.cloud.google.com/google/maps-apis), enable *Maps JavaScript API*, and restrict it to `localhost` / your domain.
-3. **Name, home, moves, work, units.** Home candidates are ranked by where your phone sleeps; tap one. Every question can be changed later from the ▾ menu by the masthead, which also starts you over.
+3. **Name, home, moves, work, units.** Home candidates are ranked by where your phone sleeps, with a *likely / maybe home* confidence from the share of nights you slept there while it was in use. Google often files one building under several labels; those are merged and named after the building when any label carries a proper name. A home with an *until* can be picked again for a later stint. Every question can be changed later from the ▾ menu by the masthead, which also starts you over.
 
 Everything lives in your browser's local storage. Nothing is committed, nothing is uploaded.
 
