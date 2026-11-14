@@ -29,6 +29,8 @@ export function MapView() {
   const start = positionAt(data, state.playhead ?? state.timeRange[0]) ?? data.profile.home
   const [view, setView] = useState<MapViewState>({ longitude: start.lng, latitude: start.lat, zoom: 11, pitch: 0, bearing: 0 })
   const lastFly = useRef(0)
+  // Mode during which the user zoomed by hand; mode-based zoom resumes once the mode changes.
+  const zoomLockMode = useRef<string | null>(null)
 
   const camera = state.camera
   useEffect(() => {
@@ -48,10 +50,12 @@ export function MapView() {
     if (!following) return
     const w = whereaboutsAt(data, now)
     if (!w) return
+    if (zoomLockMode.current && zoomLockMode.current !== w.mode) zoomLockMode.current = null
     const zoom = zoomForMode(w.mode)
     if (state.playing) {
       // Pin the current location to screen centre every frame; ease zoom so mode changes don't snap.
-      setView((v) => ({ ...v, longitude: w.lng, latitude: w.lat, zoom: v.zoom + (zoom - v.zoom) * 0.04,
+      setView((v) => ({ ...v, longitude: w.lng, latitude: w.lat,
+        zoom: zoomLockMode.current ? v.zoom : v.zoom + (zoom - v.zoom) * 0.04,
         transitionDuration: 0, transitionInterpolator: undefined }))
       return
     }
@@ -70,8 +74,15 @@ export function MapView() {
     <DeckGL
       viewState={view}
       onViewStateChange={({ viewState, interactionState }) => {
-        setView(viewState as MapViewState)
-        if (interactionState.isDragging || interactionState.isZooming || interactionState.isPanning) state.setFollow(false)
+        const vs = viewState as MapViewState
+        if (following && !interactionState.isDragging) {
+          // Zooming while following keeps the location centred and adopts the user's zoom.
+          if (interactionState.isZooming) zoomLockMode.current = whereaboutsAt(data, now)?.mode ?? 'STILL'
+          setView((v) => ({ ...v, zoom: vs.zoom, transitionDuration: 0, transitionInterpolator: undefined }))
+          return
+        }
+        setView(vs)
+        if (interactionState.isDragging) state.setFollow(false)
       }}
       controller
       layers={layers}
