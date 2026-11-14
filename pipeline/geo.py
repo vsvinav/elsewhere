@@ -4,6 +4,7 @@ import math
 from .models import Parsed, Visit
 
 HOME_TYPES = {"INFERRED_HOME", "HOME"}
+HOME_CLUSTER_KM = 50.0
 
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -16,13 +17,30 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 def home_centroid(visits: list[Visit]) -> tuple[float, float]:
-    """Duration-weighted centroid of home-typed visits; falls back to all visits."""
+    """Duration-weighted centroid of home-typed visits (fallback: all visits).
+
+    Anchors on the place_id with the most total duration and only averages pool
+    visits within HOME_CLUSTER_KM of it, so a secondary home cluster elsewhere
+    does not drag the centroid between the two.
+    """
     pool = [v for v in visits if v.semantic_type in HOME_TYPES] or visits
     if not pool:
         return (0.0, 0.0)
-    w = sum(max(v.end - v.start, 1) for v in pool)
-    lat = sum(v.lat * max(v.end - v.start, 1) for v in pool) / w
-    lng = sum(v.lng * max(v.end - v.start, 1) for v in pool) / w
+
+    def dur(v: Visit) -> int:
+        return max(v.end - v.start, 1)
+
+    by_place: dict[str, int] = {}
+    for v in pool:
+        by_place[v.place_id] = by_place.get(v.place_id, 0) + dur(v)
+    anchor_id = max(by_place, key=by_place.get)
+    anchor = next(v for v in pool if v.place_id == anchor_id)
+    cluster = [v for v in pool
+               if haversine_km(anchor.lat, anchor.lng, v.lat, v.lng) <= HOME_CLUSTER_KM]
+
+    w = sum(dur(v) for v in cluster)
+    lat = sum(v.lat * dur(v) for v in cluster) / w
+    lng = sum(v.lng * dur(v) for v in cluster) / w
     return (lat, lng)
 
 

@@ -23,3 +23,20 @@ def test_tag_geo_sets_city_country_and_distance(parsed):
     flight = next(a for a in parsed.activities if a.mode == "FLYING")
     assert flight.e_country_code == "US"
     assert flight.e_city is not None
+
+
+def test_home_centroid_anchors_on_dominant_cluster():
+    from pipeline.models import Visit
+
+    def mk(i, place_id, lat, lng, hours):
+        return Visit(id=i, start=0, end=hours * 3600, tz=0, place_id=place_id,
+                     lat=lat, lng=lng, semantic_type="INFERRED_HOME", probability=0.9)
+
+    visits = [
+        mk(1, "BOS_A", 42.3601, -71.0589, 15),
+        mk(2, "BOS_A", 42.3620, -71.0600, 10),
+        mk(3, "BOS_C", 42.3580, -71.0570, 5),
+        mk(4, "SF", 37.7749, -122.4194, 20),
+    ]
+    home = home_centroid(visits)
+    assert haversine_km(home[0], home[1], 42.3601, -71.0589) < 1
