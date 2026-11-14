@@ -28,7 +28,7 @@ const data = {
     a(JAN + 17 * H, JAN + 18 * H, 'IN_PASSENGER_VEHICLE', 6000),
     a(FEB + 1.2 * H, FEB + 1.8 * H, 'FLYING', 500000),
   ],
-  paths: [],
+  paths: [], strokes: [],
   places: {
     home: { lng: 0, lat: 0, semantic_type: 'INFERRED_HOME', city: 'Boston', country_code: 'US', n_visits: 2, first_ts: JAN, last_ts: JAN + 18 * H, name: null },
     work: { lng: 0, lat: 0, semantic_type: 'INFERRED_WORK', city: 'Boston', country_code: 'US', n_visits: 1, first_ts: JAN, last_ts: JAN, name: null },

@@ -53,10 +53,10 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 }
 .strip {
   width: min(1200px, calc(100vw - 260px));
-  margin: 72px auto 160px calc(190px + max(0px, (100vw - 1440px) / 2));
+  margin: 112px auto 160px calc(190px + max(0px, (100vw - 1440px) / 2));
 }
 @media (max-width: 1100px) {
-  .strip { width: calc(100vw - 32px); margin: 96px 16px 120px; }
+  .strip { width: calc(100vw - 32px); margin: 136px 16px 120px; }
 }
 
 /* Stub-tab nav */
@@ -321,49 +321,76 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ptable.compact td:first-child { font: 700 24px/1.1 var(--display); }
 .ptable.compact td.t { font: 500 13px/1 var(--body); color: var(--ink-2); white-space: nowrap; }
 
-/* Map screen: HUD is a boarding stub lying on the map, scrubber a torn strip below it */
+/* Map screen: one pass lying along the bottom edge; blue stub (date · where · controls) torn from a stock scrubber strip */
 .screen { position: absolute; inset: 0; overflow: hidden; }
-.hud { position: absolute; left: 190px; bottom: 28px; width: min(560px, calc(100vw - 230px)); z-index: 4; display: flex; flex-direction: column; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, 0.6)); }
+.hud { position: absolute; left: 190px; right: 48px; bottom: 28px; z-index: 4; display: grid; grid-template-columns: auto 1fr; box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6); }
 .hud-stub {
-  background: var(--blue); color: #fff; padding: 20px 24px 18px;
-  display: grid; grid-template-columns: auto 1fr; gap: 10px 28px; align-items: start;
+  background: var(--blue); color: #fff; padding: 14px 24px 14px 22px;
+  display: grid; grid-template-columns: auto minmax(160px, 300px) auto; gap: 0 28px; align-items: center;
 }
-.hud-date { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 10px; align-items: baseline; font-family: var(--display); }
-.hud-date .dow { font: 600 12px/1 var(--body); letter-spacing: 0.2em; color: var(--blue-2); grid-column: 1 / span 2; }
-.hud-date .day { font: 800 72px/0.9 var(--display); font-variant-numeric: tabular-nums; grid-row: 2 / span 2; }
-.hud-date .mon { font: 700 18px/1 var(--display); letter-spacing: 0.06em; }
-.hud-date .time { font: 400 13px/1 var(--mono); letter-spacing: 0.1em; color: var(--blue-2); font-variant-numeric: tabular-nums; }
-.hud-where { min-width: 0; align-self: center; }
+.hud-date { display: grid; grid-template-columns: auto auto; column-gap: 10px; align-items: baseline; font-family: var(--display); }
+.hud-date .dow { font: 600 11px/1 var(--body); letter-spacing: 0.2em; color: var(--blue-2); grid-column: 1 / span 2; margin-bottom: 4px; }
+.hud-date .day { font: 800 60px/0.85 var(--display); font-variant-numeric: tabular-nums; grid-row: 2 / span 2; }
+.hud-date .mon { font: 700 17px/1 var(--display); letter-spacing: 0.06em; }
+.hud-date .time { font: 400 12px/1 var(--mono); letter-spacing: 0.1em; color: var(--blue-2); font-variant-numeric: tabular-nums; }
+.hud-where { min-width: 0; border-left: 1px solid rgba(255, 255, 255, 0.18); padding-left: 24px; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
 .hud-where .lab { font: 600 11px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; color: var(--blue-2); }
-.hud-where .val { font: 700 30px/1 var(--display); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-where .val { font: 700 26px/1 var(--display); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hud-where .sub { font: 400 13px/1.3 var(--body); color: var(--blue-2); margin-top: 4px; }
-.hud-controls { grid-column: 1 / span 2; display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+.hud-controls { display: flex; gap: 6px; align-items: center; }
 .hud-controls button {
-  background: transparent; color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); padding: 9px 12px;
+  background: transparent; color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); padding: 0 12px; height: 36px;
   font: 600 11px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; transition: background 0.2s, color 0.2s;
 }
 .hud-controls button:hover { background: rgba(255, 255, 255, 0.12); }
 .hud-controls button.on { background: var(--stock); color: var(--ink); box-shadow: none; }
-.hud-controls .play { width: 44px; height: 36px; display: grid; place-items: center; background: var(--orange); color: #fff; box-shadow: none; padding: 0; }
+.hud-controls .play { width: 44px; display: grid; place-items: center; background: var(--orange); color: #fff; box-shadow: none; padding: 0; }
 .hud-controls .play:hover { background: #ff7a48; }
-.hud-controls button:last-child { margin-left: auto; }
-.hud-scrub { position: relative; height: 34px; background: var(--stock); border-top: 2px dashed var(--perf); }
+.hud-controls button:last-child { width: 36px; padding: 0; display: grid; place-items: center; margin-left: 6px; }
+.hud-scrub { position: relative; background: var(--stock); border-left: 2px dashed var(--perf); min-height: 100%; }
 .hud-scrub .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--orange); opacity: 0.9; pointer-events: none; }
-.hud-scrub .year { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--ink-3); padding-left: 5px; font: 400 9px/34px var(--mono); letter-spacing: 0.12em; color: var(--ink-3); pointer-events: none; }
-.hud-scrub input { position: absolute; inset: 0; width: 100%; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
-.hud-scrub input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 34px; background: var(--ink); border: 0; }
-.hud-scrub input::-moz-range-thumb { width: 6px; height: 34px; background: var(--ink); border: 0; border-radius: 0; }
+.hud-scrub .year { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--ink-3); padding-left: 6px; font: 400 10px/1 var(--mono); letter-spacing: 0.12em; color: var(--ink-3); pointer-events: none; padding-top: 10px; }
+.hud-scrub input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.hud-scrub input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 200px; background: var(--ink); border: 0; }
+.hud-scrub input::-moz-range-thumb { width: 6px; height: 200px; background: var(--ink); border: 0; border-radius: 0; }
 .hud-scrub input:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
 @media (max-width: 1100px) {
-  .hud { left: 12px; right: 12px; width: auto; bottom: 12px; }
-  .hud-stub { grid-template-columns: 1fr; padding: 16px 18px 14px; }
-  .hud-date .day { font-size: 56px; }
-  .hud-controls button:not(.play):not(.on) { display: none; }
+  .hud { left: 12px; right: 12px; bottom: 12px; grid-template-columns: 1fr; }
+  .hud-stub { grid-template-columns: auto 1fr; grid-template-rows: auto auto; gap: 12px 18px; padding: 14px 16px 12px; }
+  .hud-date .day { font-size: 48px; }
+  .hud-where { border-left: 0; padding-left: 0; }
+  .hud-controls { grid-column: 1 / span 2; }
+  .hud-controls button:not(.play):not(.on):not(:last-child) { display: none; }
+  .hud-scrub { border-left: 0; border-top: 2px dashed var(--perf); height: 32px; min-height: 0; }
+  .hud-scrub .year { padding-top: 9px; font-size: 9px; }
 }
 
 /* Tags on the map */
-.arrivals { position: absolute; top: 28px; right: 28px; width: 260px; display: flex; flex-direction: column; gap: 12px; z-index: 4; pointer-events: none; }
+.arrivals { position: absolute; bottom: 140px; right: 48px; width: 260px; display: flex; flex-direction: column-reverse; gap: 12px; z-index: 4; pointer-events: none; }
 .arrivals .tag { box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); }
 .tag.hover { position: absolute; width: 220px; pointer-events: none; z-index: 6; padding: 16px 16px 14px; }
 .tag.hover .name { font-size: 20px; min-height: 0; }
 .tag.hover::before { display: none; }
+
+/* Date range: a perforated strip pinned top-right, shared by every tab. */
+.rangebar { position: fixed; top: 48px; right: 48px; z-index: 6; display: flex; align-items: stretch; gap: 2px; }
+.rangebar button, .rangebar label {
+  background: var(--stock); color: var(--ink); border: 0; height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 8px;
+  font: 600 12px/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; box-shadow: 0 10px 24px rgb(0 0 0 / 0.35);
+}
+.rangebar button[aria-pressed='true'] { background: var(--blue); color: var(--stock); }
+.rangebar button:focus-visible, .rangebar input:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+.rangebar label { cursor: default; padding-right: 10px; }
+.rangebar label span { color: var(--ink-3); font-size: 10px; }
+.rangebar input { border: 0; background: transparent; color: var(--ink); font: 500 13px/1 var(--mono); padding: 0; width: 9.5em; }
+.rangebar input::-webkit-calendar-picker-indicator { opacity: 0.6; }
+.rangebar button:first-child, .rangebar label:last-child { border-radius: 2px; }
+@media (max-width: 1100px) {
+  .rangebar { top: 72px; left: 0; right: 0; padding: 0 16px 10px; background: var(--tray); overflow-x: auto; scrollbar-width: none; }
+  .rangebar button, .rangebar label { height: 32px; padding: 0 10px; flex: none; box-shadow: none; }
+  .rangebar label span { display: none; }
+}
+.sky { position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(120% 90% at 50% 40%, transparent 45%, rgb(0 0 0 / 0.35) 100%); }
+.sky > div { position: absolute; inset: 0; transition: opacity 0.8s linear; will-change: opacity; }
+.sky .night { background: var(--blue); }
+.sky .ember { background: var(--orange); }

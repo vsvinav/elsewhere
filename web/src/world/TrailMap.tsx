@@ -6,7 +6,7 @@ const W = 1100, H = 118, MAX_PTS = 15000
 /** The real GPS record printed as hairlines; flights as dashed orange. */
 export function TrailMap({ data, height = H, range, mark }: { data: Data; height?: number; range?: [number, number]; mark?: { lat: number; lng: number } }) {
   const { lines, flights, dot } = useMemo(() => {
-    const paths = range ? data.paths.filter((p) => p.end >= range[0] && p.start <= range[1]) : data.paths
+    const paths = range ? data.strokes.filter((p) => p.end >= range[0] && p.start <= range[1]) : data.strokes
     const acts = range ? data.activities.filter((a) => a.start >= range[0] && a.start <= range[1]) : data.activities
     const total = paths.reduce((s, p) => s + p.pts.length, 0)
     const step = Math.max(1, Math.ceil(total / MAX_PTS))

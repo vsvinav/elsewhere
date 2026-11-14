@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { DataContext } from '../data/DataContext'
-import { DataLoadError, loadData } from '../data/load'
+import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data } from '../data/types'
 import { useStore } from '../store/useStore'
 import { StubNav } from './StubNav'
@@ -9,7 +9,10 @@ import { Stats } from '../tabs/Stats/Stats'
 import { Places } from '../tabs/Places/Places'
 import { Trips } from '../tabs/Trips/Trips'
 import { Pass, Field } from '../world'
-import { MapScreen } from '../map/MapScreen'
+import { RangeBar } from './RangeBar'
+
+// deck.gl and Google Maps only ship when the map opens.
+const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: m.MapScreen })))
 
 export function App() {
   const [data, setData] = useState<Data | null>(null)
@@ -17,6 +20,14 @@ export function App() {
   useEffect(() => {
     loadData().then((d) => { useStore.getState().setPlayhead(d.meta.range[0]); setData(d) }).catch(setError)
   }, [])
+  const tab = useStore((s) => s.tab)
+  const onMap = tab === 'map' || tab === 'play'
+  useEffect(() => {
+    if (!onMap || !data || data.paths.length) return
+    let live = true
+    loadPaths().then((paths) => { if (live) setData({ ...data, paths }) }).catch(setError)
+    return () => { live = false }
+  }, [onMap, data])
   useEffect(() => {
     const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }
     addEventListener('hashchange', onHash)
@@ -26,14 +37,14 @@ export function App() {
   return (
     <div className="tray">
       <StubNav />
-      {error ? <LoadFailed error={error} /> : data ? <DataContext.Provider value={data}><Screen /></DataContext.Provider> : <Printing />}
+      {error ? <LoadFailed error={error} /> : data ? <DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider> : <Printing />}
     </div>
   )
 }
 
 function Screen() {
   const tab = useStore((s) => s.tab)
-  if (tab === 'map' || tab === 'play') return <MapScreen />
+  if (tab === 'map' || tab === 'play') return <Suspense fallback={<Printing />}><MapScreen /></Suspense>
   if (tab === 'stats') return <Stats />
   if (tab === 'places') return <Places />
   if (tab === 'trips') return <Trips />

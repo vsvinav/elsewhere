@@ -55,7 +55,7 @@ export function commuteStats(data: Data, range: [number, number]): CommuteStats 
     for (let j = ai; j < acts.length && acts[j].start < b.start; j++) modes.push(acts[j].mode)
     // Prefer recorded GPS points between the two visits; fall back to activity endpoints.
     const path: [number, number][] = [[a.lng, a.lat]]
-    for (const pth of data.paths) {
+    for (const pth of data.strokes) {
       if (pth.end < a.end || pth.start > b.start) continue
       for (const [ts, lat, lng] of pth.pts) if (ts >= a.end && ts <= b.start) path.push([lng, lat])
     }

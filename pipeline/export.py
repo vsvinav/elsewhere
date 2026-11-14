@@ -9,6 +9,9 @@ from .geo import tag_geo
 from .models import Parsed
 
 
+STROKE_POINTS = 8000
+
+
 def _dump(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, separators=(",", ":"), ensure_ascii=False))
 
@@ -34,7 +37,13 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
         {"start": p.start, "end": p.end, "pts": [[q.ts, q.lat, q.lng] for q in p.pts]}
         for p in parsed.paths])
 
-    _dump(out_dir / "positions.json", [asdict(p) for p in parsed.positions])
+    # Decimated copy for the printed strips; the full record is loaded only by the map.
+    total = sum(len(p.pts) for p in parsed.paths)
+    k = max(1, -(-total // STROKE_POINTS))
+    _dump(out_dir / "strokes.json", [
+        {"start": p.start, "end": p.end,
+         "pts": [[q.ts, round(q.lat, 4), round(q.lng, 4)] for i, q in enumerate(p.pts) if i % k == 0 or i == len(p.pts) - 1]}
+        for p in parsed.paths if len(p.pts) > 1])
 
     places = derive_places(parsed)
     for pid, cached in places_cache.items():

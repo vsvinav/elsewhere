@@ -36,7 +36,9 @@ export interface Meta {
   import_report: { segments_total: number; parsed: number; skipped_by_reason: Record<string, number> }
 }
 export interface Data {
-  visits: Visit[]; activities: Activity[]; paths: Path[]
+  visits: Visit[]; activities: Activity[]
+  /** Decimated GPS record for the printed strips. `paths` is the full record, loaded only for the map. */
+  strokes: Path[]; paths: Path[]
   places: Record<string, Place>; daily: Daily[]; trips: Trip[]
   profile: Profile; meta: Meta
 }

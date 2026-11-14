@@ -2,17 +2,18 @@ import { useEffect, useRef } from 'react'
 import { useMap } from '@vis.gl/react-google-maps'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
-import { distanceKm, positionAt } from '../analytics/position'
-import { fitZoom, step, zoomForKmh, type Spring } from './camera'
+import { positionAt, segmentAt } from '../analytics/position'
+import { fitZoom, step, type Spring } from './camera'
 
-const LOOKAHEAD_REAL_S = 1.5
-const POS_PERIOD_S = 1.4
-const ZOOM_PERIOD_S = 3
-const MAX_ZOOM = 16
+const POS_PERIOD_S = 1.6
+const ZOOM_PERIOD_S = 3.2
+const STAY_ZOOM = 14
+const MAX_ZOOM = 15.5
+const MIN_ZOOM = 3
 
 /**
- * Follow camera: springs toward a point between where you are and where you will be in a few seconds,
- * zoomed for how fast you are moving and never tighter than what frames that look-ahead.
+ * Follow camera: centre springs to where you are; zoom springs to frame the whole current leg
+ * (so a flight shows the arc, a walk shows the street), settling to a town view on stays.
  * Dragging detaches; wheel zoom becomes an offset that is kept.
  */
 export function useFollow() {
@@ -25,8 +26,8 @@ export function useFollow() {
   useEffect(() => {
     if (!map) return
     const detach = map.addListener('dragstart', () => useStore.getState().setFollow(false))
-    const onWheel = () => { userZoom.current = true }
     const userZoom = { current: false }
+    const onWheel = () => { userZoom.current = true }
     const idle = map.addListener('idle', () => {
       if (userZoom.current && spr.current) {
         const z = map.getZoom() ?? spr.current.zoom.x
@@ -51,23 +52,18 @@ export function useFollow() {
       const now = s.playhead ?? data.meta.range[0]
       const here = positionAt(data, now)
       if (!here) return
-      const aheadT = now + (s.playing ? LOOKAHEAD_REAL_S * s.speed : 0)
-      const ahead = positionAt(data, aheadT) ?? here
-      const kmh = s.playing ? distanceKm(here, ahead) / (LOOKAHEAD_REAL_S * s.speed / 3600) : 0
+      const seg = segmentAt(data, now)
       const div = map.getDiv()
-      const zTarget = Math.min(MAX_ZOOM, zoomForKmh(kmh), fitZoom(here, ahead, div.clientWidth, div.clientHeight)) + zoomOffset.current
-      const tLng = (here.lng + ahead.lng) / 2, tLat = (here.lat + ahead.lat) / 2
+      const legZoom = seg.kind === 'visit' || !s.playing ? STAY_ZOOM : fitZoom(seg.s, seg.e, div.clientWidth * 0.7, div.clientHeight * 0.7)
+      const zTarget = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, legZoom)) + zoomOffset.current
 
       if (!spr.current) {
         const c = map.getCenter()
-        spr.current = { lng: { x: c?.lng() ?? tLng, v: 0 }, lat: { x: c?.lat() ?? tLat, v: 0 }, zoom: { x: map.getZoom() ?? zTarget, v: 0 } }
+        spr.current = { lng: { x: c?.lng() ?? here.lng, v: 0 }, lat: { x: c?.lat() ?? here.lat, v: 0 }, zoom: { x: map.getZoom() ?? zTarget, v: 0 } }
       }
       const sp = spr.current
-      // A jump (flight, gap in the record) is a cut, not a pan: zoom out through the spring, do not race across the globe.
-      const jumpKm = distanceKm({ lng: sp.lng.x, lat: sp.lat.x }, { lng: tLng, lat: tLat })
-      const period = jumpKm > 300 ? POS_PERIOD_S * 2.2 : POS_PERIOD_S
-      step(sp.lng, tLng, dt, period); step(sp.lat, tLat, dt, period)
-      step(sp.zoom, jumpKm > 300 ? Math.min(zTarget, fitZoom({ lng: sp.lng.x, lat: sp.lat.x }, here, div.clientWidth, div.clientHeight)) : zTarget, dt, ZOOM_PERIOD_S)
+      step(sp.lng, here.lng, dt, POS_PERIOD_S); step(sp.lat, here.lat, dt, POS_PERIOD_S)
+      step(sp.zoom, zTarget, dt, ZOOM_PERIOD_S)
 
       const moved = Math.abs(sp.lng.v) + Math.abs(sp.lat.v) > 1e-7 || Math.abs(sp.zoom.v) > 1e-4
       if (moved || t - lastTarget.current > 500) {

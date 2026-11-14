@@ -1,5 +1,6 @@
 import { MapView } from './MapView'
 import { Hud } from './Hud'
+import { Sky } from './Sky'
 import { ArrivalTags, HoverTag } from './ArrivalTags'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
@@ -13,6 +14,7 @@ export function MapScreen() {
   return (
     <div className="screen">
       <MapView />
+      <Sky />
       <Hud />
       <ArrivalTags />
       <HoverTag />

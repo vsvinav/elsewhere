@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useData } from '../data/DataContext'
-import { useStore } from '../store/useStore'
+import { useStore, useThrottledPlayhead } from '../store/useStore'
 import { placeName } from '../analytics/home'
 import { isHome } from '../analytics/geo'
 
@@ -11,7 +11,7 @@ const TTL_MS = 7000
 /** Luggage tags that print when the playhead arrives somewhere new. */
 export function ArrivalTags() {
   const data = useData()
-  const playhead = useStore((s) => s.playhead)
+  const playhead = useThrottledPlayhead(100)
   const playing = useStore((s) => s.playing)
   const [tags, setTags] = useState<Arrival[]>([])
   const lastVisit = useRef<number | null>(null)

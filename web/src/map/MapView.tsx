@@ -11,14 +11,12 @@ import { Field, Pass } from '../world'
 import { MAP_STYLES } from './style'
 
 const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined
+// A Map ID switches Google to the vector renderer (smooth fractional zoom, far less tile memory); its style then lives in Cloud Console.
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined
 
 function Deck() {
   const map = useMap()
   const data = useData()
-  const playhead = useStore((s) => s.playhead)
-  const speed = useStore((s) => s.speed)
-  const playing = useStore((s) => s.playing)
-  const basemap = useStore((s) => s.basemap)
   const overlay = useMemo(() => new GoogleMapsOverlay({
     onHover: (info) => {
       const o = info.object as { id: string } | undefined
@@ -33,10 +31,25 @@ function Deck() {
     const l = map.addListener('renderingtype_changed', attach)
     return () => { l.remove(); overlay.setMap(null) }
   }, [map, overlay])
-  useEffect(() => { overlay.setProps({ layers: mapLayers(data, playhead ?? data.meta.range[0], speed, playing, basemap) }) }, [overlay, data, playhead, speed, playing, basemap])
+  const tab = useStore((s) => s.tab)
+  // Layers update straight from the store on an animation frame; React never renders for the playhead.
+  useEffect(() => {
+    if (!map) return
+    let raf = 0
+    const render = () => {
+      raf = 0
+      const s = useStore.getState()
+      const now = s.playhead ?? data.meta.range[0]
+      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.basemap, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10) })
+    }
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
+    render()
+    const unsub = useStore.subscribe(schedule)
+    const zl = map.addListener('zoom_changed', schedule)
+    return () => { unsub(); zl.remove(); cancelAnimationFrame(raf) }
+  }, [map, overlay, data])
   useFollow()
   // Map tab opens on the whole record; Play follows the playhead.
-  const tab = useStore((s) => s.tab)
   useEffect(() => {
     if (!map || tab !== 'map') return
     useStore.getState().setFollow(false)
@@ -64,7 +77,7 @@ export function MapView() {
         style={{ position: 'absolute', inset: 0 }}
         defaultCenter={{ lat: start.lat, lng: start.lng }}
         defaultZoom={12}
-        styles={MAP_STYLES[basemap]}
+        {...(MAP_ID ? { mapId: MAP_ID, renderingType: 'VECTOR' as const } : { styles: MAP_STYLES[basemap] })}
         backgroundColor={basemap === 'dark' ? '#0b0c10' : '#f7f6f2'}
         disableDefaultUI
         gestureHandling="greedy"
