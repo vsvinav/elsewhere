@@ -3,6 +3,7 @@ import { useData } from '../data/DataContext'
 import { useRecord } from './App'
 import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings, type MapProvider } from '../ingest/settings'
+import { UsageRow } from '../usage/Meter'
 import { Field } from '../world'
 import { date, n0 } from '../world/fmt'
 
@@ -77,6 +78,7 @@ export function YourRecord() {
             </select>
           </div>
           <Field label="Key used for">Map tiles · place names · photos</Field>
+          <UsageRow />
         </div>
         {rec.enrichError && <div className="dz-err">Places lookups stopped: {rec.enrichError.message}</div>}
         <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; restrict it to this site's address. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>

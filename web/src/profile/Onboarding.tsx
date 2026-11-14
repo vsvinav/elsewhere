@@ -5,6 +5,7 @@ import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings } from '../ingest/settings'
 import { profile as store, type Home, type Profile, type Work } from './profile'
 import { sleepPlaces, weekdayPlaces, moveMonths, type Suggestion } from './suggest'
+import { address } from '../ingest/nominatim'
 import './onboarding.css'
 
 type Step = 'start' | 'name' | 'home' | 'moved' | 'work' | 'units'
@@ -47,7 +48,17 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
     store.set({ name: name.trim() || null, units, homes: sorted, work })
     onClose?.()
   }
-  const label = (s: Suggestion) => data?.places[s.place_id]?.name ?? s.city ?? 'Unnamed place'
+  // Houses have no business name; OpenStreetMap's free reverse geocoder gives the street instead, one lookup a second.
+  const [addrs, setAddrs] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let live = true
+    for (const s of [...sleep.slice(0, 8), ...weekday.slice(0, 6)]) {
+      if (data?.places[s.place_id]?.name) continue
+      address(s.lat, s.lng).then((a) => { if (live && a) setAddrs((m) => (m[s.place_id] ? m : { ...m, [s.place_id]: a })) })
+    }
+    return () => { live = false }
+  }, [sleep, weekday, data])
+  const label = (s: Suggestion) => data?.places[s.place_id]?.name ?? addrs[s.place_id] ?? s.city ?? 'Unnamed place'
   const asHome = (s: Suggestion, from = 0): Home => ({ lat: s.lat, lng: s.lng, city: s.city ?? '', cc: s.cc ?? '', from, to: null, name: label(s) })
   const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }
   const isSame = (h: Home, s: Suggestion) => h.lat === s.lat && h.lng === s.lng
