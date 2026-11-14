@@ -49,3 +49,21 @@ def test_role_of_uses_dated_home_and_work():
     assert role_of(mk(2000, 37.7749, -122.4194), homes, work) == "home"
     assert role_of(mk(10, 42.3736, -71.1097), homes, work) == "work"
     assert role_of(mk(10, 42.3736, -71.1097), homes, None) is None
+
+
+def test_fold_roles_points_every_home_label_at_the_busiest_one():
+    from pipeline.geo import fold_roles
+    homes = [Home(42.3632761, -71.0643721, from_ts=0), Home(37.7749, -122.4194, from_ts=1000)]
+
+    def mk(i, ts, pid, lat, lng):
+        return Visit(id=i, start=ts, end=ts + 3600, tz=0, place_id=pid, lat=lat, lng=lng,
+                     semantic_type="UNKNOWN", probability=0.9)
+
+    visits = [
+        mk(1, 10, "a", 42.3632761, -71.0643721), mk(2, 20, "b", 42.3633, -71.0644), mk(3, 30, "b", 42.3633, -71.0644),
+        mk(4, 40, "far", 42.40, -71.10),
+        mk(5, 2000, "c", 37.7749, -122.4194), mk(6, 2100, "a", 42.3632761, -71.0643721),
+    ]
+    fold_roles(visits, homes, None)
+    # Boston labels a and b are one home, named after the busier b; the far place is untouched.
+    assert [v.place_id for v in visits] == ["b", "b", "b", "far", "c", "a"]

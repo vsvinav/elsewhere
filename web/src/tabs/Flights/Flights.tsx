@@ -44,7 +44,7 @@ export function Flights() {
         <Bill>
           <div className="two globe-row">
             <div>
-              <h2 className="word">From</h2>
+              <h2 className="word">From <span className={from.name.length > 8 ? 'red long' : 'red'}>{from.name}</span></h2>
               <div className="filters">
                 <select value={pick} onChange={(e) => setPick(+e.target.value)} aria-label="Airport">
                   {named.map((p, i) => <option key={p.name + p.p.join()} value={i}>{p.name} · {p.n} {p.n === 1 ? 'leg' : 'legs'}</option>)}

@@ -3,7 +3,8 @@ import type { Data, Daily, Place, Trip } from '../data/types'
 import type { Parsed, PVisit } from './parse'
 import { homeAt, type Profile } from '../profile/profile'
 
-const TRIP_RADIUS_KM = 50, STROKE_POINTS = 8000, ROLE_RADIUS_KM = 0.3
+const TRIP_RADIUS_KM = 50, STROKE_POINTS = 8000
+export const ROLE_RADIUS_KM = 0.3
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const r = Math.PI / 180, p1 = lat1 * r, p2 = lat2 * r, dp = p2 - p1, dl = (lng2 - lng1) * r
@@ -51,6 +52,17 @@ export function roleOf(v: PVisit, profile: Profile): Role {
   if (haversineKm(h.lat, h.lng, v.lat, v.lng) <= ROLE_RADIUS_KM) return 'home'
   if (profile.work && haversineKm(profile.work.lat, profile.work.lng, v.lat, v.lng) <= ROLE_RADIUS_KM) return 'work'
   return null
+}
+/** Google splits one address across several place ids. Visits at a home (or work) are re-pointed
+ *  at the busiest id of that cluster, so the record has one Home per home. Returns copies. */
+export function foldRoles(visits: PVisit[], profile: Profile): PVisit[] {
+  const key = (v: PVisit) => { const r = roleOf(v, profile); return r === 'home' ? `home:${profile.homes.indexOf(homeAt(profile.homes, v.start))}` : r }
+  const keys = visits.map(key)
+  const count = new Map<string, number>()
+  keys.forEach((k, i) => { if (k) { const ck = `${k}\u0000${visits[i].place_id}`; count.set(ck, (count.get(ck) ?? 0) + 1) } })
+  const best = new Map<string, string>()
+  for (const [ck] of [...count].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))) { const [k, pid] = ck.split('\u0000'); if (!best.has(k)) best.set(k, pid) }
+  return visits.map((v, i) => (keys[i] ? { ...v, place_id: best.get(keys[i]!)! } : v))
 }
 const distHome = (profile: Profile, ts: number, lat: number, lng: number) => { const h = homeAt(profile.homes, ts); return haversineKm(h.lat, h.lng, lat, lng) }
 
@@ -132,7 +144,8 @@ export function deriveTrips(p: Parsed, profile: Profile): Trip[] {
 }
 
 /** Tag city/country/distance in place, then assemble every file the Python export writes. */
-export function buildData(p: Parsed, cities: Cities, source: { file: string; sha256: string }, profile: Profile): Data {
+export function buildData(parsed: Parsed, cities: Cities, source: { file: string; sha256: string }, profile: Profile): Data {
+  const p: Parsed = { ...parsed, visits: foldRoles(parsed.visits, profile) }
   const geo = geocoder(cities)
   for (const v of p.visits) { const h = geo(v.lat, v.lng); v.city = h.name || null; v.cc = h.cc || null; v.dist = distHome(profile, v.start, v.lat, v.lng) }
   for (const a of p.activities) a.e_city = geo(a.e_lat, a.e_lng).name || null

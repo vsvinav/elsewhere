@@ -151,6 +151,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .bill .num { font: 900 clamp(84px, 14vw, 230px)/0.82 var(--display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .bill .num small { font-size: 0.26em; letter-spacing: 0.02em; margin-left: 0.15em; vertical-align: baseline; }
 .bill h2.word { margin: 0; font: 900 clamp(64px, 11vw, 160px)/0.82 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
+.bill h2.word .long { display: block; font-size: 0.6em; line-height: 0.9; }
 .bill .lede { font: 500 clamp(18px, 1.6vw, 22px)/1.35 var(--body); max-width: 44ch; margin: 0; }
 .bill .foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; border-top: var(--rule); padding-top: 16px; font: 800 clamp(18px, 2vw, 28px)/1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; flex-wrap: wrap; }
 .two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 40px clamp(32px, 5vw, 96px); align-items: start; }

@@ -103,7 +103,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   <button key={s.place_id} className="tag ob-tag" aria-pressed={homes.length === 1 && isSame(homes[0], s)} onClick={() => pickHome(s)}>
                     <span className="lab">{s.cc || '—'}</span>
                     <span className="name">{label(s)}</span>
-                    <span className="sub">{s.city && label(s) !== s.city ? `${s.city} · ` : ''}{s.score} {s.score === 1 ? 'night' : 'nights'}</span>
+                    <span className="sub">{s.city && label(s) !== s.city ? `${s.city} · ` : ''}{s.score} {s.score === 1 ? 'night' : 'nights'}{s.labels > 1 ? ` · ${s.labels} labels merged` : ''}</span>
                   </button>
                 ))}
                 {!sleep.length && <p className="lede">No overnight stays found in this record.</p>}
@@ -122,7 +122,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                     <button key={s.place_id} className="tag ob-tag" onClick={() => setHomes([...homes, asHome(s, from)])}>
                       <span className="lab">{mv ? `from ${mv.month}` : s.cc || '—'}</span>
                       <span className="name">{label(s)}</span>
-                      <span className="sub">{s.score} {s.score === 1 ? 'night' : 'nights'}</span>
+                      <span className="sub">{s.score} {s.score === 1 ? 'night' : 'nights'}{s.labels > 1 ? ` · ${s.labels} labels merged` : ''}</span>
                     </button>
                   )
                 })}

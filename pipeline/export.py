@@ -5,7 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .derive import derive_daily, derive_places, derive_trips
-from .geo import guess_home, tag_geo
+from .geo import fold_roles, guess_home, tag_geo
 from .models import Home, Parsed
 
 
@@ -24,6 +24,7 @@ def export_all(parsed: Parsed, out_dir: Path, *, source_file: str, source_sha256
     for h, nxt in zip(homes, homes[1:]):
         h.to_ts = nxt.from_ts
     tag_geo(parsed, homes)
+    fold_roles(parsed.visits, homes, work)
 
     _dump(out_dir / "visits.json", [
         {"id": v.id, "start": v.start, "end": v.end, "tz": v.tz, "place_id": v.place_id,

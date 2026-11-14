@@ -35,3 +35,14 @@ describe.skipIf(!existsSync(SRC))('in-browser pipeline matches the Python export
     expect([d.date, d.n_visits, d.hours_home, d.hours_transit, d.km_by_mode]).toEqual([e.date, e.n_visits, e.hours_home, e.hours_transit, e.km_by_mode])
   })
 })
+
+describe('foldRoles', () => {
+  it('points every label of a home at its busiest id, per dated home', async () => {
+    const { foldRoles } = await import('./derive')
+    const profile: Profile = { name: null, units: 'km', work: null, homes: [{ lat: 42.3632761, lng: -71.0643721, city: '', cc: '', from: 0, to: 1000 }, { lat: 37.7749, lng: -122.4194, city: '', cc: '', from: 1000, to: null }] }
+    const mk = (id: number, start: number, place_id: string, lat: number, lng: number) => ({ id, start, end: start + 3600, tz: 0, place_id, lat, lng, type: 'UNKNOWN', p: 0.9, lvl: 0 })
+    const visits = [mk(1, 10, 'a', 42.3632761, -71.0643721), mk(2, 20, 'b', 42.3633, -71.0644), mk(3, 30, 'b', 42.3633, -71.0644), mk(4, 40, 'far', 42.4, -71.1), mk(5, 2000, 'c', 37.7749, -122.4194), mk(6, 2100, 'a', 42.3632761, -71.0643721)]
+    expect(foldRoles(visits, profile).map((v) => v.place_id)).toEqual(['b', 'b', 'b', 'far', 'c', 'a'])
+    expect(visits[0].place_id).toBe('a')
+  })
+})

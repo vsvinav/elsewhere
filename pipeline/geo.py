@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+from collections import defaultdict
 
 from .models import Home, Parsed, Visit
 
@@ -32,6 +33,26 @@ def role_of(v: Visit, homes: list[Home], work: tuple[float, float] | None) -> st
     if work and haversine_km(work[0], work[1], v.lat, v.lng) <= ROLE_RADIUS_KM:
         return "work"
     return None
+
+
+def fold_roles(visits: list[Visit], homes: list[Home], work: tuple[float, float] | None) -> None:
+    """Google splits one address across several place ids. Every visit at a home (or work) is
+    re-pointed at the busiest id of that cluster, so the record has one Home per home."""
+    cluster: dict[int, str] = {}
+    for i, v in enumerate(visits):
+        role = role_of(v, homes, work)
+        if role == "home":
+            cluster[i] = f"home:{homes.index(home_at(homes, v.start))}"
+        elif role == "work":
+            cluster[i] = "work"
+    count: dict[tuple[str, str], int] = defaultdict(int)
+    for i, key in cluster.items():
+        count[(key, visits[i].place_id)] += 1
+    best: dict[str, str] = {}
+    for (key, pid), n in sorted(count.items(), key=lambda kv: (-kv[1], kv[0][1])):
+        best.setdefault(key, pid)
+    for i, key in cluster.items():
+        visits[i].place_id = best[key]
 
 
 def guess_home(visits: list[Visit]) -> Home:
