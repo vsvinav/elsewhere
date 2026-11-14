@@ -23,7 +23,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; }
+html, body { margin: 0; height: 100%; }
+#root { margin: 0; min-height: 100%; }
 body {
   background: var(--stock);
   color: var(--ink);
@@ -52,7 +53,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 
 /* The sheet */
 html { scroll-behavior: smooth; overflow-x: hidden; }
-.tray { min-height: 100%; background: var(--stock); }
+.tray { display: flow-root; min-height: 100%; background: var(--stock); }
 .strip { width: min(1280px, calc(100vw - 2 * var(--gutter))); margin: 128px auto calc(var(--strip-h) + 120px); }
 @media (max-width: 760px) { .strip { margin-top: 112px; margin-bottom: calc(var(--strip-h) + 160px); } }
 
