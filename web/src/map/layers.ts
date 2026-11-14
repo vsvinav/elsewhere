@@ -1,6 +1,7 @@
 import { PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Layer } from 'deck.gl'
 import type { Data, Place } from '../data/types'
 import { positionAt } from '../analytics/position'
+import { lensOf, type Lens } from '../analytics/lens'
 
 type RGBA = [number, number, number, number]
 const STOCK: RGBA = [247, 246, 242, 255]
@@ -10,34 +11,50 @@ const BLUE: RGBA = [159, 179, 230, 255]
 export const LONG_TRAIL_S = 7 * 86400
 const HEAD_REAL_S = 4
 
-interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number }
+interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number; lens: Lens }
+/** Ink per kind of movement: flights orange, foot blue, transit a quieter stock, drives stock. */
+const INK_OF: Record<Lens, RGBA> = { all: STOCK, fly: ORANGE, drive: STOCK, transit: [200, 205, 220, 255], foot: BLUE }
 interface Dot extends Place { id: string; title: string }
 
 // TripsLayer keeps timestamps in float32; offset by t0 to keep precision.
 export function buildTrails(data: Data, t0: number): Trail[] {
   const trails: Trail[] = []
-  for (const p of data.paths) if (p.pts.length > 1) { const ts = p.pts.map(([ts]) => ts - t0); trails.push({ path: p.pts.map(([, lat, lng]) => [lng, lat]), ts, color: STOCK, t0: ts[0], t1: ts[ts.length - 1] }) }
-  for (const a of data.activities) trails.push({ path: [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]], ts: [a.start - t0, a.end - t0], color: a.mode === 'FLYING' ? ORANGE : STOCK, t0: a.start - t0, t1: a.end - t0 })
+  // A GPS path takes the lens of the activity it sits inside; paths are sorted by time, as are activities.
+  const acts = data.activities
+  let ai = 0
+  for (const p of data.paths) if (p.pts.length > 1) {
+    const ts = p.pts.map(([ts]) => ts - t0), mid = (p.start + p.end) / 2
+    while (ai < acts.length && acts[ai].end < mid) ai++
+    const a = acts[ai]
+    const lens = a && a.start <= mid ? lensOf(a.mode) : 'drive'
+    trails.push({ path: p.pts.map(([, lat, lng]) => [lng, lat]), ts, color: INK_OF[lens], t0: ts[0], t1: ts[ts.length - 1], lens })
+  }
+  for (const a of acts) { const lens = lensOf(a.mode); trails.push({ path: [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]], ts: [a.start - t0, a.end - t0], color: INK_OF[lens], t0: a.start - t0, t1: a.end - t0, lens }) }
   return trails
 }
 
-let cache: { data: Data; trails: Trail[]; dots: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeKey: string } | null = null
+let cache: { data: Data; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeKey: string } | null = null
 function prepared(data: Data) {
   if (cache?.data !== data) {
     const dots: Dot[] = Object.entries(data.places).filter(([, p]) => p.semantic_type !== 'INFERRED_HOME' && p.n_visits >= 2)
       .map(([id, p]) => ({ ...p, id, title: (p.name ?? p.label ?? '').trim() })).sort((a, b) => b.n_visits - a.n_visits)
-    cache = { data, trails: buildTrails(data, data.meta.range[0]), dots, labels: new Map(), active: [], activeKey: '' }
+    cache = { data, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots, labels: new Map(), active: [], activeKey: '' }
   }
   return cache
 }
 
 /** Wide head passes rasterize every segment they are given, so hand them only trails alive in [from, to]; same array back while the set is unchanged. */
-function activeTrails(c: NonNullable<typeof cache>, from: number, to: number): Trail[] {
+function activeTrails(c: NonNullable<typeof cache>, all: Trail[], from: number, to: number): Trail[] {
   const idx: number[] = []
-  c.trails.forEach((t, i) => { if (t.t0 <= to && t.t1 >= from) idx.push(i) })
-  const key = idx.join(',')
-  if (key !== c.activeKey) { c.activeKey = key; c.active = idx.map((i) => c.trails[i]) }
+  all.forEach((t, i) => { if (t.t0 <= to && t.t1 >= from) idx.push(i) })
+  const key = all.length + ':' + idx.join(',')
+  if (key !== c.activeKey) { c.activeKey = key; c.active = idx.map((i) => all[i]) }
   return c.active
+}
+function lensTrails(c: NonNullable<typeof cache>, lens: Lens): Trail[] {
+  let t = c.byLens.get(lens)
+  if (!t) c.byLens.set(lens, (t = lens === 'all' ? c.trails : c.trails.filter((x) => x.lens === lens)))
+  return t
 }
 
 /** Greedy screen-space culling: most-visited label wins its box; nothing below zoom 6. */
@@ -58,26 +75,27 @@ function labelDots(dots: Dot[], zoom: number): Dot[] {
   return out
 }
 
-export function mapLayers(data: Data, now: number, rate: number, playing: boolean, basemap: 'dark' | 'light' = 'dark', reveal = now, zoom = 10): Layer[] {
+export function mapLayers(data: Data, now: number, rate: number, playing: boolean, basemap: 'dark' | 'light' = 'dark', reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
   const c = prepared(data)
-  const { trails, dots, labels } = c
+  const { dots, labels } = c
+  const trails = lensTrails(c, lens)
   const zb = Math.floor(zoom * 2) / 2
   let labelled = labels.get(zb)
   if (!labelled) labels.set(zb, (labelled = labelDots(dots, zb)))
   const paper = basemap === 'dark' ? STOCK : INK
-  const tint = (c: RGBA): RGBA => (c === STOCK ? paper : c)
+  const tint = (c: RGBA): RGBA => (c === STOCK ? paper : c === INK_OF.transit && basemap === 'light' ? [96, 104, 128, 255] : c)
   const t0 = data.meta.range[0]
   const layers: Layer[] = []
   if (!playing) {
     // Paused: the whole record as hairlines, like the strip printed on the pass.
-    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => { const c = tint(d.color); return [c[0], c[1], c[2], d.color === ORANGE ? 90 : 55] }, widthMinPixels: 1, widthMaxPixels: 2, opacity: 1 }))
+    layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => { const c = tint(d.color); return [c[0], c[1], c[2], d.lens === 'fly' ? 90 : 55] }, widthMinPixels: 1, widthMaxPixels: 2, opacity: 1 }))
   }
   const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails) => new TripsLayer<Trail>({
     id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: color, updateTriggers: { getColor: [basemap] },
     currentTime: now - t0, trailLength: length, fadeTrail: true, widthMinPixels: width, widthMaxPixels: width * 2, capRounded: true, jointRounded: true, opacity,
   })
   const headLen = HEAD_REAL_S * rate
-  const head = activeTrails(c, now - t0 - headLen * 1.6, now - t0)
+  const head = activeTrails(c, trails, now - t0 - headLen * 1.6, now - t0)
   layers.push(
     // Week-long wake over everything (hairline), then the wide glow and orange core over only the live trails.
     trail('trail-long', LONG_TRAIL_S, (d) => tint(d.color), 2, playing ? 0.45 : 0.22),

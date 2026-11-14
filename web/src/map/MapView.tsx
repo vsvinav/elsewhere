@@ -40,7 +40,7 @@ function Deck() {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.basemap, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10) })
+      overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, s.basemap, s.tab === 'map' ? Infinity : now, map.getZoom() ?? 10, s.lens) })
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()

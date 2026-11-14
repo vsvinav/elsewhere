@@ -5,6 +5,7 @@ import { whereaboutsAt } from '../analytics/position'
 import { placeName } from '../analytics/home'
 import { fmtTime } from '../analytics/format'
 import { label } from '../world/fmt'
+import { LENSES, LENS_LABEL } from '../analytics/lens'
 
 const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MONTH = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -16,7 +17,8 @@ export function Hud() {
   const playing = useStore((s) => s.playing)
   const speed = useStore((s) => s.speed)
   const follow = useStore((s) => s.follow)
-  const { setPlayhead, setPlaying, setSpeed, setFollow, toggleBasemap } = useStore.getState()
+  const lens = useStore((s) => s.lens)
+  const { setPlayhead, setPlaying, setSpeed, setFollow, toggleBasemap, setLens } = useStore.getState()
 
   const w = whereaboutsAt(data, playhead)
   const visit = w?.mode === 'STILL' ? data.visits.find((v) => v.lvl === 0 && v.start <= playhead && playhead <= v.end) : null
@@ -32,6 +34,9 @@ export function Hud() {
 
   return (
     <div className="hud">
+      <div className="hud-lens" role="radiogroup" aria-label="Kind of movement">
+        {LENSES.map((l) => <button key={l} role="radio" aria-checked={l === lens} className={l === lens ? 'on' : ''} onClick={() => setLens(l)}>{LENS_LABEL[l]}</button>)}
+      </div>
       <div className="hud-stub">
         <div className="hud-date">
           <span className="dow">{WEEKDAY[d.getUTCDay()]}</span>

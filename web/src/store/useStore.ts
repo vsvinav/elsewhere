@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
+import type { Lens } from '../analytics/lens'
 
 export type Tab = 'home' | 'stats' | 'places' | 'trips' | 'map' | 'play'
 export const TABS: Tab[] = ['home', 'stats', 'places', 'trips', 'map', 'play']
@@ -17,6 +18,9 @@ export interface Store {
   rate: number
   setRate(r: number): void
   follow: boolean
+  /** Movement lens; Play cuts between matching legs, the map draws only that ink. */
+  lens: Lens
+  setLens(l: Lens): void
   basemap: 'dark' | 'light'
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
@@ -57,6 +61,8 @@ export const useStore = create<Store>((set) => ({
   rate: 3600,
   setRate: (rate) => set({ rate }),
   follow: true,
+  lens: 'all',
+  setLens: (lens) => set({ lens }),
   basemap: 'dark',
   range: null,
   setRange: (range) => set({ range, playhead: range ? range[0] : null }),
