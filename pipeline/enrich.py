@@ -6,6 +6,7 @@ import urllib.request
 from pathlib import Path
 
 DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+TRANSIENT_ERRORS = {"OVER_QUERY_LIMIT", "UNKNOWN_ERROR", "REQUEST_DENIED"}
 
 
 def select_top(places: dict[str, dict], top: int) -> list[str]:
@@ -32,7 +33,11 @@ def enrich(places_json: Path, cache_path: Path, *, top: int) -> int:
     todo = [pid for pid in select_top(places, top) if pid not in cache]
     print(f"enriching {len(todo)} places ({len(cache)} cached)")
     for pid in todo:
-        cache[pid] = fetch_place(pid, key)
+        res = fetch_place(pid, key)
+        if res.get("error") in TRANSIENT_ERRORS:
+            print(f"stopping: {res['error']} (retry later)")
+            return 1
+        cache[pid] = res
         cache_path.write_text(json.dumps(cache, indent=1, ensure_ascii=False))
     print("done; re-run `python -m pipeline build` to merge names.")
     return 0
