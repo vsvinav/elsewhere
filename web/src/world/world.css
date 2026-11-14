@@ -67,7 +67,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .tourline .home { display: flex; align-items: center; gap: 14px; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .tourline .home:hover .caps { color: var(--red); }
 .tourline .account { position: relative; }
-.tourline:has(.account[open]) { z-index: 12; }
+.tourline:has(.account[open]), .rangebar:has(.datepick.open) { z-index: 12; }
 .tourline .account summary { list-style: none; cursor: pointer; padding: 0 2px 0 10px; border-left: 2px dashed var(--ink-3); font: 700 12px/40px var(--body); color: var(--ink); }
 .tourline .account summary::-webkit-details-marker { display: none; }
 .tourline .account .menu { position: absolute; right: -18px; top: 44px; z-index: 9; display: grid; min-width: 200px; white-space: nowrap; background: var(--stock); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
@@ -133,7 +133,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 @media (max-width: 760px) {
   .rangebar { top: auto; bottom: calc(var(--strip-h) + 12px); border-width: 2px; }
   body[data-scrolled] .rangebar { transform: translateY(140%); }
-  .rangebar label { display: none; }
+  .rangebar label, .rangebar .datepick { display: none; }
   /* The HUDs sit on top of the range bar (36px + 2px borders + 12px gap). */
   .hud { bottom: calc(var(--strip-h) + 64px); }
   .rangebar button { flex: 1; justify-content: center; padding: 0 8px; }

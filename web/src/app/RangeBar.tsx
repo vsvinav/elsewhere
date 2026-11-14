@@ -1,9 +1,8 @@
 import { useRawData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
+import { DatePick, DAY } from './DatePick'
 
-const DAY = 86400
-
-function isoDay(ts: number) { return new Date(ts * 1000).toISOString().slice(0, 10) }
+const midnight = (ts: number) => ts - (ts % DAY)
 function fromIso(s: string) { return Math.floor(new Date(s + 'T00:00:00Z').getTime() / 1000) }
 
 /** Date filter shared by every tab: year chips, a trailing-90-days chip, or two dates. */
@@ -24,8 +23,8 @@ export function RangeBar() {
       <button aria-pressed={range === null} onClick={() => setRange(null)}>All</button>
       {years.map((y) => <button key={y} aria-pressed={same(yearRange(y))} onClick={() => setRange(yearRange(y))}>{y}</button>)}
       <button aria-pressed={same(last90)} onClick={() => setRange(last90)}>Last 90d</button>
-      <label><span>From</span><input type="date" value={isoDay(lo)} min={isoDay(r0)} max={isoDay(hi)} onChange={(e) => e.target.value && set(fromIso(e.target.value), hi)} /></label>
-      <label><span>To</span><input type="date" value={isoDay(hi)} min={isoDay(lo)} max={isoDay(r1)} onChange={(e) => e.target.value && set(lo, fromIso(e.target.value) + DAY - 1)} /></label>
+      <DatePick label="From" value={midnight(lo)} min={midnight(r0)} max={midnight(hi)} other={midnight(hi)} onChange={(d) => set(d, hi)} />
+      <DatePick label="To" value={midnight(hi)} min={midnight(lo)} max={midnight(r1)} other={midnight(lo)} onChange={(d) => set(lo, d + DAY - 1)} />
     </div>
   )
 }
