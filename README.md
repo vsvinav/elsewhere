@@ -2,17 +2,64 @@
 <p align="center"><strong>Your Google Maps Timeline, printed as a world-tour poster.</strong><br>
 Every city you slept in, every flight, every drive — replayed on a map. Runs entirely in your browser.</p>
 
+<p align="center">
+<a href="#quick-start">Quick start</a> ·
+<a href="#what-you-get">What you get</a> ·
+<a href="#your-data-and-what-it-costs">Privacy & cost</a> ·
+<a href="#deploy-your-own">Deploy</a> ·
+<a href="#android">Android</a> ·
+<a href="#develop">Develop</a>
+</p>
+
 <p align="center"><img src="docs/screenshots/home.png" width="800" alt="Tour page: a big ELSEWHERE headline, nights per city, and a dotted route map"></p>
+
+## Quick start
+
+```bash
+git clone https://github.com/vsvinav/elsewhere && cd elsewhere/web
+npm install && npm run dev
+```
+
+Open the local URL and follow the front door:
+
+| Step | What to do | Why |
+| --- | --- | --- |
+| 1 | **Export your Timeline** — see [Getting your export](#getting-your-export) below. | It's the only input. |
+| 2 | **Drop `Timeline.json` on the card.** | Parsed in your browser, kept in local storage. Nothing is uploaded. |
+| 3 | **Paste a Google Maps key** (optional, free tier is plenty). | Draws Google tiles and names your busiest stops. Without it, maps fall back to OpenStreetMap. |
+| 4 | **Answer five questions** — name, home (and earlier homes), work, units. | Trips, nights away and distances all start from *your* home, not Google's guess. |
+
+Everything can be changed later from the ▾ menu by the masthead, which also starts you over.
+
+### Getting your export
+
+- **Android** — Settings → Location → Location Services → Timeline → *Export Timeline data*.
+- **iPhone** — Google Maps → your photo → *Your timeline* → ⋯ → *Export*.
+- Either way you get one `Timeline.json`. Big records (several years) take a few seconds to parse.
+
+> Google moved Timeline onto the phone in 2024. Takeout no longer includes it; use the in-app export above.
+
+### Getting a Google Maps key
+
+1. Open [console.cloud.google.com → Maps APIs](https://console.cloud.google.com/google/maps-apis).
+2. Enable **Maps JavaScript API** and **Places API (New)**.
+3. Create a key and restrict it to `http://localhost:*` and your domain.
+4. Optional: create a **Map ID** with a vector style for crisper tiles; paste it alongside the key.
 
 ## What you get
 
-- **Tour** — your years in one poster: cities ranked by nights slept, places, countries, a route map.
-- **Flights** — a globe turned to show every route you've flown, airports labelled, distance totalled; pick an airport to see where it took you.
-- **Facts** — nineteen things your record says about you, each with a figure, each shareable as text.
-- **Replay** — press play and watch yourself move through time. Planes, cars, trains and walks each get their own colour and marker; a speed slider goes from real-time to years-in-seconds.
-- **Stops, Dates, Numbers, Map** — the places you keep returning to, a calendar of where you were, the stats, and the full trail.
-- **Pick any range** — a year, the last 90 days, or any two dates. Everything updates.
-- **Yours, not guessed** — a one-minute setup asks your name, where home is (and was), and where you work. Trips, nights away and distances all start from *your* home, not Google's guess.
+| Tab | What's on it |
+| --- | --- |
+| **Tour** | Your years as one poster: cities ranked by nights slept, places, countries, a dotted route map. |
+| **Numbers** | Distance by month and mode, best month, the long-run averages. |
+| **Facts** | Eighteen things your record says about you, each with a figure, plus a turning card of shorter, ruder ones. |
+| **Stops** | The places you keep going back to, with photos and names. |
+| **Dates** | A calendar of where you were, night by night. |
+| **Flights** | A globe turned to show every route, airports labelled, distance totalled; pick an airport to see where it took you. |
+| **Map** | Every stop pinned, clustered as you zoom out, filtered by category, searchable, sized by visits or hours. |
+| **Replay** | Press play and move through time. Planes, cars, trains and walks each get their own colour and marker; the camera frames each leg whole. |
+
+Pick any range — a year, the last 90 days, two dates from the calendar — and every tab updates. Each card saves as a PNG, framed for a story or a post.
 
 <p align="center">
 <img src="docs/screenshots/flights.png" width="400" alt="Flights: globe with red routes and labelled airports">
@@ -23,11 +70,11 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 <img src="docs/screenshots/stops.png" width="400" alt="Stops: the places you return to">
 </p>
 
-Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Make it yourself with `python3 scripts/make_sample.py --out web/public/data` (needs the Python setup below).
+Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Build it with `python3 scripts/make_sample.py --out web/public/data` (see [Pre-bake with Python](#optional-pre-bake-a-record-with-python)).
 
-Your data never leaves your machine. The export is parsed in the browser and kept in local storage; the only network calls are map tiles, a handful of free OpenStreetMap address lookups for your home picks, and — only with your key, only for your own record — Google Places names and photos for your hundred busiest stops. Landmarks, stations and hotels without a Google photo get a free one from Wikimedia Commons. Without a key, or when Google refuses it, maps fall back to OpenStreetMap. The ▾ menu shows a running count of paid calls and a rough dollar figure.
+## Your data, and what it costs
 
-What costs what, per browser, against Google's monthly free allowance (roughly 5,000 Pro calls and 10,000 map loads):
+Your export never leaves your machine. It is parsed in the browser and kept in local storage. The only network calls are map tiles, a handful of free OpenStreetMap address lookups for your home picks, and — only with your key — Google Places names and photos for your hundred busiest stops. The ▾ menu shows a running count of paid calls and a rough dollar figure.
 
 | Feature | Source | Paid? |
 | --- | --- | --- |
@@ -38,34 +85,27 @@ What costs what, per browser, against Google's monthly free allowance (roughly 5
 | Names, types, photos for your 100 busiest stops | Google Places Details, cached forever | ≤100 Pro calls, once |
 | Place photos | Google Place Photos, loaded only when shown | ~$7 per 1,000 past free |
 
-## Run it
-
-```bash
-git clone https://github.com/vsvinav/elsewhere && cd elsewhere/web
-npm install && npm run dev
-```
-
-Open the local URL. The front door asks for two things, then five quick questions:
-
-1. **Drop in your `Timeline.json`.**
-   Android: Settings → Location → Timeline → Export.
-   iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.
-2. **Paste a Google Maps key** (free tier is plenty) so the Map and Replay pages can draw tiles. Get one at [console.cloud.google.com](https://console.cloud.google.com/google/maps-apis), enable *Maps JavaScript API*, and restrict it to `localhost` / your domain.
-3. **Name, home, moves, work, units.** Home candidates are ranked by where your phone sleeps, with a *likely / maybe home* confidence from the share of nights you slept there while it was in use. Google often files one building under several labels; those are merged and named after the building when any label carries a proper name. A home with an *until* can be picked again for a later stint. Every question can be changed later from the ▾ menu by the masthead, which also starts you over.
-
-Everything lives in your browser's local storage. Nothing is committed, nothing is uploaded.
+Google's monthly free allowance is roughly 5,000 Pro calls and 10,000 map loads; a personal install stays well inside it. When Google refuses a key, maps fall back to OpenStreetMap automatically.
 
 ## Deploy your own
 
+**GitHub Pages (built in).** Fork, then in *Settings → Pages* set the source to *GitHub Actions*. Add two repository secrets — `VITE_GOOGLE_MAPS_KEY` and, optionally, `VITE_GOOGLE_MAP_ID` — and push to `main`. The site publishes at `https://<you>.github.io/elsewhere/` and opens on the import screen; no record is bundled.
+
+**Anywhere else.**
+
 ```bash
-npm run build          # → web/dist, a static site
+cd web && npm run build   # → web/dist, a static site
 ```
 
-Host `dist/` anywhere (GitHub Pages, Netlify, Vercel). To ship a default key for visitors, put `VITE_GOOGLE_MAPS_KEY=…` in `web/.env.local` (gitignored) before building — and restrict that key to your domain.
+Host `dist/` on Netlify, Vercel, S3 — anything static. To ship a default key for visitors, put `VITE_GOOGLE_MAPS_KEY=…` in `web/.env.local` (gitignored) before building, and restrict that key to your domain.
+
+## Android
+
+A native Android app with the same tabs and the same poster is being built in its own repository: [vsvinav/elsewhere-android](https://github.com/vsvinav/elsewhere-android).
 
 ## Optional: pre-bake a record with Python
 
-The browser import is all you need. If you'd rather build the data files once and serve them (or name places with the Places API), there's a pipeline:
+The browser import is all you need. If you'd rather build the data files once and serve them (for a kiosk, or to name thousands of places with the Places API), there's a pipeline:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
@@ -74,8 +114,28 @@ python -m pipeline build Timeline.json --home LAT,LNG        # → web/public/da
 GOOGLE_MAPS_API_KEY=… python -m pipeline enrich --top 2000  # optional place names + photos
 ```
 
+## Develop
+
+```bash
+cd web
+npm run dev        # Vite dev server
+npm test           # vitest
+npx tsc --noEmit   # types
+```
+
+```
+web/src
+├── ingest/      parse Timeline.json, name places (Google, Nominatim, Wikimedia), cost gating
+├── analytics/   trips, nights, facts, flights, geo — pure functions, all tested
+├── map/         deck.gl layers, clustering, replay camera and springs
+├── tabs/        one folder per tab
+├── world/       the design system: Pass, Bill, Sticker, figures, world.css
+└── profile/     onboarding and the stored profile
+pipeline/        the optional Python pre-bake
+```
+
+Design direction and specs live in [`docs/superpowers/specs`](docs/superpowers/specs); the shipped system is in [`web/DESIGN.md`](web/DESIGN.md) when present.
+
 ## Built with
 
-React 19 · Vite · deck.gl on Google Maps · d3-geo for the globe · Big Shoulders Display & Archivo.
-
-Design notes live in [`docs/superpowers/specs`](docs/superpowers/specs).
+React 19 · Vite · deck.gl on Google Maps (MapLibre fallback) · d3-geo for the globe · Big Shoulders Display & Archivo.
