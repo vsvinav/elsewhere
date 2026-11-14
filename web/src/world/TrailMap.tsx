@@ -50,7 +50,7 @@ export function TrailMap({ data, stops = [], height = H, className = '' }: { dat
       lines: raw.map((l) => l.map((p) => proj(p).map(f1).join(',')).join(' ')),
       flights: fl.map(arc),
       // Cities that would print on top of one another keep only the one with more nights.
-      pins: stops.slice(0, 9).map((st) => ({ ...st, xy: proj([st.lng, st.lat]) })).filter((p, i, a) => !a.slice(0, i).some((q) => Math.abs(q.xy[0] - p.xy[0]) < 120 && Math.abs(q.xy[1] - p.xy[1]) < 18)).slice(0, 7),
+      pins: stops.slice(0, 9).map((st) => ({ ...st, xy: proj([st.lng, st.lat]) })).filter((p, i, a) => !a.slice(0, i).some((q) => Math.abs(q.xy[0] - p.xy[0]) < (q.city.length + p.city.length) * 7 + 24 && Math.abs(q.xy[1] - p.xy[1]) < 24)).slice(0, 7),
       landPath: lp,
     }
   }, [data, height, stops, land])
@@ -68,7 +68,7 @@ export function TrailMap({ data, stops = [], height = H, className = '' }: { dat
           {pins.map((p, i) => (
             <g key={p.city} transform={`translate(${p.xy[0].toFixed(1)},${p.xy[1].toFixed(1)})`}>
               <circle r={i === 0 ? 7 : 5} fill="var(--red)" stroke="var(--stock)" strokeWidth={2.5} />
-              <text x={11} y={4}>{p.city.toUpperCase()}</text>
+              <text x={p.xy[0] > W - 160 ? -11 : 11} y={4} textAnchor={p.xy[0] > W - 160 ? 'end' : 'start'}>{p.city.toUpperCase()}</text>
             </g>
           ))}
         </g>

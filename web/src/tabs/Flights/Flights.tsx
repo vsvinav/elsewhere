@@ -22,7 +22,6 @@ export function Flights() {
       <Bill tone="ink" className="hero">
         <div className="two globe-row">
           <div>
-            <div className="caps">Air record · {ports.length} airports</div>
             <h1 className="title"><span className="misreg">Up</span><span className="misreg red">There</span></h1>
             <p className="lede sub"><CountUp value={legs} /> flights on {hops.length} routes. <CountUp value={km} /> km above the ground; the longest {longest ? `${n0(longest.km)} km, ${name(longest.s)} to ${name(longest.t)}` : ''}.</p>
           </div>
@@ -34,7 +33,7 @@ export function Flights() {
       {regs.map((r) => (
         <Bill key={r.name}>
           <h2 className="word">{r.name}</h2>
-          <div className="caps">{r.hops.reduce((s, h) => s + h.n, 0)} flights · {r.hops.length} routes · {r.ports.map((p) => p.name).filter(Boolean).join(' · ')}</div>
+          <div className="caps">{r.hops.reduce((s, h) => s + h.n, 0)} flights · {r.hops.length} routes · {r.ports.length} airports</div>
           <FlightMap hops={r.hops} ports={r.ports} height={520} />
         </Bill>
       ))}

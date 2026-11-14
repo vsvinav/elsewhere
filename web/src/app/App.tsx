@@ -57,6 +57,12 @@ export function App() {
     importFile: (f) => { setImportError(null); ingestFile(f, setStage).then((d) => { setStage(null); adopt(d, true); useStore.getState().setTab('home') }).catch((e) => { setStage(null); setImportError(e) }) },
     reset: () => { clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch(setError) },
   }), [mine, stage, importError, enrichError, adopt])
+  // Chrome tucks away once the first bill has scrolled off; the heads underneath print clean.
+  useEffect(() => {
+    const onScroll = () => document.body.toggleAttribute('data-scrolled', scrollY > 240)
+    addEventListener('scroll', onScroll, { passive: true })
+    return () => removeEventListener('scroll', onScroll)
+  }, [])
   useEffect(() => {
     const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }
     addEventListener('hashchange', onHash)
