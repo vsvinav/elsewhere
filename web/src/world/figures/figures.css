@@ -26,3 +26,4 @@
   .fig.scale .row { grid-template-columns: 76px 1fr auto; }
 }
 .fig.beds.trip { margin-top: 18px; max-height: 60px; width: auto; }
+.fig text.dial-n { font-size: 16px; }

@@ -9,12 +9,12 @@ export type Kind = 'explored' | 'record' | 'scale' | 'habit'
 export type Figure =
   | { t: 'ring'; pct: number; label: string }
   | { t: 'scale'; value: number; ref: number; refLabel: string; unit: string; valueLabel?: string }
-  | { t: 'dial'; hours: number[] }
+  | { t: 'dial'; hours: number[]; hand: number; arc?: [number, number]; label: string }
   | { t: 'week'; cells: number[] }
   | { t: 'globe'; lat: number; lng: number; homeLat: number; homeLng: number }
   | { t: 'beds'; nights: Night[] }
-/** `quip` is the short, unserious version that turns on the card up top; the headline and detail stay sober below. */
-export interface Fact { id: string; kind: Kind; headline: string; detail: string; figure?: Figure; quip?: string }
+/** Card facts are the short, unserious ones that turn on the card up top (`quip` is what it says); the rest print below. */
+export interface Fact { id: string; kind: Kind; headline: string; detail: string; figure?: Figure; card?: true; quip?: string }
 export type Units = 'km' | 'mi'
 
 const EARTH_KM = 40_075, MI = 0.621371
@@ -57,7 +57,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const km = kmOf(d, () => true)
     if (km < 1_000) return null
     const laps = km / EARTH_KM
-    return { id: 'laps', kind: 'scale', headline: laps >= 1 ? `${laps.toFixed(1)}× around the Earth` : `${Math.round(laps * 100)}% of the way around the Earth`, detail: `${dist(km)} on record, over ground, rail, water and air. The equator is ${dist(EARTH_KM)}.`, figure: { t: 'scale', value: cv(km), ref: cv(EARTH_KM), refLabel: 'Equator', unit: u }, quip: laps >= 1 ? `${laps.toFixed(1)} laps of the planet. Still no statue.` : `${Math.round(laps * 100)}% of a lap round the Earth. Keep going.` }
+    return { id: 'laps', kind: 'scale', headline: laps >= 1 ? `${laps.toFixed(1)}× around the Earth` : `${Math.round(laps * 100)}% of the way around the Earth`, detail: `${dist(km)} on record, over ground, rail, water and air. The equator is ${dist(EARTH_KM)}.`, figure: { t: 'scale', value: cv(km), ref: cv(EARTH_KM), refLabel: 'Equator', unit: u } }
   },
   // Walked equals
   ({ d, dist, cv, u }) => {
@@ -66,20 +66,20 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const [ref, name] = WALKS.reduce((best, w) => (Math.abs(Math.log(w[0] / km)) < Math.abs(Math.log(best[0] / km)) ? w : best))
     const ratio = km / ref
     const how = ratio > 1.15 ? `${ratio.toFixed(1)}× ` : ratio < 0.85 ? `${Math.round(ratio * 100)}% of ` : ''
-    return { id: 'walked', kind: 'scale', headline: `Walked ${how}${name}`, detail: `${dist(km)} on foot. ${name[0].toUpperCase() + name.slice(1)} is about ${dist(ref)}.`, figure: { t: 'scale', value: cv(km), ref: cv(ref), refLabel: name.replace(/^the /, ''), unit: u }, quip: `Walked ${dist(km)}. Your shoes want hazard pay.` }
+    return { id: 'walked', kind: 'scale', headline: `Walked ${how}${name}`, detail: `${dist(km)} on foot. ${name[0].toUpperCase() + name.slice(1)} is about ${dist(ref)}.`, figure: { t: 'scale', value: cv(km), ref: cv(ref), refLabel: name.replace(/^the /, ''), unit: u } }
   },
   // Longest streak home
   ({ nights }) => {
     const r = longestRun(nights, (n) => n.kind === 'home')
     if (!r || r.n < 14) return null
-    return { id: 'streak-home', kind: 'record', headline: `${r.n} nights in your own bed, straight`, detail: `${long(r.from)} to ${long(r.to)}. Your longest stretch without a night away.`, figure: { t: 'beds', nights: nights.filter((n) => n.date >= r.from && n.date <= r.to) }, quip: `${r.n} nights in your own bed, straight. Thrilling.` }
+    return { id: 'streak-home', kind: 'record', headline: `${r.n} nights in your own bed, straight`, detail: `${long(r.from)} to ${long(r.to)}. Your longest stretch without a night away.`, figure: { t: 'beds', nights: nights.filter((n) => n.date >= r.from && n.date <= r.to) } }
   },
   // Longest streak away
   ({ nights }) => {
     const r = longestRun(nights, (n) => n.kind === 'new' || n.kind === 'repeat')
     if (!r || r.n < 3) return null
     const cities = [...new Set(nights.filter((n) => n.date >= r.from && n.date <= r.to && n.city).map((n) => n.city))]
-    return { id: 'streak-away', kind: 'record', headline: `${r.n} nights away without a night home`, detail: `${long(r.from)} to ${long(r.to)}${cities.length ? ` · ${cities.slice(0, 4).join(', ')}${cities.length > 4 ? ` and ${cities.length - 4} more` : ''}` : ''}.`, figure: { t: 'beds', nights: nights.filter((n) => n.date >= r.from && n.date <= r.to) }, quip: `${r.n} nights away in a row. Your pillow filed a missing-person report.` }
+    return { id: 'streak-away', kind: 'record', headline: `${r.n} nights away without a night home`, detail: `${long(r.from)} to ${long(r.to)}${cities.length ? ` · ${cities.slice(0, 4).join(', ')}${cities.length > 4 ? ` and ${cities.length - 4} more` : ''}` : ''}.`, figure: { t: 'beds', nights: nights.filter((n) => n.date >= r.from && n.date <= r.to) } }
   },
   // Furthest from home
   ({ d, dist }) => {
@@ -89,19 +89,21 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     if (!best || bestKm < 100) return null
     const p = d.places[best.place_id]
     const where = p?.name ?? p?.city ?? 'an unnamed place'
-    return { id: 'furthest', kind: 'record', headline: `${dist(bestKm)} from home`, detail: `${where}${p?.city && p.name ? `, ${p.city}` : ''}${p?.country_code ? ` (${p.country_code})` : ''}, ${longTs(best.start)}. The furthest your record gets.`, figure: { t: 'globe', lat: best.lat, lng: best.lng, homeLat: home.lat, homeLng: home.lng }, quip: `${dist(bestKm)} from home. Mum was worried.` }
+    return { id: 'furthest', kind: 'record', headline: `${dist(bestKm)} from home`, detail: `${where}${p?.city && p.name ? `, ${p.city}` : ''}${p?.country_code ? ` (${p.country_code})` : ''}, ${longTs(best.start)}. The furthest your record gets.`, figure: { t: 'globe', lat: best.lat, lng: best.lng, homeLat: home.lat, homeLng: home.lng } }
   },
   // Fastest ground leg
   ({ d, u }) => {
     let best = { kmh: 0, mode: '', ts: 0 }
     for (const a of d.activities) {
-      if (lensOf(a.mode) === 'fly' || a.end - a.start < 20 * 60 || a.m < 20_000) continue
+      const lens = lensOf(a.mode)
+      // Timeline sometimes labels a flight "walking"; only legs plausible for their mode count.
+      if (lens === 'fly' || lens === 'foot' || a.end - a.start < 20 * 60 || a.m < 20_000) continue
       const kmh = (a.m / 1000) / ((a.end - a.start) / 3600)
-      if (kmh > best.kmh && kmh < 400) best = { kmh, mode: a.mode, ts: a.start }
+      if (kmh > best.kmh && kmh < (lens === 'drive' ? 180 : 350)) best = { kmh, mode: a.mode, ts: a.start }
     }
     if (best.kmh < 60) return null
     const v = u === 'mi' ? best.kmh * MI : best.kmh
-    return { id: 'fastest', kind: 'record', headline: `${n0(v)} ${u === 'mi' ? 'mph' : 'km/h'} door to door`, detail: `Your quickest leg over land, ${longTs(best.ts)}, by ${best.mode.replace(/^IN_/, '').replace(/_/g, ' ').toLowerCase()}. Averaged over the whole leg, stops included.`, quip: `${n0(v)} ${u === 'mi' ? 'mph' : 'km/h'} door to door. Allegedly.` }
+    return { id: 'fastest', kind: 'record', headline: `${n0(v)} ${u === 'mi' ? 'mph' : 'km/h'} door to door`, detail: `Your quickest leg over land, ${longTs(best.ts)}, by ${best.mode.replace(/^IN_/, '').replace(/_/g, ' ').toLowerCase()}. Averaged over the whole leg, stops included.` }
   },
   // Earliest departure from home
   ({ d }) => {
@@ -117,7 +119,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
       if (score >= 3 * 60 && (!earliest || score < earliest.h * 60 + earliest.m)) earliest = { h, m, ts: prev.end }
     }
     if (!earliest || hours.reduce((a, b) => a + b, 0) < 20) return null
-    return { id: 'earliest', kind: 'record', headline: `Out the door at ${String(earliest.h).padStart(2, '0')}:${String(earliest.m).padStart(2, '0')}`, detail: `${longTs(earliest.ts)}, your earliest start. The dial shows what hour you usually leave home.`, figure: { t: 'dial', hours }, quip: `Out the door at ${String(earliest.h).padStart(2, '0')}:${String(earliest.m).padStart(2, '0')} once. Why.` }
+    return { id: 'earliest', kind: 'record', headline: `Out the door at ${String(earliest.h).padStart(2, '0')}:${String(earliest.m).padStart(2, '0')}`, detail: `${longTs(earliest.ts)}, your earliest start. The clock points at it; the faint bars are the hours you usually leave home.`, figure: { t: 'dial', hours, hand: earliest.h + earliest.m / 60, label: `${String(earliest.h).padStart(2, '0')}:${String(earliest.m).padStart(2, '0')}` } }
   },
   // Night owl
   ({ d }) => {
@@ -127,7 +129,8 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const n = d.activities.length
     if (n < 50) return null
     const share = pct(late, n)
-    return { id: 'owl', kind: 'habit', headline: share >= 15 ? `Night owl · ${share}% of legs after 10 pm` : `${share}% of your legs start after 10 pm`, detail: `${n0(late)} of ${n0(n)} journeys began between 22:00 and 04:00 local time.`, figure: { t: 'dial', hours }, quip: share >= 15 ? `${share}% of trips start after 10 pm. Vampire-adjacent.` : `Only ${share}% of trips after 10 pm. Early bird, or just tired.` }
+    const peak = hours.reduce((b, v, h) => (v > hours[b] ? h : b), 0)
+    return { id: 'owl', kind: 'habit', headline: share >= 15 ? `Night owl · ${share}% of legs after 10 pm` : `${share}% of your legs start after 10 pm`, detail: `${n0(late)} of ${n0(n)} journeys began between 22:00 and 04:00 local time. The hand points at your busiest hour.`, figure: { t: 'dial', hours, hand: peak + 0.5, arc: [22, 28], label: `${String(peak).padStart(2, '0')}:00` } }
   },
   // Weekend explorer
   ({ d, isFirst }) => {
@@ -142,7 +145,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     }
     if (firsts < 20) return null
     const share = pct(weekend, firsts)
-    return { id: 'weekend', kind: 'habit', headline: `${share}% of new places found on a weekend`, detail: `${n0(firsts)} first visits; ${n0(weekend)} were on a Saturday or Sunday. Two days of seven is ${Math.round(200 / 7)}%.`, figure: { t: 'week', cells }, quip: `${share}% of new places found on weekends. Weekdays are for the known.` }
+    return { id: 'weekend', kind: 'habit', headline: `${share}% of new places found on a weekend`, detail: `${n0(firsts)} first visits; ${n0(weekend)} were on a Saturday or Sunday. Two days of seven is ${Math.round(200 / 7)}%.`, figure: { t: 'week', cells } }
   },
   // Cities per 1,000 km
   ({ d, dist, cv, u }) => {
@@ -151,7 +154,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     for (const v of sleeps(d)) { const c = d.places[v.place_id]?.city; if (c && !isHome(d.places[v.place_id])) cities.add(c) }
     if (km < 2_000 || cities.size < 2) return null
     const per = (1000 * cities.size) / km
-    return { id: 'density', kind: 'scale', headline: `A new bed every ${dist(km / cities.size)}`, detail: `${cities.size} cities slept in over ${dist(km)} of travel: ${per.toFixed(1)} cities per 1,000 km.`, quip: `A new bed every ${dist(km / cities.size)}. Hotels love you.` }
+    return { id: 'density', kind: 'scale', headline: `A new bed every ${dist(km / cities.size)}`, detail: `${cities.size} cities slept in over ${dist(km)} of travel: ${per.toFixed(1)} cities per 1,000 km.` }
   },
   // Passed through, never slept
   ({ d }) => {
@@ -161,7 +164,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     for (const v of d.visits) { const p = d.places[v.place_id]; if (v.lvl === 0 && p?.city && p.role == null && !slept.has(p.city)) passed.set(p.city, (passed.get(p.city) ?? 0) + 1) }
     const top = [...passed.entries()].sort((a, b) => b[1] - a[1])[0]
     if (!top || top[1] < 5) return null
-    return { id: 'passed', kind: 'habit', headline: `${top[0]}: ${top[1]} visits, never a night`, detail: `The city you keep passing through without ever sleeping there.`, quip: `${top[0]}: ${top[1]} visits, never a night. Commitment issues.` }
+    return { id: 'passed', kind: 'habit', headline: `${top[0]}: ${top[1]} visits, never a night`, detail: `The city you keep passing through without ever sleeping there.` }
   },
   // New Year's Eve
   ({ d, range }) => {
@@ -175,14 +178,14 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
       out.push(`${y}: ${isHome(p) ? 'home' : p?.name ?? p?.city ?? 'somewhere unnamed'}${!isHome(p) && p?.city && p.name ? `, ${p.city}` : ''}`)
     }
     if (!out.length) return null
-    return { id: 'nye', kind: 'habit', headline: out.length === 1 ? `Midnight on New Year's, ${out[0].slice(0, 4)}` : `${out.length} New Year's Eves on record`, detail: out.join(' · ') + '.', quip: out.length === 1 ? `New Year's at ${out[0].slice(6)}. Big night.` : `${out.length} New Year's Eves, ${new Set(out.map((o) => o.slice(6))).size} different places. Restless.` }
+    return { id: 'nye', kind: 'habit', headline: out.length === 1 ? `Midnight on New Year's, ${out[0].slice(0, 4)}` : `${out.length} New Year's Eves on record`, detail: out.join(' · ') + '.' }
   },
   // Time in motion
   ({ d }) => {
     const h = d.activities.reduce((a, x) => a + (x.end - x.start) / 3600, 0)
     if (h < 48) return null
     const days = h / 24
-    return { id: 'motion', kind: 'scale', headline: `${days >= 10 ? n0(days) : days.toFixed(1)} whole days in motion`, detail: `${n0(h)} hours in a vehicle or on foot between places: ${pct(h, (d.meta.range[1] - d.meta.range[0]) / 3600)}% of the record.`, quip: `${days >= 10 ? n0(days) : days.toFixed(1)} days of your life in transit. Podcast people.` }
+    return { id: 'motion', kind: 'scale', headline: `${days >= 10 ? n0(days) : days.toFixed(1)} whole days in motion`, detail: `${n0(h)} hours in a vehicle or on foot between places: ${pct(h, (d.meta.range[1] - d.meta.range[0]) / 3600)}% of the record.` }
   },
   // Bars against gyms
   ({ d }) => {
@@ -192,31 +195,31 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const detail = gym === 0 ? `${hrs(bars)} hours in bars and pubs. No gym appears anywhere in this record. Balance is a myth anyway.`
       : gym > bars ? `The gym is winning, ${(gym / Math.max(0.1, bars)).toFixed(1)} hours of reps to every hour at the bar. Suspicious.`
       : `${(bars / Math.max(0.1, gym)).toFixed(1)} hours at the bar for every hour at the gym. The science is unsettled on whether that cancels out.`
-    return { id: 'bars', kind: 'habit', headline: head, detail, figure: { t: 'scale', value: bars, ref: gym, refLabel: 'Gym', unit: 'h', valueLabel: 'Bars' }, quip: gym === 0 ? `${hrs(bars)} hours in bars, zero at the gym. Balanced.` : gym > bars ? `More gym than bar. Who even are you?` : `${hrs(bars)} hours in bars, ${hrs(gym)} at the gym. Your liver is the one lifting.` }
+    return { id: 'bars', kind: 'habit', card: true, headline: head, detail, figure: { t: 'scale', value: bars, ref: gym, refLabel: 'Gym', unit: 'h', valueLabel: 'Bars' }, quip: gym === 0 ? `${hrs(bars)} hours in bars, zero at the gym. Balanced.` : gym > bars ? `More gym than bar. Who even are you?` : `${hrs(bars)} hours in bars, ${hrs(gym)} at the gym. Your liver is the one lifting.` }
   },
   // Coffee runs
   ({ d, range }) => {
     const ps = typed(d, CAFE), n = visitsOf(ps)
     if (n < 8) return null
-    return { id: 'coffee', kind: 'habit', headline: `${n0(n)} coffee runs · one every ${everyDays(n, range)} days`, detail: `${hrs(hoursOf(ps, 3))} hours in ${ps.length} cafés, waiting for, drinking, or pretending to work over coffee.`, quip: `${n0(n)} coffee runs. That's not a habit, that's a personality.` }
+    return { id: 'coffee', kind: 'habit', card: true, headline: `${n0(n)} coffee runs · one every ${everyDays(n, range)} days`, detail: `${hrs(hoursOf(ps, 3))} hours in ${ps.length} cafés, waiting for, drinking, or pretending to work over coffee.`, quip: `${n0(n)} coffee runs. That's not a habit, that's a personality.` }
   },
   // Airports
   ({ d }) => {
     const h = hoursOf(typed(d, AIRPORT), 8)
     if (h < 6) return null
-    return { id: 'airports', kind: 'scale', headline: `${hrs(h)} hours inside airports`, detail: `${(h / 8).toFixed(1)} full working days of boarding groups, gate changes and ${h > 40 ? 'overpriced' : 'surprisingly fine'} sandwiches.`, figure: { t: 'scale', value: h, ref: 40, refLabel: 'A working week', unit: 'h' }, quip: `${hrs(h)} hours in airports. You basically live at gate B12.` }
+    return { id: 'airports', kind: 'scale', headline: `${hrs(h)} hours inside airports`, detail: `${(h / 8).toFixed(1)} full working days of boarding groups, gate changes and ${h > 40 ? 'overpriced' : 'surprisingly fine'} sandwiches.`, figure: { t: 'scale', value: h, ref: 40, refLabel: 'A working week', unit: 'h' } }
   },
   // Grocery runs
   ({ d, range }) => {
     const ps = typed(d, GROCERY), n = visitsOf(ps)
     if (n < 6) return null
-    return { id: 'grocery', kind: 'habit', headline: `${n0(n)} grocery runs`, detail: `One every ${everyDays(n, range)} days, ${hrs(hoursOf(ps, 2))} hours in the aisles. Nobody has ever gone in for just milk.`, quip: `${n0(n)} grocery runs, zero of them 'just for milk'.` }
+    return { id: 'grocery', kind: 'habit', card: true, headline: `${n0(n)} grocery runs`, detail: `One every ${everyDays(n, range)} days, ${hrs(hoursOf(ps, 2))} hours in the aisles. Nobody has ever gone in for just milk.`, quip: `${n0(n)} grocery runs, zero of them 'just for milk'.` }
   },
   // Restaurant loyalty
   ({ d }) => {
     const p = typed(d, FOOD).filter((x) => x.name && x.n_visits >= 4).sort((a, b) => b.n_visits - a.n_visits)[0]
     if (!p) return null
-    return { id: 'regular', kind: 'habit', headline: `${p.name}, ${p.n_visits} times`, detail: `Your most loyal restaurant${p.city ? `, in ${p.city}` : ''}. ${hrs(p.total_hours)} hours at the table. There are other menus; you have chosen not to read them.`, quip: `${p.name} has seen you ${p.n_visits} times. They know your order.` }
+    return { id: 'regular', kind: 'habit', card: true, headline: `${p.name}, ${p.n_visits} times`, detail: `Your most loyal restaurant${p.city ? `, in ${p.city}` : ''}. ${hrs(p.total_hours)} hours at the table. There are other menus; you have chosen not to read them.`, quip: `${p.name} has seen you ${p.n_visits} times. They know your order.` }
   },
   // Longest time without leaving the house
   ({ d }) => {
@@ -224,7 +227,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     for (const v of d.visits) if (v.lvl === 0 && isHome(d.places[v.place_id]) && (!best || v.end - v.start > best.end - best.start)) best = v
     if (!best || best.end - best.start < 36 * 3600) return null
     const h = (best.end - best.start) / 3600
-    return { id: 'hermit', kind: 'record', headline: `${hrs(h)} hours without leaving the house`, detail: `${longTs(best.start)} to ${longTs(best.end)}. ${h >= 72 ? 'The outside world managed without you.' : 'A proper weekend in.'}`, quip: `${hrs(h)} hours without going outside. Impressive. Slightly concerning.` }
+    return { id: 'hermit', kind: 'record', headline: `${hrs(h)} hours without leaving the house`, detail: `${longTs(best.start)} to ${longTs(best.end)}. ${h >= 72 ? 'The outside world managed without you.' : 'A proper weekend in.'}` }
   },
   // Longest single stay away
   ({ d }) => {
@@ -232,7 +235,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     for (const v of d.visits) { const p = d.places[v.place_id]; if (v.lvl === 0 && p?.role == null && (!best || v.end - v.start > best.end - best.start)) best = v }
     if (!best || best.end - best.start < 20 * 3600) return null
     const p = d.places[best.place_id], h = (best.end - best.start) / 3600
-    return { id: 'longest-stay', kind: 'record', headline: `${hrs(h)} hours straight at ${p?.name ?? p?.city ?? 'one place'}`, detail: `From ${longTs(best.start)}. Your longest unbroken stay anywhere that wasn't home or work${p?.name && p.city ? `, in ${p.city}` : ''}.`, quip: `${hrs(h)} hours straight at ${p?.name ?? 'one place'}. Did you live there?` }
+    return { id: 'longest-stay', kind: 'record', headline: `${hrs(h)} hours straight at ${p?.name ?? p?.city ?? 'one place'}`, detail: `From ${longTs(best.start)}. Your longest unbroken stay anywhere that wasn't home or work${p?.name && p.city ? `, in ${p.city}` : ''}.` }
   },
   // Days since anywhere new
   ({ d, raw, isFirst, range }) => {
@@ -242,7 +245,7 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const days = Math.floor((range[1] - last) / 86400)
     if (days < 3) return null
     const p = d.places[d.visits.find((v) => v.start === last)?.place_id ?? '']
-    return { id: 'since-new', kind: 'habit', headline: `${n0(days)} days since you went anywhere new`, detail: `Last first visit: ${p?.name ?? p?.city ?? 'an unnamed place'}, ${longTs(last)}. ${days > 30 ? 'The map is not going to explore itself.' : 'Not bad. Keep it up.'}`, quip: `${n0(days)} days since anywhere new. The map is judging you.` }
+    return { id: 'since-new', kind: 'habit', card: true, headline: `${n0(days)} days since you went anywhere new`, detail: `Last first visit: ${p?.name ?? p?.city ?? 'an unnamed place'}, ${longTs(last)}. ${days > 30 ? 'The map is not going to explore itself.' : 'Not bad. Keep it up.'}`, quip: `${n0(days)} days since anywhere new. The map is judging you.` }
   },
   // Time zones lived in
   ({ d }) => {
@@ -252,14 +255,42 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     if (zones.length < 2) return null
     const fmt = (m: number) => `UTC${m < 0 ? '−' : '+'}${Math.floor(Math.abs(m) / 60)}${Math.abs(m) % 60 ? `:${String(Math.abs(m) % 60).padStart(2, '0')}` : ''}`
     const lo = Math.min(...zones), hi = Math.max(...zones)
-    return { id: 'zones', kind: 'explored', headline: `${zones.length} time zones slept in`, detail: `Your body clock has run from ${fmt(lo)} to ${fmt(hi)}, a ${((hi - lo) / 60).toFixed(1)}-hour spread. Counting only zones you spent a full day in.`, figure: { t: 'ring', pct: (100 * zones.length) / 24, label: 'of 24' }, quip: `${zones.length} time zones. Your body clock has given up.` }
+    return { id: 'zones', kind: 'explored', headline: `${zones.length} time zones slept in`, detail: `Your body clock has run from ${fmt(lo)} to ${fmt(hi)}, a ${((hi - lo) / 60).toFixed(1)}-hour spread. Counting only zones you spent a full day in.`, figure: { t: 'ring', pct: (100 * zones.length) / 24, label: 'of 24' } }
   },
   // Hours behind the wheel
   ({ d }) => {
     const h = d.activities.reduce((a, x) => a + (lensOf(x.mode) === 'drive' ? (x.end - x.start) / 3600 : 0), 0)
     if (h < 20) return null
     const times = h / AUDIOBOOK_H
-    return { id: 'wheel', kind: 'scale', headline: `${hrs(h)} hours in a car`, detail: `Enough to hear all seven Harry Potter audiobooks ${times >= 1 ? `${times.toFixed(1)} times over` : `${Math.round(times * 100)}% of the way through`}. Or sit in silence. Your call.`, figure: { t: 'scale', value: h, ref: AUDIOBOOK_H, refLabel: 'All seven audiobooks', unit: 'h' }, quip: `${hrs(h)} hours in a car. Hope the playlist held up.` }
+    return { id: 'wheel', kind: 'scale', headline: `${hrs(h)} hours in a car`, detail: `Enough to hear all seven Harry Potter audiobooks ${times >= 1 ? `${times.toFixed(1)} times over` : `${Math.round(times * 100)}% of the way through`}. Or sit in silence. Your call.`, figure: { t: 'scale', value: h, ref: AUDIOBOOK_H, refLabel: 'All seven audiobooks', unit: 'h' } }
+  },
+  // Homebody share
+  ({ nights }) => {
+    const known = nights.filter((n) => n.kind !== 'none')
+    if (known.length < 30) return null
+    const home = pct(known.filter((n) => n.kind === 'home').length, known.length)
+    return { id: 'homebody', kind: 'habit', card: true, headline: `${home}% of nights in your own bed`, detail: `${n0(known.length)} nights on record.`, quip: home >= 85 ? `${home}% of nights in your own bed. Homebody.` : home >= 60 ? `${home}% of nights at home. The other ${100 - home}% is where the stories are.` : `Only ${home}% of nights at home. Does your landlord know?` }
+  },
+  // Second city
+  ({ d }) => {
+    const h = new Map<string, number>()
+    for (const v of d.visits) { const p = d.places[v.place_id]; if (v.lvl === 0 && p?.city && p.role == null && !isHome(p)) h.set(p.city, (h.get(p.city) ?? 0) + (v.end - v.start) / 3600) }
+    const homeCity = Object.values(d.places).find(isHome)?.city
+    const top = [...h.entries()].filter(([c]) => c !== homeCity).sort((a, b) => b[1] - a[1])[0]
+    if (!top || top[1] < 48) return null
+    return { id: 'second-city', kind: 'habit', card: true, headline: `${top[0]}: ${hrs(top[1])} hours`, detail: `The city you spend most time in that isn't home.`, quip: `${hrs(top[1])} hours in ${top[0]}. At this point it's a situationship.` }
+  },
+  // Shop hours
+  ({ d }) => {
+    const h = hoursOf(typed(d, /store|shop|mall|boutique|market/), 3)
+    if (h < 10) return null
+    return { id: 'shops', kind: 'habit', card: true, headline: `${hrs(h)} hours in shops`, detail: `Capped at three hours a visit.`, quip: `${hrs(h)} hours in shops. "Just looking," you said, ${n0(visitsOf(typed(d, /store|shop|mall|boutique|market/)))} times.` }
+  },
+  // Transit stops
+  ({ d }) => {
+    const ps = typed(d, /transit_station|bus_station|subway_station|train_station|light_rail/), n = visitsOf(ps)
+    if (n < 10) return null
+    return { id: 'transit', kind: 'habit', card: true, headline: `${n0(n)} station visits`, detail: `${hrs(hoursOf(ps, 1))} hours on platforms.`, quip: `${n0(n)} times through a station, ${hrs(hoursOf(ps, 1))} hours on platforms. The train is always "2 minutes" away.` }
   },
 ]
 

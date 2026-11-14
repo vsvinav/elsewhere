@@ -32,19 +32,22 @@ export function Facts() {
   const all = useMemo(() => facts(data, units, raw), [data, units, raw])
   const [seed, setSeed] = useState(0)
   const [only, setOnly] = useState<Kind | null>(null)
-  const list = useMemo(() => arrange(all, seed).filter((f) => !only || f.kind === only), [all, seed, only])
-  const kinds = ORDER.filter((k) => all.some((f) => f.kind === k))
+  // The card gets its own short facts; the list never repeats them. A thin record falls back to sharing.
+  const cards = useMemo(() => { const c = all.filter((f) => f.card); return c.length >= 2 ? c : all }, [all])
+  const rest = useMemo(() => (cards === all ? all : all.filter((f) => !f.card)), [all, cards])
+  const list = useMemo(() => arrange(rest, seed).filter((f) => !only || f.kind === only), [rest, seed, only])
+  const kinds = ORDER.filter((k) => rest.some((f) => f.kind === k))
   const year = new Date(data.meta.range[1] * 1000).getUTCFullYear()
   // One fact at a time up top, turning every few seconds unless the pointer rests on it.
   const [at, setAt] = useState(0)
   const [hold, setHold] = useState(false)
-  useEffect(() => { setAt(0) }, [list])
+  useEffect(() => { setAt(0) }, [cards])
   useEffect(() => {
-    if (hold || list.length < 2) return
-    const t = setInterval(() => setAt((i) => (i + 1) % list.length), 6000)
+    if (hold || cards.length < 2) return
+    const t = setInterval(() => setAt((i) => (i + 1) % cards.length), 6000)
     return () => clearInterval(t)
-  }, [hold, list.length])
-  const star = list[at]
+  }, [hold, cards.length])
+  const star = cards[at]
   const jump = (f: Fact) => document.getElementById(`fact-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 
   return (
@@ -54,18 +57,19 @@ export function Facts() {
           <div className="two">
             <div>
               <h1 className="title"><span className="misreg">Fun</span><span className="misreg red">Facts</span></h1>
-              <p className="lede sub">{all.length ? `${all.length} things your record says about you, read sideways. Firsts are judged over the whole record, so a January trip stays new when you cut the range down.` : 'Nothing to say yet. Widen the range, or wait for the record to fill in.'}</p>
+              <p className="lede sub">{all.length ? `${rest.length} things your record says about you, read sideways. Firsts are judged over the whole record, so a January trip stays new when you cut the range down.` : 'Nothing to say yet. Widen the range, or wait for the record to fill in.'}</p>
             </div>
             {star && (
               <div className="feature" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}>
-                <div className="feature-top"><Field label={KIND[star.kind]}>{at + 1} of {list.length}</Field><span className="feature-bar" key={`${star.id}-${hold}`} data-hold={hold || undefined} /></div>
-                <button key={star.id} className="feature-card" onClick={() => jump(star)} aria-label={`Go to: ${star.headline}`} title={star.headline}>
-                  {star.figure && <div className="feature-fig"><Fig f={star.figure} /></div>}
+                <div className="feature-top"><Field label={star.card ? 'Side note' : KIND[star.kind]}>{at + 1} of {cards.length}</Field><span className="feature-bar" key={`${star.id}-${hold}`} data-hold={hold || undefined} /></div>
+                <button key={star.id} className="feature-card" onClick={() => (star.card ? setAt((at + 1) % cards.length) : jump(star))} aria-label={star.card ? 'Next' : `Go to: ${star.headline}`}>
+                  {star.figure && !WIDE.has(star.figure.t) && <div className="feature-fig"><Fig f={star.figure} /></div>}
                   <h2 className="fact-h quip">{star.quip ?? star.headline}</h2>
+                  {star.figure && WIDE.has(star.figure.t) && <div className="feature-wide"><Fig f={star.figure} /></div>}
                 </button>
                 <div className="feature-nav">
-                  <button className="btn quiet" onClick={() => setAt((at + list.length - 1) % list.length)} aria-label="Previous fact">←</button>
-                  <button className="btn quiet" onClick={() => setAt((at + 1) % list.length)} aria-label="Next fact">→</button>
+                  <button className="btn quiet" onClick={() => setAt((at + cards.length - 1) % cards.length)} aria-label="Previous fact">←</button>
+                  <button className="btn quiet" onClick={() => setAt((at + 1) % cards.length)} aria-label="Next fact">→</button>
                   {all.length > 1 && <button className="btn quiet" onClick={() => setSeed(Date.now() & 0xffff)}>Shuffle</button>}
                 </div>
               </div>
@@ -73,7 +77,7 @@ export function Facts() {
           </div>
           <div className="foot">
             <span className="facts-kinds" role="group" aria-label="Show only">
-              {kinds.map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}>{KIND[k]} <b>{all.filter((f) => f.kind === k).length}</b></button>)}
+              {kinds.map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}>{KIND[k]} <b>{rest.filter((f) => f.kind === k).length}</b></button>)}
             </span>
             <span>{units === 'mi' ? 'Miles' : 'Kilometres'}</span>
           </div>

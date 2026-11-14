@@ -17,6 +17,11 @@
 .feature-fig { width: 150px; }
 .feature-fig .fig { max-height: 150px; }
 .feature-fig:empty { display: none; }
+.feature-card:not(:has(.feature-fig)) { grid-template-columns: 1fr; }
+.feature-card .fact-h { min-width: 0; }
+.feature-wide { grid-column: 1 / -1; margin-top: 4px; }
+.feature-wide .fig.scale .row { grid-template-columns: minmax(48px, auto) 1fr auto; }
+.feature-wide .fig.beds { max-height: 56px; }
 @keyframes feature-in { from { opacity: 0; transform: translateY(14px) rotate(-0.6deg); } }
 .feature-nav { display: flex; gap: 10px; }
 .facts-kinds { display: flex; gap: 10px; flex-wrap: wrap; }

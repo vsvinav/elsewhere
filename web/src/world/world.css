@@ -19,7 +19,7 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --gutter: clamp(20px, 5.5vw, 80px);
   --strip-h: 64px;
-  color-scheme: light;
+  color-scheme: only light;
 }
 
 * { box-sizing: border-box; }
@@ -59,7 +59,7 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 
 /* Tour line: the small line at the top that names the sheet. */
 .tourline { position: fixed; top: 40px; left: var(--gutter); z-index: 6; display: flex; align-items: center; gap: 14px; color: var(--ink); background: var(--stock); border: 2px solid var(--ink); padding: 0 16px 0 0; height: 40px; }
-.tourline, .rangebar { transition: transform 0.3s var(--ease, ease), opacity 0.3s; }
+.tourline, .rangebar { transition: transform 0.3s var(--ease, ease), opacity 0.3s; box-shadow: 0 0 0 2px var(--stock); } /* halo keeps the box readable over ink bills */
 body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: translateY(-140%); opacity: 0; pointer-events: none; }
 .tourline .mark { display: inline-grid; place-items: center; width: 36px; height: 36px; background: var(--ink); color: var(--stock); font: 900 18px/1 var(--display); }
 .tourline .caps { font-size: 13px; letter-spacing: 0.26em; }
@@ -108,7 +108,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .ticket .brand i { color: var(--red); font-style: normal; }
 @media (max-width: 760px) {
   .ticket .brand { display: none; }
-  .ticket button { font-size: 13px; letter-spacing: 0.08em; }
+  .ticket button { font-size: 12px; letter-spacing: 0.04em; padding: 0 2px; }
+  .ticket button + button::before { top: 14px; bottom: 14px; }
 }
 
 /* Date range: small printed chips in the top-right, the show dates */
@@ -133,6 +134,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
   .rangebar { top: auto; bottom: calc(var(--strip-h) + 12px); border-width: 2px; }
   body[data-scrolled] .rangebar { transform: translateY(140%); }
   .rangebar label { display: none; }
+  /* The HUDs sit on top of the range bar (36px + 2px borders + 12px gap). */
+  .hud { bottom: calc(var(--strip-h) + 64px); }
   .rangebar button { flex: 1; justify-content: center; padding: 0 8px; }
 }
 
@@ -177,6 +180,7 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .hero .map { margin-top: 40px; }
 .hero .stamp { position: absolute; right: 40px; bottom: 150px; }
 @media (max-width: 1000px) { .hero .stamp { right: 0; bottom: auto; top: 150px; width: 110px; height: 110px; border-width: 4px; font-size: 11px; } .hero .stamp b { font-size: 32px; } }
+@media (max-width: 760px) { .hero .stamp { top: -4px; right: 0; width: 92px; height: 92px; } .hero .stamp b { font-size: 26px; } .hero .title { padding-right: 0; } }
 
 /* Dates list: city · nights, 6px rule, caps */
 .dates { margin: 0; padding: 0; list-style: none; border-top: var(--rule); }

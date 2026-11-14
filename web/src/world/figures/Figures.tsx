@@ -34,19 +34,33 @@ export function Scale({ value, ref, refLabel, unit, valueLabel = 'You' }: { valu
   )
 }
 
-/** 24-hour dial: a tick per hour, its length the share of legs starting then. Night hours in red. */
-export function Dial({ hours }: { hours: number[] }) {
-  const max = Math.max(1, ...hours), cx = 70, cy = 70
+/** 24-hour clock, midnight at the top: hour ticks, a red arc for the night window, faint bars for how often legs start each hour, and a hand pointing at the headline time. */
+export function Dial({ hours, hand, arc, label }: { hours: number[]; hand: number; arc?: [number, number]; label: string }) {
+  const max = Math.max(1, ...hours), cx = 70, cy = 70, R = 56
+  const arcPath = (from: number, to: number, r: number) => {
+    const [x1, y1] = polar(cx, cy, r, from / 24), [x2, y2] = polar(cx, cy, r, to / 24)
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${to - from > 12 ? 1 : 0} 1 ${x2} ${y2}`
+  }
+  const [hx, hy] = polar(cx, cy, R - 14, hand / 24)
   return (
-    <svg className="fig dial" viewBox="0 0 140 140" role="img" aria-label="When your journeys start, by hour">
-      <circle className="c-ink" cx={cx} cy={cy} r="52" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <svg className="fig dial" viewBox="-6 -6 152 152" role="img" aria-label={`Clock pointing at ${label}`}>
+      <circle className="c-ink" cx={cx} cy={cy} r={R} fill="none" stroke="currentColor" strokeWidth="2" />
+      {arc && <path className="c-red" d={arcPath(arc[0], arc[1], R - 4)} fill="none" stroke="currentColor" strokeWidth="5" opacity="0.85" />}
       {HOURS.map((h) => {
-        const v = hours[h] ?? 0, night = h >= 22 || h < 4
-        const len = 5 + (36 * v) / max
-        const [x1, y1] = polar(cx, cy, 48, h / 24), [x2, y2] = polar(cx, cy, 48 - len, h / 24)
-        return <line key={h} x1={x1} y1={y1} x2={x2} y2={y2} className={v ? (night ? 'c-red' : 'c-ink') : 'c-ghost'} stroke="currentColor" strokeWidth={v ? 3.5 : 1.5} />
+        const v = hours[h] ?? 0, big = h % 6 === 0
+        const [x1, y1] = polar(cx, cy, R - (big ? 10 : 6), h / 24), [x2, y2] = polar(cx, cy, R - 1, h / 24)
+        const [bx1, by1] = polar(cx, cy, 10, (h + 0.5) / 24), [bx2, by2] = polar(cx, cy, 10 + (22 * v) / max, (h + 0.5) / 24)
+        return (
+          <g key={h}>
+            {v > 0 && <line x1={bx1} y1={by1} x2={bx2} y2={by2} className="c-ink" stroke="currentColor" strokeWidth="3" opacity="0.18" />}
+            <line x1={x1} y1={y1} x2={x2} y2={y2} className="c-ink" stroke="currentColor" strokeWidth={big ? 2.5 : 1.2} />
+          </g>
+        )
       })}
-      {[0, 6, 12, 18].map((h) => { const [x, y] = polar(cx, cy, 62, h / 24); return <text key={h} x={x} y={y + 3} textAnchor="middle" className="l">{String(h).padStart(2, '0')}</text> })}
+      {[0, 6, 12, 18].map((h) => { const [x, y] = polar(cx, cy, R + 10, h / 24); return <text key={h} x={x} y={y + 3} textAnchor="middle" className="l">{String(h).padStart(2, '0')}</text> })}
+      <line x1={cx} y1={cy} x2={hx} y2={hy} className="c-red" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+      <circle className="c-red" cx={cx} cy={cy} r="4" fill="currentColor" />
+      <text x={cx} y={cy + 44} textAnchor="middle" className="n dial-n">{label}</text>
     </svg>
   )
 }
@@ -135,7 +149,7 @@ export function Fig({ f }: { f: Figure }) {
   switch (f.t) {
     case 'ring': return <Ring pct={f.pct} label={f.label} />
     case 'scale': return <Scale value={f.value} ref={f.ref} refLabel={f.refLabel} unit={f.unit} valueLabel={f.valueLabel} />
-    case 'dial': return <Dial hours={f.hours} />
+    case 'dial': return <Dial hours={f.hours} hand={f.hand} arc={f.arc} label={f.label} />
     case 'week': return <Week cells={f.cells} />
     case 'globe': return <Globe lat={f.lat} lng={f.lng} homeLat={f.homeLat} homeLng={f.homeLng} />
     case 'beds': return <Beds nights={f.nights} />
