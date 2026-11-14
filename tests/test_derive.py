@@ -45,3 +45,30 @@ def test_derive_daily_rows(parsed):
     assert d5["km_by_mode"]["FLYING"] == 4340.0
     assert d5["max_dist_from_home_km"] > 4000
     assert len(d5["cities"]) >= 1
+
+
+from pipeline.derive import derive_trips
+
+
+def test_derive_trips_detects_sf_trip(parsed):
+    home = tag_geo(parsed)
+    trips = derive_trips(parsed, home)
+    assert len(trips) == 2
+    t = trips[0]
+    flight_out = next(a for a in parsed.activities if a.mode == "FLYING")
+    assert t["start"] == flight_out.start          # anchored to outbound flight
+    home_return = [v for v in parsed.visits if v.place_id == "HOME1"][-1]
+    assert t["end"] == home_return.start
+    assert t["nights"] == 2
+    assert t["max_dist_from_home_km"] > 4000
+    assert t["total_km_by_mode"]["FLYING"] == 8680.0
+    assert t["total_km_by_mode"]["CYCLING"] == 4.0
+    assert len(t["anchor_cities"]) >= 1
+    assert t["memory"] == {"distance_from_origin_km": 4340, "destination_place_ids": ["MTV1"]}
+
+    india = next(v for v in parsed.visits if v.place_id == "INDIA1")
+    t2 = trips[1]
+    assert t2["start"] == india.start
+    assert t2["end"] == india.end
+    assert t2["nights"] == 1
+    assert t2["memory"] is None

@@ -104,3 +104,57 @@ def derive_daily(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
             r[k] = round(r[k], 3)
         out.append(r)
     return out
+
+
+def _nights(start: int, end: int, tz_min: int) -> int:
+    d0 = datetime.fromtimestamp(start + tz_min * 60, tz=timezone.utc).date()
+    d1 = datetime.fromtimestamp(end + tz_min * 60, tz=timezone.utc).date()
+    return (d1 - d0).days
+
+
+def derive_trips(parsed: Parsed, home: tuple[float, float]) -> list[dict]:
+    flights = [a for a in parsed.activities if a.mode == "FLYING"]
+    trips: list[dict] = []
+    cur: dict | None = None
+
+    for v in parsed.visits:
+        dist = v.dist_from_home_km if v.dist_from_home_km is not None else \
+            haversine_km(home[0], home[1], v.lat, v.lng)
+        away = dist > TRIP_RADIUS_KM
+        if cur is None and away:
+            start = v.start
+            for f in flights:
+                if 0 <= v.start - f.end <= 6 * 3600:
+                    start = min(start, f.start)
+            cur = {"start": start, "tz": v.tz, "_cities": [], "max_dist_from_home_km": 0.0}
+        if cur is not None:
+            if away:
+                if v.city and (not cur["_cities"] or cur["_cities"][-1] != v.city):
+                    cur["_cities"].append(v.city)
+                cur["max_dist_from_home_km"] = max(cur["max_dist_from_home_km"], dist)
+            else:
+                cur["end"] = v.start
+                if _nights(cur["start"], cur["end"], cur["tz"]) >= 1:
+                    trips.append(cur)
+                cur = None
+    if cur is not None:  # export ends while away
+        cur["end"] = parsed.visits[-1].end
+        if _nights(cur["start"], cur["end"], cur["tz"]) >= 1:
+            trips.append(cur)
+
+    for t in trips:
+        km: dict[str, float] = defaultdict(float)
+        for a in parsed.activities:
+            if a.start >= t["start"] and a.end <= t["end"]:
+                km[a.mode] += a.distance_m / 1000
+        t["total_km_by_mode"] = {k: round(v, 3) for k, v in km.items()}
+        t["nights"] = _nights(t["start"], t["end"], t.pop("tz"))
+        t["anchor_cities"] = t.pop("_cities")
+        t["max_dist_from_home_km"] = round(t["max_dist_from_home_km"], 2)
+        t["memory"] = None
+        for m in parsed.memory_trips:
+            if m.start < t["end"] and m.end > t["start"]:
+                t["memory"] = {"distance_from_origin_km": m.distance_from_origin_km,
+                               "destination_place_ids": m.destination_place_ids}
+                break
+    return trips
