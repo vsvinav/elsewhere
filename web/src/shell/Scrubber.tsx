@@ -11,13 +11,13 @@ export function Scrubber() {
   const playhead = useStore((s) => s.playhead)
   const playing = useStore((s) => s.playing)
   const speed = useStore((s) => s.speed)
-  const { setTimeRange, setPlayhead, setPlaying, setSpeed } = useStore.getState()
+  const { setTimeRange, setPlayhead, setPlaying, setSpeed, setFollow } = useStore.getState()
   const pos = playhead ?? r0
   const pct = (t: number) => ((t - m0) / (m1 - m0)) * 100
 
   return (
     <div className="card scrubber">
-      <button className="play" onClick={() => { if (!playing && (playhead == null || playhead >= r1)) setPlayhead(r0); setPlaying(!playing) }}>
+      <button className="play" onClick={() => { if (!playing && (playhead == null || playhead >= r1)) setPlayhead(r0); if (!playing) setFollow(true); setPlaying(!playing) }}>
         {playing ? '❚❚' : '▶'}
       </button>
       <div className="speeds">

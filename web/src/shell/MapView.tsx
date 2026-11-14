@@ -46,20 +46,25 @@ export function MapView() {
   const following = state.follow && state.activeInsight === 'replay'
   useEffect(() => {
     if (!following) return
-    const t = performance.now()
-    if (t - lastFly.current < FOLLOW_INTERVAL_MS) return
     const w = whereaboutsAt(data, now)
     if (!w) return
+    const zoom = zoomForMode(w.mode)
+    if (state.playing) {
+      // Pin the current location to screen centre every frame; ease zoom so mode changes don't snap.
+      setView((v) => ({ ...v, longitude: w.lng, latitude: w.lat, zoom: v.zoom + (zoom - v.zoom) * 0.04,
+        transitionDuration: 0, transitionInterpolator: undefined }))
+      return
+    }
+    const t = performance.now()
+    if (t - lastFly.current < FOLLOW_INTERVAL_MS) return
     setView((v) => {
       const d = distanceKm(w, { lng: v.longitude, lat: v.latitude })
-      const zoom = zoomForMode(w.mode)
       if (d < FOLLOW_TRIGGER_KM && Math.abs(zoom - v.zoom) < ZOOM_TRIGGER) return v
       lastFly.current = t
-      // Zoom follows how you're moving (walk = street level, flight = continent); far jumps fly slower.
       return { ...v, longitude: w.lng, latitude: w.lat, zoom,
         transitionDuration: d > 500 ? 2500 : 1000, transitionInterpolator: new FlyToInterpolator({ speed: 1.5 }) }
     })
-  }, [data, now, following])
+  }, [data, now, following, state.playing])
 
   return (
     <DeckGL
