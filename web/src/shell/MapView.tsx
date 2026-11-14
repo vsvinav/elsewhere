@@ -6,7 +6,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { insightById } from '../insights/registry'
-import { distanceKm, positionAt } from '../analytics/position'
+import { distanceKm, positionAt, whereaboutsAt, zoomForMode } from '../analytics/position'
 
 // Vite's dev transform injects browser-only client code into maplibre's worker module,
 // so serve a pristine copy from public/ (copied by the `postinstall` script).
@@ -17,7 +17,8 @@ const STYLES = {
   light: 'https://tiles.openfreemap.org/styles/positron',
 }
 const FOLLOW_INTERVAL_MS = 1200
-const FOLLOW_TRIGGER_KM = 3
+const FOLLOW_TRIGGER_KM = 0.3
+const ZOOM_TRIGGER = 0.75
 
 export function MapView() {
   const data = useData()
@@ -34,15 +35,15 @@ export function MapView() {
     if (!state.follow) return
     const t = performance.now()
     if (t - lastFly.current < FOLLOW_INTERVAL_MS) return
-    const pos = positionAt(data, now)
-    if (!pos) return
+    const w = whereaboutsAt(data, now)
+    if (!w) return
     setView((v) => {
-      const d = distanceKm(pos, { lng: v.longitude, lat: v.latitude })
-      if (d < FOLLOW_TRIGGER_KM) return v
+      const d = distanceKm(w, { lng: v.longitude, lat: v.latitude })
+      const zoom = zoomForMode(w.mode)
+      if (d < FOLLOW_TRIGGER_KM && Math.abs(zoom - v.zoom) < ZOOM_TRIGGER) return v
       lastFly.current = t
-      // Far jumps (flights) zoom out so the whole hop reads; local moves keep the zoom.
-      const zoom = d > 500 ? 5 : d > 60 ? 9 : Math.max(v.zoom, 10)
-      return { ...v, longitude: pos.lng, latitude: pos.lat, zoom,
+      // Zoom follows how you're moving (walk = street level, flight = continent); far jumps fly slower.
+      return { ...v, longitude: w.lng, latitude: w.lat, zoom,
         transitionDuration: d > 500 ? 2500 : 1000, transitionInterpolator: new FlyToInterpolator({ speed: 1.5 }) }
     })
   }, [data, now, state.follow])

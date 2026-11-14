@@ -1,4 +1,4 @@
-import { positionAt, distanceKm } from './position'
+import { positionAt, distanceKm, whereaboutsAt } from './position'
 import type { Data } from '../data/types'
 
 const data = {
@@ -23,4 +23,11 @@ test('gap falls back to last visit; before everything is null', () => {
 test('distanceKm Boston to SF', () => {
   const d = distanceKm({ lng: -71.0589, lat: 42.3601 }, { lng: -122.4194, lat: 37.7749 })
   expect(d).toBeGreaterThan(4330); expect(d).toBeLessThan(4350)
+})
+
+test('whereaboutsAt reports movement mode', () => {
+  const d = { visits: [{ start: 0, end: 10, lvl: 0, lng: 1, lat: 1 }],
+    activities: [{ start: 10, end: 30, s_lng: 1, s_lat: 1, e_lng: 3, e_lat: 3, mode: 'FLYING' }] } as unknown as Data
+  expect(whereaboutsAt(d, 5)?.mode).toBe('STILL')
+  expect(whereaboutsAt(d, 20)?.mode).toBe('FLYING')
 })
