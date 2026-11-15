@@ -1,3 +1,5 @@
+import { snapshotCanvases } from './snapshot'
+
 const PAD = 72
 const SCALE = 2
 export type Format = 'free' | 'story' | 'post'
@@ -5,7 +7,7 @@ const SIZE: Record<Exclude<Format, 'free'>, [number, number]> = { story: [1080, 
 
 /** What the print keeps: controls and affordances are for the screen, not the card. */
 export const printable = (n: Node) =>
-  !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save') || n.classList.contains('yearwheel')))
+  !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save') || n.classList.contains('yearwheel') || n.classList.contains('hint')))
 
 /** Renders one bill to a PNG on its own stock and downloads it; story (9:16) and post (4:5) letterbox the bill on the sheet with a brand line. */
 export async function saveCard(pass: HTMLElement, name: string, format: Format = 'free') {
@@ -13,7 +15,13 @@ export async function saveCard(pass: HTMLElement, name: string, format: Format =
   const css = getComputedStyle(pass)
   const paper = css.backgroundColor && css.backgroundColor !== 'rgba(0, 0, 0, 0)' ? css.backgroundColor : getComputedStyle(document.documentElement).getPropertyValue('--stock').trim() || '#efe6d2'
   const ink = css.color
-  const card = await toCanvas(pass, { pixelRatio: SCALE, filter: printable })
+  // WebGL canvases (the globe) are frozen to images first so the print shows the frame on screen at the click.
+  const snap = snapshotCanvases(pass)
+  let card: HTMLCanvasElement
+  try {
+    await snap.ready
+    card = await toCanvas(pass, { pixelRatio: SCALE, filter: printable })
+  } finally { snap.restore() }
   const out = document.createElement('canvas')
   const g = out.getContext('2d')!
   if (format === 'free') {
