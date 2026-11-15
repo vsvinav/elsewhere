@@ -2,33 +2,22 @@ import { useRef, useState, type DragEvent } from 'react'
 import { useData } from '../data/DataContext'
 import { useRecord } from './App'
 import { STAGE_LABEL } from '../ingest'
-import { settings, useSettings, type MapProvider } from '../ingest/settings'
-import { UsageRow } from '../usage/Meter'
+import { useStore } from '../store/useStore'
 import { Field } from '../world'
-import { KeyCheck } from '../profile/KeyCheck'
-import { date, n0 } from '../world/fmt'
+import { n0 } from '../world/fmt'
 
-/** The last pass on Home: where a visitor's own export goes in, and where their Google key lives. */
+/** The last pass on Home: where a visitor's own export goes in. Keys live on the Settings page. */
 export function YourRecord() {
   const data = useData()
   const rec = useRecord()
-  const { mapsKey, mapId, mapProvider } = useSettings()
+  const openSettings = useStore((s) => s.openSettings)
   const [over, setOver] = useState(false)
-  const [key, setKey] = useState(mapsKey)
-  const [id, setId] = useState(mapId)
-  const [showKey, setShowKey] = useState(false)
   const file = useRef<HTMLInputElement>(null)
   const busy = rec.stage !== null
   const named = Object.values(data.places).filter((p) => p.name).length
   const photos = Object.values(data.places).filter((p) => p.photo).length
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) rec.importFile(f) }
-  const saveKeys = () => {
-    const changed = key !== mapsKey || id !== mapId
-    settings.setKey(key.trim()); settings.set({ mapId: id.trim() })
-    // The Maps script loads once per page with one key; a new key needs a fresh page. The check result is kept in settings, so it survives.
-    if (changed && 'google' in window) location.reload()
-  }
 
   return (
     <div className={over ? 'drop-over' : ''}>
@@ -61,29 +50,8 @@ export function YourRecord() {
           {rec.importError && <div className="dz-err">Couldn't read that file: {rec.importError.message}</div>}
         </div>
 
-        <div className="fields keys">
-          <div className="field">
-            <div className="lab">Google Maps key</div>
-            <input className="val" type={showKey ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} onFocus={() => setShowKey(true)} onBlur={() => { setShowKey(false); saveKeys() }} placeholder="AIza…" aria-label="Google Maps API key" spellCheck={false} autoComplete="off" />
-          </div>
-          <div className="field">
-            <div className="lab">Map ID (optional, vector tiles)</div>
-            <input className="val" value={id} onChange={(e) => setId(e.target.value)} onBlur={saveKeys} placeholder="none" aria-label="Google Map ID" spellCheck={false} autoComplete="off" />
-          </div>
-          <div className="field">
-            <div className="lab">Map tiles</div>
-            <select className="val" value={mapProvider} onChange={(e) => settings.set({ mapProvider: e.target.value as MapProvider })} aria-label="Map provider">
-              <option value="auto">Google if the key works, else OpenStreetMap</option>
-              <option value="google">Google Maps</option>
-              <option value="osm">OpenStreetMap (free, no key)</option>
-            </select>
-          </div>
-          <Field label="Key used for">Map tiles · place names · photos</Field>
-          <KeyCheck />
-          <UsageRow />
-        </div>
         {rec.enrichError && <div className="dz-err">Places lookups stopped: {rec.enrichError.message}</div>}
-        <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; if you restrict it to websites, add this site's address. The same key works on the phone app only without a website restriction. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>
+        <p className="fine"><button className="link" onClick={openSettings}>Keys live in Settings →</button></p>
     </div>
   )
 }

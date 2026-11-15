@@ -7,6 +7,9 @@ export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 
 export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play']
 /** Replay pace: multiplier on the per-segment timing (each leg plays for a few seconds, each stay for about one). */
 
+/** Hash for the Settings page; not a tab, it sits over whichever tab was open. */
+export const SETTINGS_HASH = 'settings'
+
 /** Where a readable figure leads: a date window, one pin, a trip, or a set of pins. */
 export type Door =
   | { kind: 'range'; from: number; to: number; label: string }
@@ -22,6 +25,12 @@ export interface Focus { ids: string[] | null; n: number }
 export interface Store {
   tab: Tab
   setTab(t: Tab): void
+  /** Settings is a page over the current tab; closing it returns there. */
+  settingsOpen: boolean
+  openSettings(): void
+  closeSettings(): void
+  /** Follow the address bar after the visitor navigates (back button, typed hash). */
+  syncFromHash(): void
   playhead: number | null
   playing: boolean
   speed: number
@@ -83,12 +92,28 @@ export function useThrottledPlayhead(ms: number): number | null {
 
 const onMap = (t: Tab) => t === 'map' || t === 'play'
 /** State for landing on a tab: the replay starts following; walking off the map by the nav leaves a door's origin and framing behind. */
-const entering = (tab: Tab): Partial<Store> => ({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) })
+const entering = (tab: Tab): Partial<Store> => ({ tab, settingsOpen: false, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) })
 
 export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
   // Walking off the map by the nav leaves the door's origin and framing behind.
   setTab: (tab) => { location.hash = tab; set(entering(tab)) },
+  settingsOpen: location.hash.slice(1) === SETTINGS_HASH,
+  openSettings: () => { location.hash = SETTINGS_HASH; set({ settingsOpen: true, playing: false }) },
+  closeSettings: () => set((s) => { location.hash = s.tab; return { settingsOpen: false } }),
+  syncFromHash: () => {
+    const h = location.hash.slice(1)
+    const s = get()
+    if (h === SETTINGS_HASH) { if (!s.settingsOpen) s.openSettings(); return }
+    if (s.settingsOpen) set({ settingsOpen: false })
+    const t = (h || 'home') as Tab
+    if (t === s.tab) return
+    if (s.origin && t === s.origin.backTab) {
+      const { scrollY } = s.origin
+      s.leaveDoor()
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollTo({ top: scrollY })))
+    } else if ((TABS as readonly string[]).includes(t)) set(entering(t)) // the address bar already moved; writing it back would push over the Forward entry
+  },
   playhead: null,
   playing: false,
   speed: 1,
@@ -153,12 +178,3 @@ export const useStore = create<Store>((set, get) => ({
  * a fresh load never writes one, so Back from the first door lands there. Returning through a door's origin also
  * restores where the reader was on the page.
  */
-export function syncTabFromHash() {
-  const t = (location.hash.slice(1) || 'home') as Tab
-  const { tab, origin, leaveDoor } = useStore.getState()
-  if (t === tab) return
-  if (origin && t === origin.backTab) {
-    leaveDoor()
-    requestAnimationFrame(() => requestAnimationFrame(() => scrollTo({ top: origin.scrollY })))
-  } else if ((TABS as readonly string[]).includes(t)) useStore.setState(entering(t)) // the address bar already moved; writing it back would push over the Forward entry
-}

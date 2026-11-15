@@ -66,6 +66,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .tourline .caps b { color: var(--red); font-weight: 800; }
 .tourline .home { display: flex; align-items: center; gap: 14px; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .tourline .home:hover .caps { color: var(--red); }
+.tourline .chip { padding: 0 10px; border: 0; border-left: 2px dashed var(--ink-3); background: none; color: var(--ink); font: 700 12px/40px var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
+.tourline .chip:hover, .tourline .chip[aria-current='page'] { color: var(--red); }
 .tourline .account { position: relative; }
 .tourline:has(.account[open]), .rangebar:has(.datepick.open) { z-index: 12; }
 .tourline .account summary { list-style: none; cursor: pointer; padding: 0 2px 0 10px; border-left: 2px dashed var(--ink-3); font: 700 12px/40px var(--body); color: var(--ink); }
@@ -494,6 +496,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .fields.keys { margin-top: 28px; }
 .fields.keys input.val { width: 26ch; font-size: 14px; letter-spacing: 0.02em; }
 .fine { font: 500 12.5px/1.5 var(--body); color: var(--ink-3); margin: 18px 0 0; max-width: 70ch; }
+.fine .link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.fine .link:hover { color: var(--red); }
 .ink .dropzone { border-color: var(--stock-3); } .ink .dz-sub { color: var(--stock-3); } .ink .dz-sub code { background: var(--ink-2); color: var(--stock); }
 .ink .btn { background: var(--stock); color: var(--ink); border-color: var(--stock); } .ink .btn:hover { background: var(--red); border-color: var(--red); color: var(--stock); }
 .ink .btn.quiet { background: transparent; color: var(--stock); } .ink .btn.quiet:hover { background: var(--stock); color: var(--ink); }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { syncTabFromHash, useStore, type Door } from './useStore'
+import { useStore, type Door } from './useStore'
+const syncTabFromHash = () => useStore.getState().syncFromHash()
 
 const reset = () => { location.hash = 'home'; useStore.setState({ tab: 'home', range: null, pin: null, playhead: null, origin: null, focus: null, hiddenCats: ['food'] as never, playing: false }) }
 
@@ -169,5 +170,36 @@ describe('browser Back', () => {
     expect(history.length).toBe(before)
     expect(hash).not.toHaveBeenCalled()
     hash.mockRestore()
+  })
+})
+
+const back = (to: string) => { location.hash = to; useStore.getState().syncFromHash() }
+
+beforeEach(() => { location.hash = ''; useStore.setState({ tab: 'home', settingsOpen: false, origin: null }) })
+
+describe('settings over the tabs', () => {
+  it('opens at #settings and keeps the tab underneath', () => {
+    useStore.getState().setTab('stats')
+    useStore.getState().openSettings()
+    expect(location.hash).toBe('#settings')
+    expect(useStore.getState()).toMatchObject({ tab: 'stats', settingsOpen: true })
+  })
+  it('back from #settings closes Settings and leaves the hash alone', () => {
+    useStore.getState().setTab('stats')
+    useStore.getState().openSettings()
+    back('stats')
+    expect(useStore.getState()).toMatchObject({ tab: 'stats', settingsOpen: false })
+    expect(location.hash).toBe('#stats')
+  })
+  it('closing returns to the tab', () => {
+    useStore.getState().setTab('trips')
+    useStore.getState().openSettings()
+    useStore.getState().closeSettings()
+    expect(location.hash).toBe('#trips')
+    expect(useStore.getState().settingsOpen).toBe(false)
+  })
+  it('a typed #settings opens it', () => {
+    back('settings')
+    expect(useStore.getState().settingsOpen).toBe(true)
   })
 })

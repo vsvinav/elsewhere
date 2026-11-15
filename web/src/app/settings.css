@@ -1,0 +1,30 @@
+/* Settings: one sheet over the tour, sections ruled like the bills, same fields as Backstage. */
+.settings { display: grid; gap: 40px; }
+.settings .back { margin: 0; justify-self: start; padding: 10px 14px; font-size: 13px; }
+.settings h1 { margin: 0; font: 900 clamp(64px, 11vw, 160px)/0.82 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
+.settings .setting { border-top: var(--rule); padding-top: 22px; display: grid; gap: 4px; justify-items: start; }
+.settings .setting h2 { margin: 0 0 8px; font: 900 clamp(28px, 3.4vw, 44px)/0.9 var(--display); text-transform: uppercase; letter-spacing: 0.01em; }
+.settings .setting .fields.keys { margin-top: 10px; }
+.settings .field label.lab { display: block; cursor: pointer; }
+.settings .field select.val { background: transparent; border: 0; border-bottom: 2px solid var(--ink); padding: 0 0 2px; color: var(--ink); font-size: 14px; }
+.settings .field select.val:focus { outline: 0; border-bottom-color: var(--red); }
+.settings .field input.val.wide { width: 36ch; }
+.settings .val-row { display: flex; align-items: flex-end; gap: 10px; }
+.settings .val-row .val { margin-top: 6px; }
+.settings .show { padding: 0 0 2px; border: 0; background: none; color: var(--ink-3); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
+.settings .show[aria-pressed='true'], .settings .show:hover { color: var(--red); }
+.settings .st-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.settings .st-status { font: 600 14px/1.4 var(--body); color: var(--red); max-width: 60ch; }
+.settings .st-status.ok { color: var(--ink); }
+.settings .st-status:empty { display: none; }
+.settings .st-units { display: flex; gap: 10px; margin-top: 10px; }
+.settings .st-units .btn { margin: 0; cursor: pointer; }
+.settings .st-units input { position: absolute; opacity: 0; width: 0; height: 0; }
+.settings .st-units .btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offset: 2px; }
+.settings .setting .fine { margin-top: 14px; }
+.settings .setting .usage { display: grid; gap: 4px; align-content: start; }
+.settings .setting .usage .lab { font: 700 11px/1 var(--body); font-stretch: 85%; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
+.settings .setting .usage > span:nth-child(2) { font: 600 18px/1.2 var(--body); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.settings .setting .usage .fine { margin: 0; }
+.settings .setting .usage button { justify-self: start; padding: 0; border: 0; background: none; color: var(--ink-3); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; text-decoration: underline; cursor: pointer; }
+.settings .setting .usage button:hover { color: var(--red); }
