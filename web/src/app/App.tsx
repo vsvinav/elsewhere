@@ -6,7 +6,8 @@ import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
-import { enrichPlaces } from '../ingest/enrich'
+import { enrichPlaces, type Progress } from '../ingest/enrich'
+import { NamingStamp } from './NamingStamp'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
 import { StubNav } from './StubNav'
@@ -38,6 +39,7 @@ export function App() {
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
+  const [naming, setNaming] = useState<Progress>(null)
   const [editing, setEditing] = useState(false)
   const prof = useProfile()
   const { mapsKey } = useSettings()
@@ -70,7 +72,7 @@ export function App() {
   useEffect(() => {
     if (!record) return
     setEnrichError(null)
-    return enrichPlaces(record, { lookup: spend ? mapsKey : '', photo: mapsKey }, setPlaces, setEnrichError)
+    return enrichPlaces(record, { lookup: spend ? mapsKey : '', photo: mapsKey }, setPlaces, setEnrichError, setNaming)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sha, mapsKey, spend])
   const data = useMemo(() => (record && places ? { ...record, places } : record), [record, places])
@@ -113,6 +115,7 @@ export function App() {
         </details>
       </div>
       <StubNav />
+      <NamingStamp progress={naming} />
       {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
     </div>
   )

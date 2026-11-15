@@ -40,14 +40,17 @@ async function lookup(id: string, key: string): Promise<Cached> {
 
 /** `lookup` pays for Details calls (empty = none); `photo` only builds URLs for photos already cached. */
 export interface Keys { lookup: string; photo: string }
+/** How far the lookups have got; `null` once there is nothing left to fetch. */
+export type Progress = { done: number; total: number } | null
 
 /**
  * Names and photographs places with the visitor's key. Calls `onPlaces` first with what is cached,
  * then again as lookups land. Returns a stop function.
  */
-export function enrichPlaces(data: Data, keys: Keys, onPlaces: (p: Record<string, Place>) => void, onError: (e: Error) => void): () => void {
+export function enrichPlaces(data: Data, keys: Keys, onPlaces: (p: Record<string, Place>) => void, onError: (e: Error) => void, onProgress: (p: Progress) => void = () => {}): () => void {
   let stopped = false
   const key = keys.lookup
+  const stop = () => { if (!stopped) { stopped = true; onProgress(null) } }
   ;(async () => {
     const cache = (await kv.get<Record<string, Cached>>('places').catch(() => undefined)) ?? {}
     if (stopped) return
@@ -55,18 +58,22 @@ export function enrichPlaces(data: Data, keys: Keys, onPlaces: (p: Record<string
     if (!key) return
     const queue = wanted(data.places, cache)
     if (!queue.length) return
+    const total = queue.length
     let landed = 0
+    onProgress({ done: 0, total })
     const flush = async () => { await kv.set('places', cache); if (!stopped) onPlaces(apply(data.places, cache, keys.photo)) }
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
       while (queue.length && !stopped) {
         const id = queue.shift()!
-        try { cache[id] = await lookup(id, key) } catch (e) { stopped = true; onError(e as Error); return }
-        if (++landed % 12 === 0) await flush()
+        try { cache[id] = await lookup(id, key) } catch (e) { stopped = true; onError(e as Error); onProgress(null); return }
+        onProgress({ done: ++landed, total })
+        if (landed % 12 === 0) await flush()
       }
     }))
     await flush()
+    if (!stopped) onProgress(null)
   })()
-  return () => { stopped = true }
+  return stop
 }
 
 const ADDRESS_TYPES = new Set(['street_address', 'premise', 'subpremise', 'route', 'plus_code', 'postal_code', 'locality', 'sublocality', 'sublocality_level_1', 'neighborhood', 'political', 'geocode', 'intersection'])

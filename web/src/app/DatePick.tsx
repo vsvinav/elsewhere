@@ -72,4 +72,59 @@ export function DatePick({ label, value, min, max, other, onChange }: Props) {
   )
 }
 
+interface MonthProps {
+  label: string
+  /** First second of the chosen month (UTC), or 0 / null for the open end. */
+  value: number | null
+  min: number
+  max: number
+  /** What the open end means: "Start of record" or "Still". */
+  openLabel: string
+  onChange(month: number | null): void
+}
+
+/** The same chip and popover, but a year of months; the open end is a labelled choice too. */
+export function MonthPick({ label, value, min, max, openLabel, onChange }: MonthProps) {
+  const [open, setOpen] = useState(false)
+  const [vy, setYear] = useState(() => ymd(value || min)[0])
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (open) setYear(ymd(value || min)[0]) }, [open, value, min])
+  useEffect(() => {
+    if (!open) return
+    const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    addEventListener('pointerdown', away); addEventListener('keydown', esc)
+    return () => { removeEventListener('pointerdown', away); removeEventListener('keydown', esc) }
+  }, [open])
+  const [miny, minm] = ymd(min), [maxy, maxm] = ymd(max)
+  const [py, pm] = value ? ymd(value) : [0, 0]
+  const pick = (m: number | null) => { onChange(m); setOpen(false) }
+  return (
+    <div className={`datepick month${open ? ' open' : ''}`} ref={root}>
+      <button type="button" className="datepick-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span>{label}</span><b>{value ? `${MONTHS[pm].slice(0, 3)} ${py}` : openLabel}</b><i aria-hidden>▾</i>
+      </button>
+      {open && (
+        <div className="datepick-pop" role="dialog" aria-label={`${label} month`}>
+          <div className="datepick-head">
+            <button type="button" onClick={() => setYear(vy - 1)} disabled={vy <= miny} aria-label="Previous year">←</button>
+            <h3>{vy}</h3>
+            <button type="button" onClick={() => setYear(vy + 1)} disabled={vy >= maxy} aria-label="Next year">→</button>
+          </div>
+          <div className="datepick-grid months" role="grid">
+            {MONTHS.map((name, m) => {
+              const ts = utc(vy, m, 1), dead = vy * 12 + m < miny * 12 + minm || vy * 12 + m > maxy * 12 + maxm
+              const on = !!value && py === vy && pm === m
+              return <button type="button" key={m} className={on ? 'pick' : ''} disabled={dead} onClick={() => pick(ts)} aria-pressed={on}>{name.slice(0, 3)}</button>
+            })}
+          </div>
+          <div className="datepick-foot">
+            <button type="button" onClick={() => pick(null)}>{openLabel}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export { DAY }

@@ -30,6 +30,13 @@
 .datepick-foot button { border: 0; background: none; color: var(--ink-2); font: 700 11px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; padding: 4px 0; }
 .datepick-foot button:hover { color: var(--red); }
 
+.datepick-grid.months { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.datepick-grid.months button { aspect-ratio: auto; height: 36px; font: 700 12px/1 var(--body); letter-spacing: 0.1em; text-transform: uppercase; }
+.datepick-grid.months button:hover:not(:disabled) { background: var(--stock-2); }
+.datepick-grid.months button.pick:hover { background: var(--red); }
+.datepick.month .datepick-chip { border: 2px solid var(--ink); border-right-width: 2px; }
+.datepick.month .datepick-chip span { display: inline; }
+
 @media (max-width: 1100px) {
   .datepick-chip span { display: none; }
   .datepick-pop { right: auto; left: 0; }

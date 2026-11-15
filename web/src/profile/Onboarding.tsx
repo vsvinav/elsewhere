@@ -7,6 +7,11 @@ import { profile as store, type Home, type Profile, type Work } from './profile'
 import { sleepPlaces, weekdayPlaces, moveMonths, type Suggestion } from './suggest'
 import { address } from '../ingest/nominatim'
 import { clusterName } from '../ingest/enrich'
+import { MonthPick } from '../app/DatePick'
+const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "2024-06" → "Jun 2024", matching the month chips. */
+const monthName = (ym: string) => `${MON[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`
 import './onboarding.css'
 
 type Step = 'start' | 'name' | 'home' | 'moved' | 'work' | 'units'
@@ -132,7 +137,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
           )}
 
           {step === 'moved' && (
-            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => m.month).join(' and ')}. Tap a place to add it as a home, then set the month each one started. Give a home an until and it can be added again for a later stint.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
+            <Q n={3} title="Did you live anywhere else?" sub={moves.length ? `Your nights shift in ${moves.map((m) => monthName(m.month)).join(', ')}. Tap a place to add it as a home, then set the month each one started. Give a home an until and it can be added again for a later stint.` : 'Add another home and the month it started. Skip if you stayed put.'} onBack={back} onNext={next} skip={next}>
               <div className="ob-tags">
                 {sleep.map((s) => {
                   // A place already used as a home can come back as a later stint once its earlier one has an "until".
@@ -142,9 +147,9 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   const from = last?.to ?? (mv ? Date.parse(mv.month + '-01') / 1000 : range[0])
                   return (
                     <button key={s.place_id} className="tag ob-tag" onClick={() => setHomes([...homes, asHome(s, from)])}>
-                      <span className="lab">{last ? 'moved back' : mv ? `from ${mv.month}` : s.cc || '—'}</span>
+                      <span className="lab">{last ? 'moved back' : mv ? `from ${monthName(mv.month)}` : s.cc || '—'}</span>
                       <span className="name">{label(s)}</span>
-                      <span className="sub">{last ? `again, after ${monthOf(last.to!)}` : `${s.score} ${s.score === 1 ? 'night' : 'nights'} · ${Math.round(s.share * 100)}% of nights then`}</span>
+                      <span className="sub">{last ? `again, after ${monthName(monthOf(last.to!))}` : `${s.score} ${s.score === 1 ? 'night' : 'nights'} · ${Math.round(s.share * 100)}% of nights then`}</span>
                     </button>
                   )
                 })}
@@ -202,12 +207,10 @@ function Q({ n, title, sub, children, onNext, onBack, skip, nextLabel = 'Next' }
   )
 }
 
-const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
 
 type Stint = { name?: string; city?: string; from: number; to: number | null }
 /** Chosen homes or jobs with the month each began and ended; blank means "from the start of the record" / "still". */
 function StintList<T extends Stint>({ items, set, range, word, removable, hint }: { items: T[]; set: (h: T[]) => void; range: [number, number]; word: string; removable: boolean; hint?: string }) {
-  const month = (v: string) => (v ? Date.parse(v + '-01') / 1000 : 0)
   return (
     <div className="ob-homelist">
       {hint && <p className="ob-hint">{hint}</p>}
@@ -217,8 +220,8 @@ function StintList<T extends Stint>({ items, set, range, word, removable, hint }
           return (
             <li key={`${name},${h.from}`}>
               <span className="name">{name}{h.name && h.city && h.name !== h.city && <small className="sub"> · {h.city}</small>}</span>
-              <label className="ob-month"><span className="lab">{word} since</span><input type="month" value={h.from ? monthOf(h.from) : ''} min={monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => set(items.map((x) => x === h ? { ...x, from: month(e.target.value) } : x))} aria-label={`${name} ${word} since`} /></label>
-              <label className="ob-month"><span className="lab">until</span><input type="month" value={h.to ? monthOf(h.to) : ''} min={h.from ? monthOf(h.from) : monthOf(range[0])} max={monthOf(range[1])} onChange={(e) => set(items.map((x) => x === h ? { ...x, to: e.target.value ? month(e.target.value) : null } : x))} aria-label={`${name} ${word} until`} /></label>
+              <MonthPick label={`${word} since`} value={h.from || null} min={range[0]} max={range[1]} openLabel="Start of record" onChange={(m) => set(items.map((x) => x === h ? { ...x, from: m ?? 0 } : x))} />
+              <MonthPick label="until" value={h.to} min={h.from || range[0]} max={range[1]} openLabel="Still" onChange={(m) => set(items.map((x) => x === h ? { ...x, to: m } : x))} />
               {removable && <button className="btn quiet" onClick={() => set(items.filter((x) => x !== h))}>Remove</button>}
             </li>
           )

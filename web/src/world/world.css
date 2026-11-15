@@ -581,3 +581,17 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .pin-facts dt { font: 800 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
 .pin-facts dd { margin: 2px 0 0; font: 600 14px/1.1 var(--body); }
 @media (max-width: 720px) { .pin-card { right: auto; left: -3px; width: min(260px, 90vw); } }
+
+/* Naming stamp: turns above the ticket strip while Places lookups land */
+.naming {
+  position: fixed; left: 20px; bottom: calc(var(--strip-h, 0px) + 16px); z-index: 7;
+  width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; align-content: center; gap: 2px;
+  --tilt: -9deg; border: 4px solid var(--red); color: var(--red); background: var(--stock); transform: rotate(var(--tilt));
+  font: 800 9px/1.1 var(--body); font-stretch: 85%; letter-spacing: 0.18em; text-transform: uppercase; text-align: center;
+  animation: slap 0.4s var(--ease) both;
+}
+.naming .ring { position: absolute; inset: 4px; border-radius: 50%; border: 2px dashed var(--red); animation: stamp-turn 6s linear infinite; }
+.naming b { font: 900 24px/0.9 var(--display); letter-spacing: 0; }
+.naming b small { font: 700 10px/1 var(--body); letter-spacing: 0.08em; margin-left: 1px; }
+@keyframes stamp-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .naming, .naming .ring { animation: none; } }
