@@ -8,7 +8,8 @@ vi.mock('../ingest/db', () => ({
   },
 }))
 
-import { clearPhotos, deletePhoto, listPhotos, photoBlob, savePhoto, updatePhoto, usePhotos } from './store'
+import { clearPhotos, deletePhoto, forPlace, listPhotos, photoBlob, savePhoto, updatePhoto, usePhotos } from './store'
+import { clearRecord } from '../ingest'
 
 const NOW = Date.UTC(2025, 10, 15, 12)
 const jpeg = () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' })
@@ -52,6 +53,14 @@ describe('photo storage', () => {
     expect(usePhotos.getState().photos!.map((q) => q.placeId)).toEqual(['x'])
     await usePhotos.getState().clear()
     expect(usePhotos.getState().photos).toEqual([])
+    expect(await listPhotos()).toEqual([])
+  })
+  it('Start over empties the store as well as the shelf, so no stale strip survives', async () => {
+    await usePhotos.getState().add(jpeg(), { ts: NOW, placeId: 'x' })
+    expect(forPlace(usePhotos.getState().photos, 'x').length).toBe(1)
+    await clearRecord()
+    expect(usePhotos.getState().photos).toEqual([])
+    expect(forPlace(usePhotos.getState().photos, 'x')).toEqual([])
     expect(await listPhotos()).toEqual([])
   })
 })
