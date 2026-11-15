@@ -3,13 +3,12 @@ import type { Data } from '../data/types'
 import { Field, Stamp } from '../world'
 import { KeyCheck, useKeyGate } from './KeyCheck'
 import { NamingStamp } from '../app/NamingStamp'
-import type { Progress } from '../ingest/enrich'
 import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings } from '../ingest/settings'
 import { profile as store, type Home, type Profile, type Work } from './profile'
 import { sleepPlaces, weekdayPlaces, moveMonths, type Suggestion } from './suggest'
 import { address } from '../ingest/nominatim'
-import { clusterName } from '../ingest/enrich'
+import { clusterName, useNaming } from '../ingest/places'
 import { MonthPick } from '../app/DatePick'
 const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -62,24 +61,24 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   // Names: a proper name from any Google label in the cluster (one cached Details call per label, three at most),
   // else OpenStreetMap's free reverse geocoder for the street, one lookup a second.
   const [names, setNames] = useState<Record<string, string>>({})
-  const [naming, setNaming] = useState<Progress>(null)
+  const naming = useNaming()
+  const [asking, setAsking] = useState(false)
   useEffect(() => {
     let live = true
     const put = (id: string, n: string | null) => { if (live && n) setNames((m) => (m[id] ? m : { ...m, [id]: n })) }
     const todo = data ? [...sleep.slice(0, 8), ...weekday.slice(0, 6)] : []
-    let done = 0
-    const tick = () => { done++; if (live) setNaming(done < todo.length ? { done, total: todo.length } : null) }
-    if (todo.length) setNaming({ done: 0, total: todo.length })
+    let left = todo.length
+    setAsking(left > 0)
     for (const s of todo) {
       clusterName(s.members, data!.places, mapsKey).then((n) => {
         if (n) return put(s.place_id, n)
         if (!data!.places[s.place_id]?.name) return address(s.lat, s.lng).then((a) => put(s.place_id, a))
-      }).catch(() => {}).finally(tick)
+      }).catch(() => {}).finally(() => { if (live && !--left) setAsking(false) })
     }
     return () => { live = false }
   }, [sleep, weekday, data, mapsKey, demo])
   const label = (s: Suggestion) => names[s.place_id] ?? data?.places[s.place_id]?.name ?? s.city ?? 'Unnamed place'
-  const pending = (s: Suggestion) => !!naming && !names[s.place_id] && !data?.places[s.place_id]?.name
+  const pending = (s: Suggestion) => asking && !names[s.place_id] && !data?.places[s.place_id]?.name
   const sure = (s: Suggestion) => s.share >= 0.6 ? 'likely home' : s.share >= 0.3 ? 'maybe home' : 'stayed here'
   const asHome = (s: Suggestion, from = 0): Home => ({ lat: s.lat, lng: s.lng, city: s.city ?? '', cc: s.cc ?? '', from, to: null, name: label(s) })
   const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }

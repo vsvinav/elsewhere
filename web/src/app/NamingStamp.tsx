@@ -1,4 +1,4 @@
-import type { Progress } from '../ingest/enrich'
+import type { Progress } from '../ingest/places'
 
 /** A small red stamp that turns while Places lookups land, then lifts off. */
 export function NamingStamp({ progress }: { progress: Progress }) {

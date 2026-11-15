@@ -7,6 +7,8 @@ import { Barcode, CountUp, Field, Pass, PrintIn, Sticker } from '../../world'
 import { PlaceMap } from '../../world/PlaceMap'
 import { date, hours, n0 } from '../../world/fmt'
 import type { Place } from '../../data/types'
+import { need } from '../../ingest/places'
+import { useInView } from '../../world/useInView'
 
 type Sort = 'visits' | 'hours' | 'recent' | 'first'
 const SORT: Record<Sort, (a: Place, b: Place) => number> = {
@@ -92,24 +94,30 @@ export function Places() {
       )}
 
       <div className="tags">
-          {list.slice(0, limit).map(([id, p]) => (
-            <button className="tag" key={id} onClick={() => { setOpen(id); scrollTo({ top: 0, behavior: 'smooth' }) }} aria-pressed={open === id}>
-              <PlacePhoto place={p} />
-              <div>
-                <div className="lab">{kind(p) ?? (p.name ? 'place' : 'unnamed stop')}</div>
-                <div className="name">{placeName(p, id)}</div>
-                <div className="sub">{[p.city, p.country_code].filter(Boolean).join(', ') || 'city not on record'}</div>
-              </div>
-              <div className="row">
-                <div className="field"><div className="lab">Visits</div><div className="val">{n0(p.n_visits)}</div></div>
-                <div className="field"><div className="lab">Time</div><div className="val">{hours(p.total_hours)}</div></div>
-                <div className="field"><div className="lab">Last</div><div className="val" style={{ fontSize: 16, marginTop: 8 }}>{date(p.last_ts).slice(0, 6)}</div></div>
-              </div>
-              <i className={`tape ${p.name ? '' : 'ghost'}`} />
-            </button>
-          ))}
+          {list.slice(0, limit).map(([id, p]) => <Tag key={id} id={id} p={p} places={data.places} pressed={open === id} onOpen={() => { setOpen(id); scrollTo({ top: 0, behavior: 'smooth' }) }} />)}
       </div>
       {limit < list.length && <button className="btn" onClick={() => setLimit(limit + PAGE)}>Print {Math.min(PAGE, list.length - limit)} more tags</button>}
     </main>
+  )
+}
+
+/** One luggage tag; the place is looked up the first time the tag scrolls into view. */
+function Tag({ id, p, places, pressed, onOpen }: { id: string; p: Place; places: Record<string, Place>; pressed: boolean; onOpen(): void }) {
+  const ref = useInView<HTMLButtonElement>(() => need([id], places))
+  return (
+    <button ref={ref} className="tag" onClick={onOpen} aria-pressed={pressed}>
+      <PlacePhoto place={p} />
+      <div>
+        <div className="lab">{kind(p) ?? (p.name ? 'place' : 'unnamed stop')}</div>
+        <div className="name">{placeName(p, id)}</div>
+        <div className="sub">{[p.city, p.country_code].filter(Boolean).join(', ') || 'city not on record'}</div>
+      </div>
+      <div className="row">
+        <div className="field"><div className="lab">Visits</div><div className="val">{n0(p.n_visits)}</div></div>
+        <div className="field"><div className="lab">Time</div><div className="val">{hours(p.total_hours)}</div></div>
+        <div className="field"><div className="lab">Last</div><div className="val" style={{ fontSize: 16, marginTop: 8 }}>{date(p.last_ts).slice(0, 6)}</div></div>
+      </div>
+      <i className={`tape ${p.name ? '' : 'ghost'}`} />
+    </button>
   )
 }

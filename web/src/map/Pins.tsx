@@ -8,6 +8,7 @@ import { placeName } from '../analytics/home'
 import { fmtDate } from '../analytics/format'
 import { useUnits } from '../profile/units'
 import { liveCam } from './live'
+import { need } from '../ingest/places'
 
 const PAD = { top: 80, bottom: 260, left: 60, right: 60 }
 
@@ -90,6 +91,7 @@ export function PinHud() {
 
 function PinCard({ id, onClose }: { id: string; onClose(): void }) {
   const data = useData()
+  useEffect(() => need([id], data.places), [id, data.places])
   const { u, cv } = useUnits()
   const p = data.places[id]
   const cat = categoryOf(p)

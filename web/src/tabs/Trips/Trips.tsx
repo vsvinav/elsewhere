@@ -9,6 +9,7 @@ import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TripMap } from '../../world/TripMap'
 import { date, label, n0 } from '../../world/fmt'
 import { useUnits } from '../../profile/units'
+import { PlaceRow } from '../../world/PlaceRow'
 
 export function Trips() {
   const { u, U, cv } = useUnits()
@@ -77,7 +78,7 @@ export function Trips() {
                     </div>
                     <ol className="plist">
                       {visitedIn(t.start, t.end).map(([id, n], j) => (
-                        <li key={id}><span className="rank">0{j + 1}</span><span><div className="name">{placeName(data.places[id], id)}</div><div className="sub">{data.places[id]?.city ?? ''}</div></span><span className="n">{n}</span></li>
+                        <PlaceRow key={id} id={id} places={data.places}><span className="rank">0{j + 1}</span><span><div className="name">{placeName(data.places[id], id)}</div><div className="sub">{data.places[id]?.city ?? ''}</div></span><span className="n">{n}</span></PlaceRow>
                       ))}
                     </ol>
                   </>

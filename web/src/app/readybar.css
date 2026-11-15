@@ -1,0 +1,8 @@
+/* Readiness bar: a 3px red line on an ink track along the very top edge, with the stage in small caps at its end. */
+.ready { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 70; background: var(--ink); pointer-events: none; }
+.ready i { display: block; height: 100%; background: var(--red); transition: width 0.4s var(--ease); }
+.ready span { position: absolute; right: 12px; top: 6px; font: 700 10px/1 var(--body); font-variant-caps: all-small-caps; letter-spacing: 0.12em; color: var(--ink); animation: ready-in 0.3s var(--ease) both; }
+.ready[data-done] { animation: ready-out 0.6s var(--ease) both; }
+@keyframes ready-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes ready-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ready i { transition: none; } .ready span, .ready[data-done] { animation: none; } }

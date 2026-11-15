@@ -1,13 +1,14 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
-import type { Data, Place } from '../data/types'
+import type { Data } from '../data/types'
 import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
-import { enrichPlaces, type Progress } from '../ingest/enrich'
+import { apply, onError as onPlacesError, setKey as setPlacesKey, useNaming, usePlaces } from '../ingest/places'
 import { NamingStamp } from './NamingStamp'
+import { ReadyBar, readyFor, type Ready } from './ReadyBar'
 import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
@@ -33,18 +34,18 @@ export const useRecord = () => useContext(RecordContext)!
 export function App() {
   const [record, setRecord] = useState<Data | null>(null)
   const [mine, setMine] = useState(false)
-  const [places, setPlaces] = useState<Record<string, Place> | null>(null)
   const [error, setError] = useState<Error | null>(null)
   // No sample shipped with this build (the data folder is not in git): the front door still takes an import.
   const [noDemo, setNoDemo] = useState(false)
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
-  const [naming, setNaming] = useState<Progress>(null)
+  const [ready, setReady] = useState<Ready | null>(null)
+  const naming = useNaming()
   const [editing, setEditing] = useState(false)
   const prof = useProfile()
   const { mapsKey } = useSettings()
-  const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setPlaces(null); setMine(isMine); setRecord(d) }, [])
+  const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
   }, [adopt])
@@ -54,7 +55,8 @@ export function App() {
     if (!record || !prof) return
     if (JSON.stringify([record.profile.homes ?? null, record.profile.works ?? null]) === homesKey) return
     let live = true
-    rederive(record, prof, setStage).then((d) => { if (!live) return; setStage(null); setRecord({ ...d, paths: record.paths }) }).catch((e) => { if (live) { setStage(null); setImportError(e) } })
+    const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'rederive')) }
+    rederive(record, prof, onStage).then((d) => { if (!live) return; setStage(null); setRecord({ ...d, paths: record.paths }) }).catch((e) => { if (live) { setStage(null); setReady(null); setImportError(e) } })
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record?.meta.source_sha256, homesKey])
@@ -63,23 +65,20 @@ export function App() {
   useEffect(() => {
     if (!onMap || !record || record.paths.length) return
     let live = true
-    loadPaths(record).then((paths) => { if (live) setRecord({ ...record, paths }) }).catch(setError)
+    setReady({ label: 'Drawing paths', pct: 0 })
+    loadPaths(record).then((paths) => { if (live) { setReady({ label: 'Drawing paths', pct: 100 }); setRecord({ ...record, paths }) } }).catch(setError)
     return () => { live = false }
   }, [onMap, record])
-  // Names and photos land on top of the record, from cache first and then from Places with the visitor's key.
-  const sha = record?.meta.source_sha256
+  // Names and photos land on top of the record as the shared places store fills, from cache and from lookups the tabs ask for.
   // Lookups wait until onboarding is done (the questions stay free); the baked record counts as yours, so it is named too.
   const spend = !!prof
-  useEffect(() => {
-    if (!record) return
-    setEnrichError(null)
-    return enrichPlaces(record, { lookup: spend ? mapsKey : '', photo: mapsKey }, setPlaces, setEnrichError, setNaming)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sha, mapsKey, spend])
-  const data = useMemo(() => (record && places ? { ...record, places } : record), [record, places])
+  useEffect(() => onPlacesError(setEnrichError), [])
+  useEffect(() => { setEnrichError(null); setPlacesKey(spend ? mapsKey : '') }, [mapsKey, spend])
+  const { cache } = usePlaces()
+  const data = useMemo(() => (record ? { ...record, places: apply(record.places, cache, mapsKey) } : null), [record, cache, mapsKey])
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,
-    importFile: (f) => { setImportError(null); ingestFile(f, profileStore.get() ?? PROVISIONAL, setStage).then((d) => { setStage(null); adopt(d, true); if (profileStore.get()) useStore.getState().setTab('home') }).catch((e) => { setStage(null); setImportError(e) }) },
+    importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); if (profileStore.get()) useStore.getState().setTab('home') }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
     reset: () => { profileStore.set(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch(setError) },
     editProfile: () => setEditing(true),
   }), [mine, stage, importError, enrichError, adopt])
@@ -96,14 +95,16 @@ export function App() {
   }, [])
 
   const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }
+  const bar = <ReadyBar ready={ready} />
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
-  if (!record && noDemo) return <Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} />
-  if (!record) return <div className="tray"><Printing /></div>
+  if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
+  if (!record) return <div className="tray">{bar}<Printing /></div>
   if (!prof || editing) {
-    return <Onboarding key={editing ? 'edit' : 'new'} data={data} demo={!mine} stage={stage} importError={importError} importFile={ctx.importFile} initial={editing ? prof : null} onClose={editing ? () => setEditing(false) : undefined} />
+    return <>{bar}<Onboarding key={editing ? 'edit' : 'new'} data={data} demo={!mine} stage={stage} importError={importError} importFile={ctx.importFile} initial={editing ? prof : null} onClose={editing ? () => setEditing(false) : undefined} /></>
   }
   return (
     <div className="tray">
+      {bar}
       <div className="tourline">
         <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
         <details className="account">

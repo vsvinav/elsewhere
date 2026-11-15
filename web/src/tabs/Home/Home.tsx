@@ -11,6 +11,7 @@ import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
 import { useProfile } from '../../profile/profile'
 import { useUnits } from '../../profile/units'
+import { PlaceRow } from '../../world/PlaceRow'
 
 const INK: Record<string, string> = { fly: 'red', foot: 'mustard', drive: '', transit: '' }
 const yearSpan = ([a, b]: [number, number]) => (a === b ? String(a) : `${a}–${b}`)
@@ -111,7 +112,7 @@ export function Home() {
           </div>
           <ol className="dates" aria-label="Most visited third places">
             {f.thirdPlaces.map((p) => (
-              <li key={p.id}><span className="where">{p.name}{p.place.city && <small>{p.place.city}</small>}</span><span className="n">{p.place.n_visits}<small>visits</small></span></li>
+              <PlaceRow key={p.id} id={p.id} places={data.places}><span className="where">{p.name}{p.place.city && <small>{p.place.city}</small>}</span><span className="n">{p.place.n_visits}<small>visits</small></span></PlaceRow>
             ))}
           </ol>
         </div>
@@ -144,4 +145,5 @@ export function Home() {
     </main>
   )
 }
+
 

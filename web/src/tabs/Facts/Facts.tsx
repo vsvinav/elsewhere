@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData, useRawData } from '../../data/DataContext'
 import { useProfile } from '../../profile/profile'
+import { need } from '../../ingest/places'
 import { facts, type Fact, type Kind } from '../../analytics/facts'
 import { Bill, Field, Pass, PrintIn, Stamp } from '../../world'
 import { Fig } from '../../world/figures/Figures'
@@ -30,6 +31,8 @@ export function Facts() {
   const prof = useProfile()
   const units = prof?.units ?? 'km'
   const all = useMemo(() => facts(data, units, raw), [data, units, raw])
+  // A few facts read names and types of the most visited places; ask for those thirty, not the whole record.
+  useEffect(() => { need(Object.entries(raw.places).sort((a, b) => b[1].n_visits - a[1].n_visits).slice(0, 30).map(([id]) => id), raw.places) }, [raw.places])
   const [seed, setSeed] = useState(0)
   const [only, setOnly] = useState<Kind | null>(null)
   // The card turns the short quips up top; every fact, quip or not, still prints in the list below.
