@@ -97,3 +97,22 @@ test('facts: each one carries a door to the window or the pins that made it', ()
   // Every fact's door reads as its headline.
   for (const x of f) expect(x.door?.label).toBe(x.headline)
 })
+
+test('facts: a record of 100k visits, doors included, comes back in one pass', () => {
+  const N = 100_000, P = 4_000
+  const places: Record<string, ReturnType<typeof place>> = { home: place('home', 'Boston', 'US', 42.36, -71.06) }
+  for (let i = 0; i < P; i++) places[`p${i}`] = place(null, `City${i % 400}`, `C${i % 150}`, 40 + (i % 90) / 10, -70 + (i % 300) / 10, { primary_type: ['cafe', 'bar', 'gym', 'airport', 'supermarket', 'restaurant', 'train_station', 'clothing_store'][i % 8], name: `P${i}`, n_visits: 1 + (i % 9), total_hours: 2 + (i % 5) })
+  const visits = []
+  for (let i = 0; i < N; i++) {
+    const t = JAN + i * 1800
+    const id = i % 3 === 0 ? 'home' : `p${i % P}`
+    visits.push(v(t, t + 1500, id, places[id].lat, places[id].lng))
+  }
+  const big = { ...data, visits, places, meta: { range: [JAN, JAN + N * 1800] } } as unknown as Data
+  const t0 = performance.now()
+  const f = facts(big, 'km')
+  const ms = performance.now() - t0
+  expect(f.length).toBeGreaterThan(5)
+  for (const x of f) expect(x.door).toBeDefined()
+  expect(ms).toBeLessThan(3000)
+})

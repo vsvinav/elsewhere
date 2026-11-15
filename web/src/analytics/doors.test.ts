@@ -1,4 +1,4 @@
-import { onePerCity, onePerCountry, placesInCity, dayRange, monthRange, tripId } from './doors'
+import { cityIndex, onePerCity, onePerCountry, placesInCity, dayRange, monthRange, tripId } from './doors'
 import type { Place } from '../data/types'
 
 const p = (city: string | null, cc: string | null, n: number): Place => ({ lat: 0, lng: 0, label: null, role: null, city, country_code: cc, n_visits: n, total_hours: 0, first_ts: 0, last_ts: 0, name: null })
@@ -23,4 +23,19 @@ test('dayRange covers the local day around an instant', () => {
 test('monthRange and tripId', () => {
   expect(monthRange('2025-02')).toEqual([Date.UTC(2025, 1, 1) / 1000, Date.UTC(2025, 2, 1) / 1000 - 1])
   expect(tripId({ start: 5, end: 9 })).toBe('5-9')
+})
+test('cityIndex groups every pin by city in one pass', () => {
+  const ix = cityIndex(places)
+  expect([...ix.keys()].sort()).toEqual(['Lisbon', 'Paris', 'Porto'])
+  expect(ix.get('Lisbon')!.sort()).toEqual(['a', 'b'])
+})
+test('the door helpers stay linear on a place book the size of a long record', () => {
+  const big: Record<string, Place> = {}
+  for (let i = 0; i < 300_000; i++) big[`p${i}`] = p(`city${i % 5000}`, `C${i % 190}`, i % 37)
+  const t0 = performance.now()
+  expect(onePerCountry(big).length).toBe(190)
+  expect(onePerCity(big).length).toBe(5000)
+  expect(cityIndex(big).size).toBe(5000)
+  expect(placesInCity(big, 'city7').length).toBe(60)
+  expect(performance.now() - t0).toBeLessThan(1500)
 })

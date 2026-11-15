@@ -18,7 +18,7 @@ export type Figure =
   | { t: 'beds'; nights: Night[] }
 /**
  * Card facts are the short, unserious ones that turn on the card up top (`quip` is what it says); the rest print below.
- * * `door` is where the headline leads on the map: the window or the pins that made it. Its label is filled in from the headline.
+ * `door` is where the headline leads on the map: the window or the pins that made it. Its label is filled in from the headline.
  */
 export interface Fact { id: string; kind: Kind; headline: string; detail: string; figure?: Figure; card?: true; quip?: string; door: Door }
 type Lead = Door extends infer D ? (D extends Door ? Omit<D, 'label'> : never) : never
