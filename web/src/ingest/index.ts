@@ -6,7 +6,7 @@ import type { Job, Progress } from './worker'
 
 export const STAGE_LABEL: Record<string, string> = { reading: 'Reading the file', parsing: 'Reading segments', cities: 'Naming cities', deriving: 'Working out trips and days', done: 'Printed' }
 
-const CITIES = () => new URL('/cities.json', location.origin).href
+const CITIES = () => new URL(`${import.meta.env.BASE_URL}cities.json`, location.origin).href
 
 function run(job: Job, onStage: (stage: string) => void): Promise<{ data: Data; parsed?: Parsed }> {
   return new Promise((resolve, reject) => {
