@@ -13,6 +13,7 @@ export const SETTINGS_TITLE = 'SETTINGS'
 export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', units: 'UNITS', data: 'DATA' } as const
 export const PROVIDER_LABEL: Record<LlmProvider, string> = { openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini', custom: 'Ollama / custom' }
 export const LLM_CAPTION = 'Your key is stored in this browser only and is sent straight to the provider you choose.'
+export const NO_KEY_STATUS = 'Add a key first'
 export const CLEAR_LABEL = "Clear this browser's record"
 export const CLEAR_CONFIRM = "Clear this browser's record? Your import and profile go; this page's keys stay."
 
@@ -48,19 +49,19 @@ function MapsSection() {
       <h2>{SECTION.maps}</h2>
       <div className="fields keys">
         <div className="field">
-          <label className="lab" htmlFor="st-maps-key">Google Maps key</label>
+          <label className="lab" htmlFor="st-maps-key">API key</label>
           <input id="st-maps-key" className="val" type={showKey ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} onFocus={() => setShowKey(true)} onBlur={() => { setShowKey(false); save() }} placeholder="AIza…" spellCheck={false} autoComplete="off" />
         </div>
         <div className="field">
-          <label className="lab" htmlFor="st-map-id">Map ID (optional, vector tiles)</label>
+          <label className="lab" htmlFor="st-map-id">Map ID · optional</label>
           <input id="st-map-id" className="val" value={id} onChange={(e) => setId(e.target.value)} onBlur={save} placeholder="none" spellCheck={false} autoComplete="off" />
         </div>
         <div className="field">
-          <label className="lab" htmlFor="st-map-tiles">Map tiles</label>
+          <label className="lab" htmlFor="st-map-tiles">Map provider</label>
           <select id="st-map-tiles" className="val" value={mapProvider} onChange={(e) => settings.set({ mapProvider: e.target.value as MapProvider })}>
-            <option value="auto">Google if the key works, else OpenStreetMap</option>
-            <option value="google">Google Maps</option>
-            <option value="osm">OpenStreetMap (free, no key)</option>
+            <option value="auto">Auto</option>
+            <option value="google">Google</option>
+            <option value="osm">OpenStreetMap</option>
           </select>
         </div>
         <Field label="Key used for">Map tiles · place names · photos</Field>
@@ -79,6 +80,7 @@ function AskSection({ fetchFn }: { fetchFn: typeof fetch }) {
   const [status, setStatus] = useState<{ busy: boolean; text: string }>({ busy: false, text: '' })
   const patch = (p: Partial<typeof llm>) => settings.set({ llm: { ...llm, ...p } })
   const test = async () => {
+    if (llm.provider !== 'custom' && !llm.key.trim()) { setStatus({ busy: false, text: NO_KEY_STATUS }); return }
     setStatus({ busy: true, text: 'Testing…' })
     try { await askLlm(llm, TEST_PROMPT, fetchFn); setStatus({ busy: false, text: `Connected · ${modelOf(llm)}` }) }
     catch (e) { setStatus({ busy: false, text: e instanceof Error ? e.message : String(e) }) }
@@ -93,15 +95,13 @@ function AskSection({ fetchFn }: { fetchFn: typeof fetch }) {
             {(Object.keys(PROVIDER_LABEL) as LlmProvider[]).map((p) => <option key={p} value={p}>{PROVIDER_LABEL[p]}</option>)}
           </select>
         </div>
-        {llm.provider !== 'custom' && (
-          <div className="field">
-            <label className="lab" htmlFor="st-llm-key">API key</label>
-            <span className="val-row">
-              <input id="st-llm-key" className="val" type={showKey ? 'text' : 'password'} value={llm.key} onChange={(e) => patch({ key: e.target.value })} spellCheck={false} autoComplete="off" />
-              <button type="button" className="show" aria-pressed={showKey} onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
-            </span>
-          </div>
-        )}
+        <div className="field">
+          <label className="lab" htmlFor="st-llm-key">{llm.provider === 'custom' ? 'API key · optional' : 'API key'}</label>
+          <span className="val-row">
+            <input id="st-llm-key" className="val" type={showKey ? 'text' : 'password'} value={llm.key} onChange={(e) => patch({ key: e.target.value })} spellCheck={false} autoComplete="off" />
+            <button type="button" className="show" aria-pressed={showKey} onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
+          </span>
+        </div>
         <div className="field">
           <label className="lab" htmlFor="st-llm-model">Model</label>
           <input id="st-llm-model" className="val" value={llm.model} onChange={(e) => patch({ model: e.target.value })} placeholder={DEFAULT_MODEL[llm.provider]} spellCheck={false} autoComplete="off" />
@@ -114,7 +114,7 @@ function AskSection({ fetchFn }: { fetchFn: typeof fetch }) {
         )}
       </div>
       <div className="st-actions">
-        <button className="btn" onClick={test} disabled={status.busy}>Test</button>
+        <button className="btn" onClick={test}>Test</button>
         <span role="status" className={`st-status${status.text.startsWith('Connected') ? ' ok' : ''}`}>{status.text}</span>
       </div>
       <p className="fine">{LLM_CAPTION}</p>

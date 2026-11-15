@@ -37,6 +37,16 @@ describe('llmRequest', () => {
     expect(JSON.parse(r.body).model).toBe('llama3.1')
     expect(llmRequest(cfg({ provider: 'custom' }), 'hi').url).toBe('http://localhost:11434/v1/chat/completions')
   })
+  it('custom: a blank key is no key', () => {
+    expect(llmRequest(cfg({ provider: 'custom', key: '   ' }), 'hi').headers).toEqual({ 'Content-Type': 'application/json' })
+  })
+  it('trims key, model and base URL; gemini URL-encodes the key', () => {
+    const r = llmRequest(cfg({ provider: 'custom', key: ' k ', model: ' m ', baseUrl: ' http://h/v1 ' }), 'hi')
+    expect(r.url).toBe('http://h/v1/chat/completions')
+    expect(r.headers.Authorization).toBe('Bearer k')
+    expect(JSON.parse(r.body).model).toBe('m')
+    expect(llmRequest(cfg({ provider: 'gemini', key: ' a&b=c ', model: ' x ' }), 'hi').url).toBe('https://generativelanguage.googleapis.com/v1beta/models/x:generateContent?key=a%26b%3Dc')
+  })
 })
 
 describe('parseLlmReply', () => {
@@ -57,6 +67,10 @@ describe('askLlm', () => {
   it('rejects with the HTTP status when the provider refuses', async () => {
     const fetchFn = (async () => new Response('nope', { status: 401 })) as unknown as typeof fetch
     await expect(askLlm(cfg({ key: 'bad' }), 'hi', fetchFn)).rejects.toThrow('HTTP 401')
+  })
+  it('treats a non-JSON 200 body as an empty reply', async () => {
+    const fetchFn = (async () => new Response('<html>', { status: 200 })) as unknown as typeof fetch
+    await expect(askLlm(cfg({ key: 'k' }), 'hi', fetchFn)).rejects.toThrow('Empty reply')
   })
   it('returns the reply text', async () => {
     const fetchFn = (async () => Response.json({ choices: [{ message: { content: 'OK' } }] })) as unknown as typeof fetch

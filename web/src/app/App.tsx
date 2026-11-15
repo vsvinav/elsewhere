@@ -13,7 +13,7 @@ import { NamingStamp } from './NamingStamp'
 import { ReadyBar, readyFor, type Ready } from './ReadyBar'
 import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
-import { SETTINGS_HASH, useStore } from '../store/useStore'
+import { useStore } from '../store/useStore'
 import { Settings } from './Settings'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
@@ -95,13 +95,7 @@ export function App() {
     return () => removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => {
-    const onHash = () => {
-      const t = location.hash.slice(1)
-      const s = useStore.getState()
-      if (t === SETTINGS_HASH) { if (!s.settingsOpen) s.openSettings() }
-      else if (t && t !== s.tab) s.setTab(t as never)
-      else if (s.settingsOpen) s.closeSettings()
-    }
+    const onHash = () => useStore.getState().syncFromHash()
     addEventListener('hashchange', onHash)
     return () => removeEventListener('hashchange', onHash)
   }, [])
@@ -126,7 +120,7 @@ export function App() {
           <summary aria-label="Account">▾</summary>
           <div className="menu">
             <button onClick={ctx.editProfile}>Edit profile</button>
-            <button onClick={() => useStore.getState().openSettings()}>Settings</button>
+            <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); useStore.getState().openSettings() }}>Settings</button>
             <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
             <UsageRow />
           </div>

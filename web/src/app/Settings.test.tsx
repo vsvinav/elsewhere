@@ -46,18 +46,21 @@ describe('Settings', () => {
     const { host, unmount } = mount()
     expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
     expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'UNITS', 'DATA'])
+    expect(host.querySelector('label[for=st-map-id]')?.textContent).toBe('Map ID · optional')
+    expect(host.querySelector('label[for=st-map-tiles]')?.textContent).toBe('Map provider')
+    expect([...host.querySelectorAll('#st-map-tiles option')].map((o) => o.textContent)).toEqual(['Auto', 'Google', 'OpenStreetMap'])
     expect(host.textContent).toContain('Your key is stored in this browser only and is sent straight to the provider you choose.')
     for (const el of host.querySelectorAll('input:not([type=radio]), select')) expect(host.querySelector(`label[for="${el.id}"]`), `label for #${el.id}`).not.toBeNull()
     unmount()
   })
 
-  it('custom provider shows Base URL and hides the API key', () => {
+  it('custom provider shows Base URL and makes the API key optional', () => {
     const { host, unmount } = mount()
-    expect(input(host, 'st-llm-key')).not.toBeNull()
+    expect(host.querySelector('label[for=st-llm-key]')?.textContent).toBe('API key')
     expect(input(host, 'st-llm-base')).toBeNull()
     act(() => setValue(host.querySelector<HTMLSelectElement>('#st-llm-provider')!, 'custom'))
     expect(settings.get().llm.provider).toBe('custom')
-    expect(input(host, 'st-llm-key')).toBeNull()
+    expect(host.querySelector('label[for=st-llm-key]')?.textContent).toBe('API key · optional')
     expect(input(host, 'st-llm-base')?.placeholder).toBe('http://localhost:11434/v1')
     expect(input(host, 'st-llm-model')?.placeholder).toBe('llama3.1')
     unmount()
@@ -84,9 +87,20 @@ describe('Settings', () => {
     unmount()
   })
 
+  it('TEST without a key asks for one and makes no call', async () => {
+    const fetchFn = vi.fn() as unknown as typeof fetch
+    const { host, flush, unmount } = mount(fetchFn)
+    act(() => { [...host.querySelectorAll('button')].find((b) => b.textContent === 'Test')!.click() })
+    await flush()
+    expect(host.querySelector('[role=status]')?.textContent).toBe('Add a key first')
+    expect(fetchFn).not.toHaveBeenCalled()
+    unmount()
+  })
+
   it('TEST shows the provider error', async () => {
     const failing = (async () => new Response('', { status: 401 })) as unknown as typeof fetch
     const { host, flush, unmount } = mount(failing)
+    act(() => setValue(input(host, 'st-llm-key')!, 'sk-bad'))
     act(() => { [...host.querySelectorAll('button')].find((b) => b.textContent === 'Test')!.click() })
     await flush()
     expect(host.querySelector('[role=status]')?.textContent).toBe('HTTP 401')

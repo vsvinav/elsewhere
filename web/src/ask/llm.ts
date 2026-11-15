@@ -9,20 +9,21 @@ export const TEST_PROMPT = 'Reply with the single word OK.'
 const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 const MAX_TOKENS = 256
 
-export const modelOf = (c: LlmConfig): string => c.model || DEFAULT_MODEL[c.provider]
+export const modelOf = (c: LlmConfig): string => c.model.trim() || DEFAULT_MODEL[c.provider]
 
 export function llmRequest(c: LlmConfig, prompt: string): { url: string; headers: Record<string, string>; body: string } {
   const model = modelOf(c)
+  const key = c.key.trim()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (c.provider === 'anthropic') {
-    Object.assign(headers, { 'x-api-key': c.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' })
+    Object.assign(headers, { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' })
     return { url: 'https://api.anthropic.com/v1/messages', headers, body: JSON.stringify({ model, max_tokens: MAX_TOKENS, messages: [{ role: 'user', content: prompt }] }) }
   }
   if (c.provider === 'gemini') {
-    return { url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(c.key)}`, headers, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+    return { url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, headers, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
   }
-  const base = (c.baseUrl || (c.provider === 'custom' ? DEFAULT_BASE_URL : OPENAI_BASE_URL)).replace(/\/+$/, '')
-  if (c.key) headers.Authorization = `Bearer ${c.key}`
+  const base = (c.baseUrl.trim() || (c.provider === 'custom' ? DEFAULT_BASE_URL : OPENAI_BASE_URL)).replace(/\/+$/, '')
+  if (key) headers.Authorization = `Bearer ${key}`
   return { url: `${base}/chat/completions`, headers, body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: MAX_TOKENS }) }
 }
 
@@ -42,5 +43,7 @@ export async function askLlm(c: LlmConfig, prompt: string, fetchFn: typeof fetch
   const { url, headers, body } = llmRequest(c, prompt)
   const res = await fetchFn(url, { method: 'POST', headers, body })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return parseLlmReply(c.provider, await res.json())
+  // A 200 that is not JSON (a proxy's HTML page, an empty body) has no reply in it.
+  const json = await res.json().catch(() => null)
+  return parseLlmReply(c.provider, json)
 }

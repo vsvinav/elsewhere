@@ -17,6 +17,8 @@ export interface Store {
   settingsOpen: boolean
   openSettings(): void
   closeSettings(): void
+  /** Follow the address bar after the visitor navigates (back button, typed hash). */
+  syncFromHash(): void
   playhead: number | null
   playing: boolean
   speed: number
@@ -65,12 +67,19 @@ export function useThrottledPlayhead(ms: number): number | null {
   return v
 }
 
-export const useStore = create<Store>((set) => ({
+export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
   setTab: (tab) => { location.hash = tab; set({ tab, settingsOpen: false, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}) }) },
   settingsOpen: location.hash.slice(1) === SETTINGS_HASH,
   openSettings: () => { location.hash = SETTINGS_HASH; set({ settingsOpen: true, playing: false }) },
   closeSettings: () => set((s) => { location.hash = s.tab; return { settingsOpen: false } }),
+  syncFromHash: () => {
+    const t = location.hash.slice(1)
+    const s = get()
+    if (t === SETTINGS_HASH) { if (!s.settingsOpen) s.openSettings() }
+    else if ((TABS as string[]).includes(t) && t !== s.tab) s.setTab(t as Tab)
+    else if (s.settingsOpen) set({ settingsOpen: false })
+  },
   playhead: null,
   playing: false,
   speed: 1,

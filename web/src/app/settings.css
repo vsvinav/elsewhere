@@ -14,7 +14,6 @@
 .settings .show { padding: 0 0 2px; border: 0; background: none; color: var(--ink-3); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
 .settings .show[aria-pressed='true'], .settings .show:hover { color: var(--red); }
 .settings .st-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-.settings .st-actions .btn:disabled { opacity: 0.5; cursor: wait; }
 .settings .st-status { font: 600 14px/1.4 var(--body); color: var(--red); max-width: 60ch; }
 .settings .st-status.ok { color: var(--ink); }
 .settings .st-status:empty { display: none; }
