@@ -6,7 +6,7 @@ import { degPerPx, simplifyIdx } from './simplify'
 import { paceOf } from './camera'
 import { BIG_KM } from './pace'
 import type { Data, Place } from '../data/types'
-import { bearing, segmentAt, whereaboutsAt } from '../analytics/position'
+import { segmentAt, whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
 import { legsOf } from '../analytics/legs'
 import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
@@ -107,7 +107,7 @@ function activeTrails(c: NonNullable<typeof cache>, all: Trail[], from: number, 
   return c.active
 }
 /** Where the drawn trail's head is at `t` (seconds from t0): the marker is placed from the same simplified points the GPU draws, so it never leads or trails the line. */
-function trailHead(trails: Trail[], t: number): { lng: number; lat: number; heading: number } | null {
+function trailHead(trails: Trail[], t: number): { lng: number; lat: number } | null {
   let lo = 0, hi = trails.length - 1
   while (lo < hi) { const m = (lo + hi + 1) >> 1; if (trails[m].t0 <= t) lo = m; else hi = m - 1 }
   const tr = trails[lo]
@@ -117,7 +117,7 @@ function trailHead(trails: Trail[], t: number): { lng: number; lat: number; head
   while (i < ts.length - 1 && ts[i] < t) i++
   const [x0, y0] = tr.path[i - 1], [x1, y1] = tr.path[i]
   const k = ts[i] > ts[i - 1] ? (t - ts[i - 1]) / (ts[i] - ts[i - 1]) : 1
-  return { lng: x0 + (x1 - x0) * k, lat: y0 + (y1 - y0) * k, heading: bearing({ lng: x0, lat: y0 }, { lng: x1, lat: y1 }) }
+  return { lng: x0 + (x1 - x0) * k, lat: y0 + (y1 - y0) * k }
 }
 /** Dots visited by `reveal`, cached per day so the array is stable between frames. */
 function revealed(c: NonNullable<typeof cache>, dots: Dot[], reveal: number): Dot[] {
@@ -270,19 +270,18 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
     const seg = still ? null : segmentAt(data, now)
     const kind = stampKind(still ? 'still' : lensOf(w.mode), rate, !!seg && seg.kind === 'activity' && seg.km >= BIG_KM)
     const ink = kind === 'still' || kind === 'ff' ? INK : INK_OF[kind]
-    const turns = kind === 'fly' || kind === 'drive' || kind === 'ff'
     const small = kind === 'still'
     const r = easedRing(small ? 11 : 20)
     layers.push(
-      // The stamp: a stock disc with the leg's ink ring, and the vehicle inside turned the way it is going.
+      // The stamp: a stock disc with the leg's ink ring, and the vehicle inside kept upright so it never spins.
       new ScatterplotLayer<typeof w>({
         id: 'here-ring', data: [w], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: r, radiusMaxPixels: r,
         getFillColor: STOCK, stroked: true, getLineColor: ink, lineWidthMinPixels: 3, updateTriggers: { getLineColor: kind },
       }),
       new IconLayer<typeof w>({
         id: 'here', data: [w], getPosition: (d) => [d.lng, d.lat], getIcon: () => ICON[kind], getColor: ink,
-        getSize: r * 1.3, sizeUnits: 'pixels', getAngle: (d) => (turns ? -d.heading : 0), billboard: false,
-        updateTriggers: { getIcon: kind, getColor: kind, getAngle: turns },
+        getSize: r * 1.3, sizeUnits: 'pixels', billboard: false,
+        updateTriggers: { getIcon: kind, getColor: kind },
       }),
     )
   }
