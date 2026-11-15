@@ -1,9 +1,9 @@
 import { useRawData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { DatePick, DAY } from './DatePick'
+import { yearSpan, yearsOf } from './yearWheel'
 
 const midnight = (ts: number) => ts - (ts % DAY)
-function fromIso(s: string) { return Math.floor(new Date(s + 'T00:00:00Z').getTime() / 1000) }
 
 /** Date filter shared by every tab: year chips, a trailing-90-days chip, or two dates. */
 export function RangeBar() {
@@ -11,9 +11,8 @@ export function RangeBar() {
   const range = useStore((s) => s.range)
   const setRange = useStore((s) => s.setRange)
   const [r0, r1] = meta.range
-  const years: number[] = []
-  for (let y = new Date(r0 * 1000).getUTCFullYear(); y <= new Date(r1 * 1000).getUTCFullYear(); y++) years.push(y)
-  const yearRange = (y: number): [number, number] => [fromIso(`${y}-01-01`), fromIso(`${y}-12-31`) + DAY - 1]
+  const years = yearsOf(meta.range)
+  const yearRange = (y: number) => yearSpan(meta.range, y)
   const same = (r: [number, number]) => range !== null && range[0] === r[0] && range[1] === r[1]
   const last90: [number, number] = [r1 - 90 * DAY, r1]
   const lo = range ? range[0] : r0, hi = range ? range[1] : r1

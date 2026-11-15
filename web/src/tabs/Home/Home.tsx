@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
-import { useData } from '../../data/DataContext'
+import { useData, useRawData } from '../../data/DataContext'
 import { homeFacts, placeName } from '../../analytics/home'
 import { tour } from '../../analytics/tour'
 import { lensOf } from '../../analytics/lens'
 import { Bill, CountUp, Field, Stamp, Sticker } from '../../world'
 import { TrailMap } from '../../world/TrailMap'
 import { Nights } from '../../world/Nights'
+import { YearWheel } from '../../world/YearWheel'
 import { date, dateISO, label, n0 } from '../../world/fmt'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
@@ -24,6 +25,7 @@ const yearSpan = ([a, b]: [number, number]) => (a === b ? String(a) : `${a}–${
 export function Home() {
   const { u, cv } = useUnits()
   const data = useData()
+  const raw = useRawData()
   const f = useMemo(() => homeFacts(data), [data])
   const t = useMemo(() => tour(data), [data])
   const prof = useProfile()
@@ -64,6 +66,7 @@ export function Home() {
         <div className="two">
           <div>
             <h1 className={`title${name ? ' named' : ''}`}>{name ? <><span className="misreg">{name}'s</span><span className="misreg red">Elsewhere</span></> : <><span className="misreg">Else</span><span className="misreg red">where</span></>}</h1>
+            <YearWheel range={raw.meta.range} />
             <p className="lede sub">{yearSpan(t.years)}, live from <Door target={d.days}>{n0(f.days)} days</Door> of record. Everywhere your phone slept, every leg between. <Door target={d.places}>{n0(f.places)} places</Door>, <Door target={d.cities}>{n0(f.cities)} cities</Door>, <Door target={d.countries}>{n0(f.countries)} {f.countries === 1 ? 'country' : 'countries'}</Door>.</p>
             <TrailMap data={data} stops={t.stops} className="map drift" />
           </div>
