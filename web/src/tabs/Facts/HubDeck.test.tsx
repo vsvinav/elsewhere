@@ -66,6 +66,15 @@ describe('HubDeck', () => {
     expect(s.range![1]).toBeLessThanOrEqual(Date.UTC(2022, 10, 18) / 1000)
   })
 
+  it('a record under a year old shows its farthest day without claiming it happened on this day', () => {
+    const short = { ...data, meta: { ...data.meta, range: [Date.UTC(2023, 10, 11, 8) / 1000, Date.UTC(2024, 4, 1) / 1000] } } as typeof data
+    wrap(<HubDeck data={short} raw={short} facts={facts} today="2024-04-10" units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
+    const card = cards()[1]
+    expect(card.textContent).toContain('landed in Paris')
+    expect(card.textContent).toContain("Your record starts 11 November — meanwhile, here's your farthest day so far.")
+    expect(card.textContent).not.toContain('On this day, earlier this year')
+  })
+
   it('streaks prints the longest run away, the weeks with something new, and the streak still running', () => {
     const open = vi.fn()
     wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)

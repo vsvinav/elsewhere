@@ -43,12 +43,11 @@ export function streaks(data: Data): Streaks {
   const nights = data.visits.length ? bedStrip(data) : []
   const isAway = (n: { kind: string }) => n.kind === 'new' || n.kind === 'repeat'
   const away = longestRun(nights, isAway)
+  // Nights the record has not reached yet are skipped at the tail; a gap inside the run ends it.
+  let i = nights.length - 1
+  while (i >= 0 && nights[i].kind === 'none') i--
   let current = 0
-  for (let i = nights.length - 1; i >= 0; i--) {
-    if (nights[i].kind === 'none') continue
-    if (!isAway(nights[i])) break
-    current++
-  }
+  for (; i >= 0 && isAway(nights[i]); i--) current++
   // Daily rows come in date order; distinct weeks with a new place, then the longest chain of adjacent ones.
   let newWeeks: Run | null = null
   let run: { w0: number; w1: number } | null = null

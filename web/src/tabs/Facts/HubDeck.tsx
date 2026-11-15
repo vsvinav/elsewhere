@@ -8,7 +8,7 @@ import { tilt } from '../../analytics/passport'
 import { MI, type Units } from '../../profile/units'
 import { useStore } from '../../store/useStore'
 import { n0, WEEKDAYS } from '../../world/fmt'
-import { dmy, headline } from '../highlights/copy'
+import { dayMonth, dmy, headline } from '../highlights/copy'
 import { PassportCompact } from './Passport'
 import '../Trips/deck.css'
 import './hub.css'
@@ -100,7 +100,7 @@ export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPass
             <>
               <h3 className="display hub-h">{highlight.city}</h3>
               <p className="hub-lede">{dmy(highlight.date)} — you {highlight.verb} {highlight.city}.</p>
-              <div className="hub-date caps">{headline(highlight)}</div>
+              <div className="hub-date caps">{day.kind === 'short' ? `Your record starts ${dayMonth(day.starts)} — meanwhile, here's your farthest day so far.` : headline(highlight)}</div>
             </>
           ) : (
             <>

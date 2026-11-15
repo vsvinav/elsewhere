@@ -53,6 +53,18 @@ test('streaks: longest run away, longest run of weeks with a new place, and the 
   expect(s.current).toBe(2)
 })
 
+test('streaks: a night with no record inside a run ends it, so the current streak never beats the longest', () => {
+  // Paris for three nights (new), one night unaccounted for, then two more in Paris (repeat) to the end.
+  const gap = {
+    ...data,
+    visits: [v(at(2024, 1, 1, 12), at(2024, 1, 4, 12), 'paris', 48.85, 2.35), v(at(2024, 1, 5, 12), at(2024, 1, 7, 12), 'paris', 48.85, 2.35)],
+    meta: { range: [at(2024, 1, 1), at(2024, 1, 7, 12)] },
+  } as Data
+  const s = streaks(gap)
+  expect(s.away).toEqual({ from: '2024-01-02', to: '2024-01-04', n: 3 })
+  expect(s.current).toBe(2)
+})
+
 test('streaks: a record that ends at home has no current streak', () => {
   const home = { ...data, visits: data.visits.slice(0, 4), meta: { range: [at(2024, 1, 1), at(2024, 1, 9, 12)] } } as Data
   expect(streaks(home).current).toBe(0)
