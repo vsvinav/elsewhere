@@ -77,3 +77,23 @@ test('facts: a cut range only counts what happened inside it, but keeps firsts f
   expect(f.map((x) => x.id)).not.toContain('hermit')
   expect(f.find((x) => x.id === 'furthest')?.detail).toMatch(/January 8, 2025/)
 })
+
+test('facts: each one carries a door to the window or the pins that made it', () => {
+  const f = facts(data, 'km')
+  const door = (id: string) => f.find((x) => x.id === id)!.door
+  // Whole-record scale facts open the whole range.
+  expect(door('laps')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 10 * D })
+  expect(door('walked')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 10 * D })
+  // The hermit stretch is the stay itself.
+  expect(door('hermit')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 4 * D - 12 * H })
+  // Furthest and longest stay open the pin, with the playhead on the visit.
+  expect(door('furthest')).toMatchObject({ kind: 'place', placeId: expect.stringMatching(/^hotel/), at: expect.any(Number) })
+  expect(door('longest-stay')).toMatchObject({ kind: 'place', placeId: 'hotel', at: JAN + 4 * D })
+  // Countries: one pin per country.
+  const c = door('countries')
+  expect(c?.kind).toBe('places')
+  expect(c && c.kind === 'places' && c.placeIds.length).toBe(2)
+  expect(c && c.kind === 'places' && c.placeIds).toContain('home')
+  // Every fact's door reads as its headline.
+  for (const x of f) expect(x.door?.label).toBe(x.headline)
+})

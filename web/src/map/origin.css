@@ -1,0 +1,15 @@
+/* Origin stub: mustard on ink, perforated where it tore off the figure it came from. */
+.origin {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin: 0; padding: 7px 10px 6px 12px;
+  border: 0; border-left: 2px dashed var(--mustard); background: var(--ink); color: var(--mustard); cursor: pointer;
+  font: 800 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: origin-in 160ms var(--ease, ease) both;
+}
+.origin small { font: 700 10px/1 var(--body); font-stretch: 85%; letter-spacing: 0.22em; color: var(--stock-3); }
+.origin i { font-style: normal; margin-left: 4px; color: var(--stock); }
+.origin:hover { color: var(--stock); }
+.origin:hover i { color: var(--mustard); }
+.origin:focus-visible { outline-color: var(--mustard); outline-offset: -4px; }
+.hud.pins .origin { position: absolute; bottom: calc(100% + 3px); right: -3px; z-index: 1; }
+@keyframes origin-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .origin { animation: none; } }

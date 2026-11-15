@@ -7,6 +7,17 @@ export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 
 export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play']
 /** Replay pace: multiplier on the per-segment timing (each leg plays for a few seconds, each stay for about one). */
 
+/** Where a readable figure leads: a date window, one pin, a trip, or a set of pins. */
+export type Door =
+  | { kind: 'range'; from: number; to: number; label: string }
+  | { kind: 'place'; placeId: string; at?: number; label: string }
+  | { kind: 'trip'; tripId: string; from: number; to: number; label: string }
+  | { kind: 'places'; placeIds: string[]; label: string }
+/** The figure the reader walked through, and the way back to it. */
+export interface Origin { label: string; backTab: Tab; scrollY: number }
+/** What the Map frames once its camera is live: these pins, or every pin in the range when `ids` is null. `n` bumps per door. */
+export interface Focus { ids: string[] | null; n: number }
+
 export interface Store {
   tab: Tab
   setTab(t: Tab): void
@@ -38,6 +49,12 @@ export interface Store {
   setSpeed(s: number): void
   setFollow(f: boolean): void
   setHoverPlace(h: Store['hoverPlace']): void
+  /** Walk through a figure: open the map on what made it, remembering the way back. */
+  goTo(door: Door): void
+  /** Return to the tab the door was on; the caller restores the scroll from `origin`. */
+  goBack(): void
+  origin: Origin | null
+  focus: Focus | null
 }
 
 /** Playhead sampled at most every `ms`; HUD, sky and tags read this so the per-frame tick never re-renders React. */
@@ -58,7 +75,9 @@ export function useThrottledPlayhead(ms: number): number | null {
   return v
 }
 
-export const useStore = create<Store>((set) => ({
+const onMap = (t: Tab) => t === 'map' || t === 'play'
+
+export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
   setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}) }) },
   playhead: null,
@@ -73,15 +92,40 @@ export const useStore = create<Store>((set) => ({
   toggleCat: (c) => set((s) => ({ hiddenCats: s.hiddenCats.includes(c) ? s.hiddenCats.filter((x) => x !== c) : [...s.hiddenCats, c] })),
   setHiddenCats: (hiddenCats) => set({ hiddenCats }),
   pin: null,
-  setPin: (pin) => set({ pin }),
+  setPin: (pin) => set({ pin, origin: null, focus: null }),
   pinSize: 'visits',
   setPinSize: (pinSize) => set({ pinSize }),
   range: null,
-  setRange: (range) => set({ range, playhead: range ? range[0] : null }),
+  setRange: (range) => set({ range, playhead: range ? range[0] : null, origin: null, focus: null }),
   hoverPlace: null,
   setPlayhead: (playhead) => set({ playhead }),
   setPlaying: (playing) => set(playing ? { playing, follow: true } : { playing }),
   setSpeed: (speed) => set({ speed }),
   setFollow: (follow) => set({ follow }),
   setHoverPlace: (hoverPlace) => set({ hoverPlace }),
+  origin: null,
+  focus: null,
+  goTo: (door) => {
+    const s = get()
+    // A door opened from the map itself keeps the first way back.
+    const origin: Origin = onMap(s.tab) && s.origin ? { ...s.origin, label: door.label } : { label: door.label, backTab: onMap(s.tab) ? 'home' : s.tab, scrollY: onMap(s.tab) ? 0 : window.scrollY }
+    const n = (s.focus?.n ?? 0) + 1
+    location.hash = 'map'
+    const base = { tab: 'map' as Tab, playing: false, origin }
+    switch (door.kind) {
+      case 'range':
+      case 'trip':
+        set({ ...base, range: [door.from, door.to], playhead: door.from, pin: null, focus: { ids: null, n } }); break
+      case 'place':
+        set({ ...base, pin: door.placeId, playhead: door.at ?? s.playhead, hiddenCats: [], focus: { ids: [door.placeId], n } }); break
+      case 'places':
+        set({ ...base, pin: null, hiddenCats: [], focus: { ids: door.placeIds, n } }); break
+    }
+  },
+  goBack: () => {
+    const o = get().origin
+    if (!o) return
+    get().setTab(o.backTab)
+    set({ origin: null, focus: null })
+  },
 }))

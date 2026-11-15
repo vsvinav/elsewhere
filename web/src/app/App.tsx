@@ -93,7 +93,14 @@ export function App() {
     return () => removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => {
-    const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }
+    // Browser Back from a door lands on the figure it was opened from.
+    const onHash = () => {
+      const t = location.hash.slice(1)
+      const { tab, origin, setTab, goBack } = useStore.getState()
+      if (!t || t === tab) return
+      if (origin && t === origin.backTab) { goBack(); requestAnimationFrame(() => requestAnimationFrame(() => scrollTo({ top: origin.scrollY }))) }
+      else setTab(t as never)
+    }
     addEventListener('hashchange', onHash)
     return () => removeEventListener('hashchange', onHash)
   }, [])
