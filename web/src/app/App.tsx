@@ -13,7 +13,8 @@ import { NamingStamp } from './NamingStamp'
 import { ReadyBar, readyFor, type Ready } from './ReadyBar'
 import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
-import { useStore } from '../store/useStore'
+import { SETTINGS_HASH, useStore } from '../store/useStore'
+import { Settings } from './Settings'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
 import { Stats } from '../tabs/Stats/Stats'
@@ -64,7 +65,8 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record?.meta.source_sha256, homesKey])
   const tab = useStore((s) => s.tab)
-  const onMap = tab === 'map' || tab === 'play'
+  const settingsOpen = useStore((s) => s.settingsOpen)
+  const onMap = (tab === 'map' || tab === 'play') && !settingsOpen
   useEffect(() => {
     if (!onMap || !record || record.paths.length) return
     let live = true
@@ -93,7 +95,13 @@ export function App() {
     return () => removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => {
-    const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }
+    const onHash = () => {
+      const t = location.hash.slice(1)
+      const s = useStore.getState()
+      if (t === SETTINGS_HASH) { if (!s.settingsOpen) s.openSettings() }
+      else if (t && t !== s.tab) s.setTab(t as never)
+      else if (s.settingsOpen) s.closeSettings()
+    }
     addEventListener('hashchange', onHash)
     return () => removeEventListener('hashchange', onHash)
   }, [])
@@ -113,10 +121,12 @@ export function App() {
       {bar}
       <div className="tourline">
         <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
+        <button className="chip" onClick={() => useStore.getState().openSettings()} aria-current={settingsOpen ? 'page' : undefined}>Settings</button>
         <details className="account">
           <summary aria-label="Account">▾</summary>
           <div className="menu">
             <button onClick={ctx.editProfile}>Edit profile</button>
+            <button onClick={() => useStore.getState().openSettings()}>Settings</button>
             <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
             <UsageRow />
           </div>
@@ -125,7 +135,7 @@ export function App() {
       <StubNav />
       <GoogleDownNote />
       <NamingStamp progress={naming} />
-      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
+      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
     </div>
   )
 }

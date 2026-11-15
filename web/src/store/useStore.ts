@@ -7,9 +7,16 @@ export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 
 export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play']
 /** Replay pace: multiplier on the per-segment timing (each leg plays for a few seconds, each stay for about one). */
 
+/** Hash for the Settings page; not a tab, it sits over whichever tab was open. */
+export const SETTINGS_HASH = 'settings'
+
 export interface Store {
   tab: Tab
   setTab(t: Tab): void
+  /** Settings is a page over the current tab; closing it returns there. */
+  settingsOpen: boolean
+  openSettings(): void
+  closeSettings(): void
   playhead: number | null
   playing: boolean
   speed: number
@@ -60,7 +67,10 @@ export function useThrottledPlayhead(ms: number): number | null {
 
 export const useStore = create<Store>((set) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
-  setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}) }) },
+  setTab: (tab) => { location.hash = tab; set({ tab, settingsOpen: false, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}) }) },
+  settingsOpen: location.hash.slice(1) === SETTINGS_HASH,
+  openSettings: () => { location.hash = SETTINGS_HASH; set({ settingsOpen: true, playing: false }) },
+  closeSettings: () => set((s) => { location.hash = s.tab; return { settingsOpen: false } }),
   playhead: null,
   playing: false,
   speed: 1,
