@@ -78,3 +78,8 @@
 .kc-limited { font: 600 13px/1 var(--body); color: var(--ink-2); }
 @media (prefers-reduced-motion: reduce) { .keycheck.busy::before { animation: none; } }
 .kc-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* A card still waiting on its name: the city holds the line, with a faint pulse so it reads as provisional. */
+.ob-tag .naming-name { animation: naming-pulse 1.4s ease-in-out infinite; }
+@keyframes naming-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .ob-tag .naming-name { animation: none; opacity: 0.6; } }

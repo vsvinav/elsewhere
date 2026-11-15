@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Data } from '../data/types'
 import { Field, Stamp } from '../world'
 import { KeyCheck, useKeyGate } from './KeyCheck'
+import { NamingStamp } from '../app/NamingStamp'
+import type { Progress } from '../ingest/enrich'
 import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings } from '../ingest/settings'
 import { profile as store, type Home, type Profile, type Work } from './profile'
@@ -60,19 +62,24 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   // Names: a proper name from any Google label in the cluster (one cached Details call per label, three at most),
   // else OpenStreetMap's free reverse geocoder for the street, one lookup a second.
   const [names, setNames] = useState<Record<string, string>>({})
+  const [naming, setNaming] = useState<Progress>(null)
   useEffect(() => {
     let live = true
     const put = (id: string, n: string | null) => { if (live && n) setNames((m) => (m[id] ? m : { ...m, [id]: n })) }
-    for (const s of [...sleep.slice(0, 8), ...weekday.slice(0, 6)]) {
-      if (!data) break
-      clusterName(s.members, data.places, mapsKey).then((n) => {
+    const todo = data ? [...sleep.slice(0, 8), ...weekday.slice(0, 6)] : []
+    let done = 0
+    const tick = () => { done++; if (live) setNaming(done < todo.length ? { done, total: todo.length } : null) }
+    if (todo.length) setNaming({ done: 0, total: todo.length })
+    for (const s of todo) {
+      clusterName(s.members, data!.places, mapsKey).then((n) => {
         if (n) return put(s.place_id, n)
-        if (!data.places[s.place_id]?.name) return address(s.lat, s.lng).then((a) => put(s.place_id, a))
-      })
+        if (!data!.places[s.place_id]?.name) return address(s.lat, s.lng).then((a) => put(s.place_id, a))
+      }).catch(() => {}).finally(tick)
     }
     return () => { live = false }
   }, [sleep, weekday, data, mapsKey, demo])
   const label = (s: Suggestion) => names[s.place_id] ?? data?.places[s.place_id]?.name ?? s.city ?? 'Unnamed place'
+  const pending = (s: Suggestion) => !!naming && !names[s.place_id] && !data?.places[s.place_id]?.name
   const sure = (s: Suggestion) => s.share >= 0.6 ? 'likely home' : s.share >= 0.3 ? 'maybe home' : 'stayed here'
   const asHome = (s: Suggestion, from = 0): Home => ({ lat: s.lat, lng: s.lng, city: s.city ?? '', cc: s.cc ?? '', from, to: null, name: label(s) })
   const pickHome = (s: Suggestion) => { setHomes([asHome(s)]); if (!initial) setUnits(MILES.has(s.cc ?? '') ? 'mi' : 'km') }
@@ -129,7 +136,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 {sleep.map((s) => (
                   <button key={s.place_id} className="tag ob-tag" aria-pressed={homes.length === 1 && isSame(homes[0], s)} onClick={() => pickHome(s)}>
                     <span className="lab">{sure(s)}</span>
-                    <span className="name">{label(s)}</span>
+                    <span className={`name${pending(s) ? ' naming-name' : ''}`}>{label(s)}</span>
                     <span className="sub">{s.city && label(s) !== s.city ? `${s.city} · ` : ''}{s.score} {s.score === 1 ? 'night' : 'nights'} · {Math.round(s.share * 100)}% of nights then{s.members.length > 1 ? ` · ${s.members.length} labels merged` : ''}</span>
                   </button>
                 ))}
@@ -151,7 +158,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   return (
                     <button key={s.place_id} className="tag ob-tag" onClick={() => setHomes([...homes, asHome(s, from)])}>
                       <span className="lab">{last ? 'moved back' : mv ? `from ${monthName(mv.month)}` : s.cc || '—'}</span>
-                      <span className="name">{label(s)}</span>
+                      <span className={`name${pending(s) ? ' naming-name' : ''}`}>{label(s)}</span>
                       <span className="sub">{last ? `again, after ${monthName(monthOf(last.to!))}` : `${s.score} ${s.score === 1 ? 'night' : 'nights'} · ${Math.round(s.share * 100)}% of nights then`}</span>
                     </button>
                   )
@@ -169,7 +176,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                   return (
                     <button key={s.place_id} className="tag ob-tag" aria-pressed={on} onClick={() => setWorks(on ? works.filter((w) => w.place_id !== s.place_id) : [...works, { lat: s.lat, lng: s.lng, place_id: s.place_id, name: label(s), from: 0, to: null }])}>
                       <span className="lab">{s.cc || '—'}</span>
-                      <span className="name">{label(s)}</span>
+                      <span className={`name${pending(s) ? ' naming-name' : ''}`}>{label(s)}</span>
                       <span className="sub">{Math.round(s.score)} weekday hours</span>
                     </button>
                   )
@@ -190,6 +197,7 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
           )}
         </div>
         {step !== 'start' && <Stamp top="Official" big={`${Math.min(i, 5)}/5`} bottom="record" style={{ position: 'absolute', right: 'var(--gutter)', bottom: 56 }} />}
+        {(step === 'home' || step === 'moved' || step === 'work') && <NamingStamp progress={naming} />}
       </section>
     </main>
   )

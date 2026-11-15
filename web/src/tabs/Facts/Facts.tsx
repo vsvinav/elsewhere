@@ -32,9 +32,9 @@ export function Facts() {
   const all = useMemo(() => facts(data, units, raw), [data, units, raw])
   const [seed, setSeed] = useState(0)
   const [only, setOnly] = useState<Kind | null>(null)
-  // The card gets its own short facts; the list never repeats them. A thin record falls back to sharing.
+  // The card turns the short quips up top; every fact, quip or not, still prints in the list below.
   const cards = useMemo(() => { const c = all.filter((f) => f.card); return c.length >= 2 ? c : all }, [all])
-  const rest = useMemo(() => (cards === all ? all : all.filter((f) => !f.card)), [all, cards])
+  const rest = all
   const list = useMemo(() => arrange(rest, seed).filter((f) => !only || f.kind === only), [rest, seed, only])
   const kinds = ORDER.filter((k) => rest.some((f) => f.kind === k))
   const year = new Date(data.meta.range[1] * 1000).getUTCFullYear()

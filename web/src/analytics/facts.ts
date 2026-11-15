@@ -4,6 +4,7 @@ import { isHome } from './geo'
 import { lensOf } from './lens'
 import { distanceKm } from './position'
 import { nightsIn } from './tour'
+import { flights } from '../world/flights'
 
 export type Kind = 'explored' | 'record' | 'scale' | 'habit'
 export type Figure =
@@ -23,6 +24,7 @@ const long = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US
 const longTs = (ts: number) => long(new Date(ts * 1000).toISOString().slice(0, 10))
 const localHour = (ts: number, tz: number) => new Date((ts + tz * 60) * 1000).getUTCHours()
 const localDow = (ts: number, tz: number) => (new Date((ts + tz * 60) * 1000).getUTCDay() + 6) % 7
+const COUNTRIES = 195
 const pct = (a: number, b: number) => Math.round((100 * a) / Math.max(1, b))
 
 /** Named walks a reader can picture; km. */
@@ -291,6 +293,52 @@ const GEN: ((c: Ctx) => Fact | null)[] = [
     const ps = typed(d, /transit_station|bus_station|subway_station|train_station|light_rail/), n = visitsOf(ps)
     if (n < 10) return null
     return { id: 'transit', kind: 'habit', card: true, headline: `${n0(n)} station visits`, detail: `${hrs(hoursOf(ps, 1))} hours on platforms.`, quip: `${n0(n)} times through a station, ${hrs(hoursOf(ps, 1))} hours on platforms. The train is always "2 minutes" away.` }
+  },
+  // Nights away as hotel floors
+  ({ nights }) => {
+    const away = nights.filter((n) => n.kind === 'new' || n.kind === 'repeat').length
+    if (away < 7) return null
+    return { id: 'away', kind: 'scale', headline: `${n0(away)} nights in a bed that wasn't yours`, detail: away >= 30 ? `About ${(away / 30).toFixed(1)} months of the record spent away. Red nights were somewhere new; mustard, somewhere you'd been before.` : `${pct(away, nights.length)}% of the nights in this range. Red nights were somewhere new; mustard, somewhere you'd been before.`, figure: { t: 'beds', nights } }
+  },
+  // New vs repeat
+  ({ d, isFirst }) => {
+    const vs = nonRoutine(d)
+    if (vs.length < 20) return null
+    const fresh = vs.filter(isFirst).length
+    const share = pct(fresh, vs.length)
+    return { id: 'fresh', kind: 'habit', card: true, headline: `${share}% of stops were somewhere new`, detail: `${n0(fresh)} first-time places out of ${n0(vs.length)} stops away from home and work.`, figure: { t: 'ring', pct: share, label: 'new' }, quip: share >= 50 ? `${share}% of your stops were somewhere new. Commitment issues, or curiosity.` : `${100 - share}% of stops were places you'd already been. You have favourites.` }
+  },
+  // Favourite stop
+  ({ d }) => {
+    const best = Object.entries(d.places).filter(([, p]) => p.role == null && p.n_visits >= 5).sort((a, b) => b[1].n_visits - a[1].n_visits)[0]
+    if (!best) return null
+    const [, p] = best
+    return { id: 'fav', kind: 'habit', headline: `${p.name ?? 'One unnamed place'} · ${p.n_visits} visits`, detail: `${p.name ? '' : 'Add a Google Maps key to name it. '}Your most visited stop that isn't home or work${p.city ? `, in ${p.city}` : ''}. ${n0(p.total_hours)} hours there in all.` }
+  },
+  // Most-flown route
+  ({ d, dist }) => {
+    const { hops, ports } = flights(d)
+    const top = [...hops].sort((a, b) => b.n - a.n || b.km - a.km)[0]
+    if (!top || top.n < 2) return null
+    const name = (p: [number, number]) => ports.find((x) => Math.abs(x.p[0] - p[0]) < 0.1 && Math.abs(x.p[1] - p[1]) < 0.1)?.name || 'somewhere'
+    return { id: 'route', kind: 'record', headline: `${name(top.s)} ↔ ${name(top.t)}, ${top.n} times`, detail: `Your most-flown route, ${dist(top.km)} each way. ${dist(top.km * top.n)} on this one line alone.` }
+  },
+  // Countries
+  ({ d }) => {
+    const cc = new Set<string>()
+    for (const p of Object.values(d.places)) if (p.country_code) cc.add(p.country_code)
+    if (cc.size < 2) return null
+    return { id: 'countries', kind: 'explored', headline: `${cc.size} of ${COUNTRIES} countries`, detail: `${pct(cc.size, COUNTRIES)}% of the world's countries have your footprints in them: ${[...cc].sort().join(', ')}.`, figure: { t: 'ring', pct: (100 * cc.size) / COUNTRIES, label: 'countries' } }
+  },
+  // Busiest travel month
+  ({ d, dist, nights }) => {
+    const km = new Map<string, number>()
+    for (const a of d.activities) { const k = new Date((a.start + a.tz * 60) * 1000).toISOString().slice(0, 7); km.set(k, (km.get(k) ?? 0) + a.m / 1000) }
+    const top = [...km.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (!top || km.size < 3) return null
+    const away = nights.filter((n) => n.date.startsWith(top[0]) && n.kind !== 'home' && n.kind !== 'none').length
+    const name = new Date(top[0] + '-01T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' })
+    return { id: 'month', kind: 'record', headline: `${name}: ${dist(top[1])}`, detail: `Your busiest month, ${away} nights away. The average month was ${dist([...km.values()].reduce((a, b) => a + b, 0) / km.size)}.`, figure: { t: 'beds', nights: nights.filter((n) => n.date.startsWith(top[0])) } }
   },
 ]
 
