@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useData, useRawData } from '../../data/DataContext'
 import { useProfile } from '../../profile/profile'
 import { need } from '../../ingest/places'
@@ -7,7 +7,8 @@ import { Bill, Field, Pass, PrintIn, Stamp } from '../../world'
 import { Fig } from '../../world/figures/Figures'
 import { Door } from '../../world/Door'
 import { bedText, SITE } from '../../share/text'
-import { HighlightSlot } from '../highlights/HighlightSlot'
+import { localToday } from '../../analytics/highlights'
+import { HubDeck } from './HubDeck'
 import { Passport } from './Passport'
 import './facts.css'
 
@@ -38,82 +39,68 @@ export function Facts() {
   useEffect(() => { need(Object.entries(raw.places).sort((a, b) => b[1].n_visits - a[1].n_visits).slice(0, 30).map(([id]) => id), raw.places) }, [raw.places])
   const [seed, setSeed] = useState(0)
   const [only, setOnly] = useState<Kind | null>(null)
-  // The card turns the short quips up top; every fact, quip or not, still prints in the list below.
-  const cards = useMemo(() => { const c = all.filter((f) => f.card); return c.length >= 2 ? c : all }, [all])
-  const rest = all
-  const list = useMemo(() => arrange(rest, seed).filter((f) => !only || f.kind === only), [rest, seed, only])
-  const kinds = ORDER.filter((k) => rest.some((f) => f.kind === k))
+  const [open, setOpen] = useState(false)
+  const list = useMemo(() => arrange(all, seed).filter((f) => !only || f.kind === only), [all, seed, only])
+  const kinds = ORDER.filter((k) => all.some((f) => f.kind === k))
   const year = new Date(data.meta.range[1] * 1000).getUTCFullYear()
-  // One fact at a time up top, turning every few seconds unless the pointer rests on it.
-  const [at, setAt] = useState(0)
-  const [hold, setHold] = useState(false)
-  useEffect(() => { setAt(0) }, [cards])
-  useEffect(() => {
-    if (hold || cards.length < 2) return
-    const t = setInterval(() => setAt((i) => (i + 1) % cards.length), 6000)
-    return () => clearInterval(t)
-  }, [hold, cards.length])
-  const star = cards[at]
-  const jump = (f: Fact) => document.getElementById(`fact-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const days = Math.max(1, Math.round((data.meta.range[1] - data.meta.range[0]) / 86400))
+  const today = useMemo(() => localToday(), [])
+  const listRef = useRef<HTMLElement>(null)
+  const passRef = useRef<HTMLElement>(null)
+  const smooth = (): ScrollBehavior => (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
+  const openKind = (k: Kind) => { setOnly(k); setOpen(true); requestAnimationFrame(() => listRef.current?.scrollIntoView?.({ behavior: smooth(), block: 'start' })) }
+  const openPassport = () => passRef.current?.scrollIntoView?.({ behavior: smooth(), block: 'start' })
 
   return (
     <>
-      <HighlightSlot />
       <main className="bills facts-head">
         <Bill className="hero" share={false}>
-          <div className="two">
-            <div>
-              <h1 className="title"><span className="misreg">Fun</span><span className="misreg red">Facts</span></h1>
-              <p className="lede sub">{all.length ? `${rest.length} things your record says about you, read sideways. Firsts are judged over the whole record, so a January trip stays new when you cut the range down.` : 'Nothing to say yet. Widen the range, or wait for the record to fill in.'}</p>
-            </div>
-            {star && (
-              <div className="feature" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}>
-                <div className="feature-top"><Field label={star.card ? 'Side note' : KIND[star.kind]}>{at + 1} of {cards.length}</Field><span className="feature-bar" key={`${star.id}-${hold}`} data-hold={hold || undefined} /></div>
-                <button key={star.id} className="feature-card" onClick={() => (star.card ? setAt((at + 1) % cards.length) : jump(star))} aria-label={star.card ? 'Next' : `Go to: ${star.headline}`}>
-                  {star.figure && !WIDE.has(star.figure.t) && <div className="feature-fig"><Fig f={star.figure} /></div>}
-                  <h2 className="fact-h quip">{star.quip ?? star.headline}</h2>
-                  {star.figure && WIDE.has(star.figure.t) && <div className="feature-wide"><Fig f={star.figure} /></div>}
-                </button>
-                <div className="feature-nav">
-                  <button className="btn quiet" onClick={() => setAt((at + cards.length - 1) % cards.length)} aria-label="Previous fact">←</button>
-                  <button className="btn quiet" onClick={() => setAt((at + 1) % cards.length)} aria-label="Next fact">→</button>
-                  {all.length > 1 && <button className="btn quiet" onClick={() => setSeed(Date.now() & 0xffff)}>Shuffle</button>}
-                </div>
-              </div>
-            )}
-          </div>
+          <h1 className="title"><span className="misreg">Play</span></h1>
+          <p className="lede sub">{all.length ? `Six cards from ${days.toLocaleString('en-US')} days of record. Each one opens its full pass; the whole list of facts is one tap away.` : 'Nothing to say yet. Widen the range, or wait for the record to fill in.'}</p>
+          <HubDeck data={data} raw={raw} facts={all} today={today} units={units} onOpenKind={openKind} onOpenPassport={openPassport} />
           <div className="foot">
-            <span className="facts-kinds" role="group" aria-label="Show only">
-              {kinds.map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}>{KIND[k]} <b>{rest.filter((f) => f.kind === k).length}</b></button>)}
-            </span>
             <span>{units === 'mi' ? 'Miles' : 'Kilometres'}</span>
           </div>
-          <Stamp top="Fun facts" big={String(year)} bottom="live" />
+          <Stamp top="Play" big={String(year)} bottom="live" />
         </Bill>
       </main>
-      {list.length > 0 && (
-        <main className="strip dense facts">
-          {list.map((f, i) => {
-            const wide = f.figure && WIDE.has(f.figure.t)
-            const text = () => (f.figure?.t === 'beds' ? bedText(f.figure.nights, f.headline.toUpperCase()) : `${f.headline.toUpperCase()}\n${f.detail}\n${SITE}`)
-            return (
-              <Pass key={f.id} id={`fact-${f.id}`} className={`fact ${f.kind}`} text={text} stub={
-                <PrintIn>
-                  <Field label={KIND[f.kind]}>{i + 1} of {list.length}</Field>
-                  {f.figure && !wide && <div className="fact-fig"><Fig f={f.figure} /></div>}
-                </PrintIn>
-              }>
-                <PrintIn>
-                  <h2 className="fact-h"><Door target={f.door} className="fact-door">{f.headline}</Door></h2>
-                  <p className="fact-p">{f.detail}</p>
-                  {f.figure && wide && <div className="fact-wide"><Fig f={f.figure} /></div>}
-                </PrintIn>
-              </Pass>
-            )
-          })}
-        </main>
-      )}
-      <main className="strip dense facts-passport">
+      <main ref={listRef} className="strip dense facts">
+        <div className="hub-all">
+          <button type="button" aria-expanded={open} aria-controls="facts-list" onClick={() => setOpen(!open)}>
+            <span>All facts</span>
+            <span className="caps">{all.length} passes {open ? '−' : '+'}</span>
+          </button>
+        </div>
+        {open && (
+          <div id="facts-list">
+            <div className="foot facts-filter">
+              <span className="facts-kinds" role="group" aria-label="Show only">
+                {kinds.map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}>{KIND[k]} <b>{all.filter((f) => f.kind === k).length}</b></button>)}
+              </span>
+              {all.length > 1 && <button className="btn quiet" onClick={() => setSeed(Date.now() & 0xffff)}>Shuffle</button>}
+            </div>
+            {list.map((f, i) => {
+              const wide = f.figure && WIDE.has(f.figure.t)
+              const text = () => (f.figure?.t === 'beds' ? bedText(f.figure.nights, f.headline.toUpperCase()) : `${f.headline.toUpperCase()}\n${f.detail}\n${SITE}`)
+              return (
+                <Pass key={f.id} id={`fact-${f.id}`} className={`fact ${f.kind}`} text={text} stub={
+                  <PrintIn>
+                    <Field label={KIND[f.kind]}>{i + 1} of {list.length}</Field>
+                    {f.figure && !wide && <div className="fact-fig"><Fig f={f.figure} /></div>}
+                  </PrintIn>
+                }>
+                  <PrintIn>
+                    <h2 className="fact-h"><Door target={f.door} className="fact-door">{f.headline}</Door></h2>
+                    <p className="fact-p">{f.detail}</p>
+                    {f.figure && wide && <div className="fact-wide"><Fig f={f.figure} /></div>}
+                  </PrintIn>
+                </Pass>
+              )
+            })}
+          </div>
+        )}
+      </main>
+      <main ref={passRef} className="strip dense facts-passport">
         <Passport />
       </main>
     </>

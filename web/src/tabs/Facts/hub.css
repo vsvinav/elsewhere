@@ -1,0 +1,56 @@
+/* Play deck: six poster cards along the top of the Facts tab, swiped like the trip deck, each opening its full pass. */
+.hub-deck { margin: 0 0 32px; }
+.hub-row { align-items: stretch; }
+.hub-card { flex: 0 0 300px; max-width: 300px; min-height: 380px; padding: 18px; border-width: 3px; transform: rotate(var(--tilt, 0deg)); color: var(--ink); }
+.hub-card.is-selected { transform: rotate(0deg) translate(-2px, -2px); }
+.hub-card.ink { background: var(--ink); color: var(--stock); }
+.hub-card.red { background: var(--red); color: var(--stock); }
+.hub-kind { font-size: 10px; letter-spacing: 0.26em; opacity: 0.8; }
+.hub-card .hub-h { margin: 14px 0 10px; font-size: clamp(34px, 4vw, 52px); line-height: 0.9; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.hub-lede { margin: 0; font: 500 15px/1.35 var(--body); }
+.hub-date { margin-top: 12px; font-size: 10px; color: var(--ink-3); }
+.hub-open { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding: 12px 0 0; border: 0; border-top: 2px solid currentColor; background: none; color: var(--red); font: 700 12px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer; }
+.hub-card.ink .hub-open, .hub-card.red .hub-open { color: var(--mustard); border-top-color: var(--stock); }
+.hub-open:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.hub-card .hub-open { padding-top: 14px; margin-top: auto; }
+.hub-card > :not(.hub-open):last-of-type { margin-bottom: 16px; }
+
+.hub-streaks { list-style: none; margin: 10px 0 0; padding: 0; }
+.hub-streaks li { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: baseline; padding: 10px 0; border-bottom: 2px solid currentColor; }
+.hub-streaks li:last-child { border-bottom: 0; }
+.hub-streaks b { grid-row: span 2; font-size: 34px; line-height: 0.9; font-weight: 900; }
+.hub-streaks .caps { font-size: 10px; letter-spacing: 0.22em; }
+.hub-streaks small { font: 500 12px/1.2 var(--body); opacity: 0.75; }
+.hub-streaks li.zero b { color: var(--red); }
+
+.hub-years { display: flex; gap: 8px; margin: 12px 0; }
+.hub-chip { flex: 1; padding: 8px 0; border: 2px solid var(--ink); background: none; color: var(--ink); font: 900 22px/1 var(--display); letter-spacing: 0.04em; cursor: pointer; }
+.hub-chip:hover:not(:disabled) { background: var(--ink); color: var(--stock); }
+.hub-chip:disabled { cursor: default; }
+.hub-table { width: 100%; border-collapse: collapse; }
+.hub-table th { text-align: left; font-size: 10px; letter-spacing: 0.22em; color: var(--ink-3); padding: 8px 0; border-bottom: 2px solid var(--ink); }
+.hub-table td { text-align: right; font-size: 24px; line-height: 1; font-weight: 900; padding: 8px 0 8px 10px; border-bottom: 2px solid var(--ink); font-variant-numeric: tabular-nums; }
+.hub-table tr:last-child th, .hub-table tr:last-child td { border-bottom: 0; }
+
+.heat-mini { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; margin-top: 14px; }
+.heat-mini i { display: block; aspect-ratio: 1; background: var(--stock); opacity: var(--v, 0.12); }
+
+.hub-nav { justify-content: center; }
+.dots { display: flex; gap: 6px; }
+.dots button { width: auto; height: auto; padding: 4px; border: 0; background: none; cursor: pointer; }
+.dots i { display: block; width: 8px; height: 8px; border: 2px solid var(--ink); background: none; }
+.dots i.on { background: var(--ink); }
+
+.hub-all { margin: 0 0 24px; }
+.hub-all > button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 0; border: 0; border-top: 3px solid var(--ink); border-bottom: 3px solid var(--ink); background: none; color: var(--ink); font: 900 22px/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.hub-all > button .caps { font-size: 11px; color: var(--ink-3); }
+.hub-all > button:hover { color: var(--red); }
+
+@media (max-width: 760px) {
+  .hub-card { flex-basis: 290px; max-width: 290px; }
+  .hub-nav .caps { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-card { transform: none; transition: none; }
+  .hub-card.is-selected { transform: none; }
+}
