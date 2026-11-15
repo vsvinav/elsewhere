@@ -10,6 +10,7 @@ import { segmentAt, whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
 import { legsOf } from '../analytics/legs'
 import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
+import { HeadingEase, iconAngle, stampHeading, type StampKind } from './heading'
 
 type RGBA = [number, number, number, number]
 const STOCK: RGBA = [239, 230, 210, 255]
@@ -37,23 +38,24 @@ const INK_OF = Object.fromEntries(Object.entries(LENS_COLOR).map(([k, v]) => [k,
 
 // Position markers, drawn as masks so they take the ink of the current movement.
 const svg = (d: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32"><path fill="#000" d="${d}"/></svg>`)}`
-const ICON: Record<Lens | 'still' | 'ff', { url: string; width: number; height: number; mask: true }> = {
+const ICON: Record<StampKind, { url: string; width: number; height: number; mask: true }> = {
   fly: { url: svg('M16 2c1.2 0 2 1 2 2.6V12l11 6.5v3l-11-3.4v6.2l3 2.2V29l-5-1.5L11 29v-2.5l3-2.2v-6.2L3 21.5v-3L14 12V4.6C14 3 14.8 2 16 2z'), width: 64, height: 64, mask: true },
-  drive: { url: svg('M9 6h14l3 8h2a2 2 0 0 1 2 2v7h-3v2a2 2 0 0 1-4 0v-2H9v2a2 2 0 0 1-4 0v-2H2v-7a2 2 0 0 1 2-2h2l3-8zm1.5 2.5L8.6 14h14.8l-1.9-5.5h-11zM7 17.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm18 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'), width: 64, height: 64, mask: true },
-  transit: { url: svg('M8 4h16a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3l2 3v1h-3l-2-3H11l-2 3H6v-1l2-3a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zm0 4v6h7V8H8zm9 0v6h7V8h-7zM9.5 17a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm13 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'), width: 64, height: 64, mask: true },
-  foot: { url: svg('M18 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-3.5 6.5 3 .5 2 3.5 4 2v2.5l-4.5-2-1.5-2-1 5 3 3.5V30h-2.5l-3-5.5-3 5.5H9l3.5-7.5 1-6-2 1.5V22H9v-6l5.5-6.5z'), width: 64, height: 64, mask: true },
+  // Seen from above and travelling up the box, like the plane, so each still reads once turned along its leg.
+  drive: { url: svg('M11 3h10a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm0 6-1 5h12l-1-5H11zm-1 11 1 5h10l1-5H10zM6 8h2v6H6zm18 0h2v6h-2zM6 19h2v6H6zm18 0h2v6h-2z'), width: 64, height: 64, mask: true },
+  transit: { url: svg('M12 2h8a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4zm0 4-1 4h10l-1-4h-8zm-1 7v3h10v-3H11zm0 6v3h10v-3H11zm0 6v2h10v-2H11z'), width: 64, height: 64, mask: true },
+  foot: { url: svg('M11 8.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm0 7a3.5 7 0 1 1 0 14 3.5 7 0 0 1 0-14zM21 0.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm0 7a3.5 7 0 1 1 0 14 3.5 7 0 0 1 0-14z'), width: 64, height: 64, mask: true },
   all: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
   still: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
   // Fast-forward chevrons: shown when the replay is too quick for the vehicle to matter.
   ff: { url: svg('M22 16a6 6 0 1 1-12 0 6 6 0 0 1 12 0zM2 13h8v2H2zm-2 2.5h9v1.5H0zM3 18h7v2H3z'), width: 64, height: 64, mask: true },
 }
-type StampKind = keyof typeof ICON
 // The stamp only changes once the new kind has held for a beat, so fast replay does not strobe between icons.
 const STAMP_HOLD_MS = 350
 const FF_PACE = 8
 let stamp = { shown: 'still' as StampKind, pending: 'still' as StampKind, since: 0 }
 // The stamp's ring grows and shrinks over a few frames instead of snapping between still and moving.
 let ringR = 0, ringAt = 0
+const heading = new HeadingEase()
 function easedRing(want: number): number {
   const t = performance.now()
   if (!ringR || t - ringAt > 500) ringR = want
@@ -272,16 +274,17 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
     const ink = kind === 'still' || kind === 'ff' ? INK : INK_OF[kind]
     const small = kind === 'still'
     const r = easedRing(small ? 11 : 20)
+    const angle = heading.at(stampHeading(seg, kind), performance.now())
     layers.push(
-      // The stamp: a stock disc with the leg's ink ring, and the vehicle inside kept upright so it never spins.
+      // The stamp: a stock disc with the leg's ink ring, and the vehicle inside turned along a long leg, upright on a short one.
       new ScatterplotLayer<typeof w>({
         id: 'here-ring', data: [w], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: r, radiusMaxPixels: r,
         getFillColor: STOCK, stroked: true, getLineColor: ink, lineWidthMinPixels: 3, updateTriggers: { getLineColor: kind },
       }),
       new IconLayer<typeof w>({
         id: 'here', data: [w], getPosition: (d) => [d.lng, d.lat], getIcon: () => ICON[kind], getColor: ink,
-        getSize: r * 1.3, sizeUnits: 'pixels', billboard: false,
-        updateTriggers: { getIcon: kind, getColor: kind },
+        getSize: r * 1.3, sizeUnits: 'pixels', billboard: false, getAngle: () => iconAngle(angle),
+        updateTriggers: { getIcon: kind, getColor: kind, getAngle: angle },
       }),
     )
   }
