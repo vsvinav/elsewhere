@@ -60,3 +60,21 @@
   .ob-homes li { flex-wrap: wrap; }
   .ob-bill .stamp { display: none; }
 }
+
+/* Key check: a verdict stamped under the key field, in the sheet's own ink and red. */
+.keycheck { margin-top: 12px; font: 600 14px/1.4 var(--body); }
+.keycheck.busy { color: var(--ink-2); }
+.keycheck.busy::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 2px solid var(--ink-2); border-right-color: transparent; border-radius: 50%; animation: keycheck-turn 0.9s linear infinite; vertical-align: -1px; }
+@keyframes keycheck-turn { to { transform: rotate(360deg); } }
+.keycheck.ok { color: var(--ink); }
+.keycheck.ok::before { content: '✓'; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border: 2px solid var(--ink); border-radius: 50%; font-size: 11px; vertical-align: -3px; }
+.keycheck.bad { border: 2px solid var(--red); padding: 14px 16px; }
+.kc-head { font: 800 15px/1 var(--display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--red); }
+.kc-msg { display: block; margin-top: 10px; font: 500 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); user-select: all; word-break: break-word; }
+.kc-hint { margin: 10px 0 0; font: 500 14px/1.45 var(--body); color: var(--ink-2); }
+.kc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 14px; }
+.kc-agree { display: flex; align-items: center; gap: 8px; font: 500 13px/1.3 var(--body); color: var(--ink-2); flex-basis: 100%; }
+.kc-agree input { accent-color: var(--red); width: 16px; height: 16px; }
+.kc-limited { font: 600 13px/1 var(--body); color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .keycheck.busy::before { animation: none; } }
+.kc-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }

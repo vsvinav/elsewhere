@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Data } from '../data/types'
 import { Field, Stamp } from '../world'
+import { KeyCheck, useKeyGate } from './KeyCheck'
 import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings } from '../ingest/settings'
 import { profile as store, type Home, type Profile, type Work } from './profile'
@@ -45,7 +46,8 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
   const weekday = useMemo(() => (data ? weekdayPlaces(data) : []), [data])
   const moves = useMemo(() => (data ? moveMonths(data) : []), [data])
   // A fresh import lands while the visitor is on the start step; move them along.
-  useEffect(() => { if (data && !demo && step === 'start') setStep('name') }, [data, demo, step])
+  const gated = useKeyGate()
+  useEffect(() => { if (data && !demo && step === 'start' && !gated) setStep('name') }, [data, demo, step, gated])
 
   const i = ORDER.indexOf(step)
   const next = () => setStep(ORDER[i + 1])
@@ -106,10 +108,11 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
               </label>
               <div className="ob-key">
                 <Field label="Google Maps key · optional: names and photos for your stops. Maps print on OpenStreetMap without one">
-                  <input className="val" type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => settings.set({ mapsKey: key.trim() })} placeholder="AIza…" aria-label="Google Maps API key" spellCheck={false} autoComplete="off" />
+                  <input className="val" type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => settings.setKey(key.trim())} placeholder="AIza…" aria-label="Google Maps API key" spellCheck={false} autoComplete="off" />
                 </Field>
+                <KeyCheck />
               </div>
-              {demo && data && <button className="btn quiet ob-demo" onClick={() => setStep('name')}>Try the demo record instead →</button>}
+              {demo && data && !gated && <button className="btn quiet ob-demo" onClick={() => setStep('name')}>Try the demo record instead →</button>}
               </div>
             </div>
           )}

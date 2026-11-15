@@ -5,6 +5,7 @@ import { STAGE_LABEL } from '../ingest'
 import { settings, useSettings, type MapProvider } from '../ingest/settings'
 import { UsageRow } from '../usage/Meter'
 import { Field } from '../world'
+import { KeyCheck } from '../profile/KeyCheck'
 import { date, n0 } from '../world/fmt'
 
 /** The last pass on Home: where a visitor's own export goes in, and where their Google key lives. */
@@ -24,8 +25,8 @@ export function YourRecord() {
   const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) rec.importFile(f) }
   const saveKeys = () => {
     const changed = key !== mapsKey || id !== mapId
-    settings.set({ mapsKey: key.trim(), mapId: id.trim() })
-    // The Maps script loads once per page with one key; a new key needs a fresh page.
+    settings.setKey(key.trim()); settings.set({ mapId: id.trim() })
+    // The Maps script loads once per page with one key; a new key needs a fresh page. The check result is kept in settings, so it survives.
     if (changed && 'google' in window) location.reload()
   }
 
@@ -78,10 +79,11 @@ export function YourRecord() {
             </select>
           </div>
           <Field label="Key used for">Map tiles · place names · photos</Field>
+          <KeyCheck />
           <UsageRow />
         </div>
         {rec.enrichError && <div className="dz-err">Places lookups stopped: {rec.enrichError.message}</div>}
-        <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; restrict it to this site's address. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>
+        <p className="fine">The key stays in this browser. Enable Maps JavaScript API and Places API (New) on it; if you restrict it to websites, add this site's address. The same key works on the phone app only without a website restriction. Record {date(data.meta.range[0])} → {date(data.meta.range[1])}.</p>
     </div>
   )
 }
