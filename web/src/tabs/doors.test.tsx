@@ -94,9 +94,8 @@ describe('Numbers', () => {
     expect(useStore.getState().focus?.ids?.length).toBeGreaterThan(0)
     expect(useStore.getState().focus!.ids!.every((id) => data.places[id].city === 'Paris')).toBe(true)
 
-    const dates = screen.getAllByRole('button', { name: /^Open on the map: Paris · [A-Z]{3} \d+, \d{4} → / })
-    expect(dates).toHaveLength(2)
-    fireEvent.click(dates[1])
+    screen.getByRole('button', { name: /^Open on the map: Paris · first visit [A-Z]{3} \d+, \d{4}$/ })
+    fireEvent.click(screen.getByRole('button', { name: /^Open on the map: Paris · last visit [A-Z]{3} \d+, \d{4}$/ }))
     const r = useStore.getState().range!
     expect(data.visits.some((v) => data.places[v.place_id]?.city === 'Paris' && v.start >= r[0] && v.end <= r[1])).toBe(true)
   })

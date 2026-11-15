@@ -157,4 +157,17 @@ describe('browser Back', () => {
     syncTabFromHash()
     expect(useStore.getState()).toBe(before)
   })
+
+  it('never writes the hash while mirroring it, so the Forward entry survives', () => {
+    useStore.setState({ tab: 'map' })
+    history.replaceState(null, '', location.pathname)
+    const before = history.length
+    const hash = vi.spyOn(history, 'pushState')
+    syncTabFromHash()
+    expect(useStore.getState().tab).toBe('home')
+    expect(location.hash).toBe('')
+    expect(history.length).toBe(before)
+    expect(hash).not.toHaveBeenCalled()
+    hash.mockRestore()
+  })
 })

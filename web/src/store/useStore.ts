@@ -79,11 +79,13 @@ export function useThrottledPlayhead(ms: number): number | null {
 }
 
 const onMap = (t: Tab) => t === 'map' || t === 'play'
+/** State for landing on a tab: the replay starts following; walking off the map by the nav leaves a door's origin and framing behind. */
+const entering = (tab: Tab): Partial<Store> => ({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) })
 
 export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
   // Walking off the map by the nav leaves the door's origin and framing behind.
-  setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) }) },
+  setTab: (tab) => { location.hash = tab; set(entering(tab)) },
   playhead: null,
   playing: false,
   speed: 1,
@@ -148,10 +150,10 @@ export const useStore = create<Store>((set, get) => ({
  */
 export function syncTabFromHash() {
   const t = (location.hash.slice(1) || 'home') as Tab
-  const { tab, origin, setTab, leaveDoor } = useStore.getState()
+  const { tab, origin, leaveDoor } = useStore.getState()
   if (t === tab) return
   if (origin && t === origin.backTab) {
     leaveDoor()
     requestAnimationFrame(() => requestAnimationFrame(() => scrollTo({ top: origin.scrollY })))
-  } else if ((TABS as readonly string[]).includes(t)) setTab(t)
+  } else if ((TABS as readonly string[]).includes(t)) useStore.setState(entering(t)) // the address bar already moved; writing it back would push over the Forward entry
 }

@@ -184,7 +184,7 @@ export function Stats() {
                 <tr key={c.city}>
                   <td><Door target={d.city(c.city, `${c.city} · ${hours(c.hours)} · ${n0(c.visits)} visits · ${n0(c.places)} places`)}>{c.city}<small>{c.country}</small></Door></td>
                   <td><Door target={d.city(c.city, `${c.city} · ${hours(c.hours)}`)}>{hours(c.hours)}</Door></td><td><Door target={d.city(c.city, `${c.city} · ${n0(c.visits)} visits`)}>{n0(c.visits)}</Door></td><td><Door target={d.city(c.city, `${c.city} · ${n0(c.places)} places`)}>{n0(c.places)}</Door></td>
-                  <td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · ${date(c.first)} → ${date(c.last)}` }}>{date(c.first)}</Door></td><td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · ${date(c.first)} → ${date(c.last)}` }}>{date(c.last)}</Door></td>
+                  <td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · first visit ${date(c.first)}` }}>{date(c.first)}</Door></td><td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · last visit ${date(c.last)}` }}>{date(c.last)}</Door></td>
                 </tr>
               ))}
             </tbody>
