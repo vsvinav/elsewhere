@@ -17,6 +17,7 @@
 .deck-head .arrow { color: var(--red); }
 .deck-head h3 { margin: 8px 0 0; font-size: clamp(30px, 4vw, 44px); line-height: 0.9; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .deck-card .placemap { margin: 0; border: 0; border-bottom: 2px solid var(--ink); }
+.deck-blank { background: var(--stock-2); }
 .deck-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px 20px 10px; }
 .deck-stats .field .val.n { font-size: 34px; }
 .deck-stats .field .val.n small { font: 700 11px/1 var(--body); letter-spacing: 0.1em; }

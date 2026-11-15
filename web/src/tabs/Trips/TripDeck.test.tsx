@@ -80,6 +80,23 @@ describe('TripDeck', () => {
     expect(passes.map((p) => p.getAttribute('aria-expanded'))).toEqual(['false', 'true', 'false'])
   })
 
+  it('prints a live map only on the selected card and its neighbours; the rest wait on blank stock', () => {
+    cleanup()
+    const many = { ...base, trips: Array.from({ length: 20 }, (_, i) => ({ ...lisbon, start: start - i * 30 * D, end: start - i * 30 * D + 3 * D, anchor_cities: [`City ${i}`] })) }
+    render(<DataContext.Provider value={many}><Trips /></DataContext.Provider>)
+    expect(cards()).toHaveLength(20)
+    expect(screen.getAllByTestId('tripmap')).toHaveLength(2)
+    expect(within(cards()[0]).queryByTestId('tripmap')).toBeTruthy()
+    expect(within(cards()[1]).queryByTestId('tripmap')).toBeTruthy()
+    expect(within(cards()[2]).queryByTestId('tripmap')).toBeNull()
+    fireEvent.keyDown(deck(), { key: 'ArrowRight' })
+    expect(screen.getAllByTestId('tripmap').length).toBeLessThanOrEqual(3)
+    expect(within(cards()[2]).queryByTestId('tripmap')).toBeTruthy()
+    fireEvent.keyDown(deck(), { key: 'ArrowRight' })
+    expect(within(cards()[0]).queryByTestId('tripmap')).toBeNull()
+    expect(within(cards()[3]).queryByTestId('tripmap')).toBeTruthy()
+  })
+
   it('MAP walks through the trip door', () => {
     wrap()
     fireEvent.click(within(cards()[0]).getByRole('button', { name: /^Open on the map: / }))

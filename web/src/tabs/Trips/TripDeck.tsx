@@ -7,9 +7,7 @@ import { useUnits } from '../../profile/units'
 import { compare, type Card, type Compared } from './deck'
 import './deck.css'
 
-const STATS: { key: keyof Compared; label: string }[] = [
-  { key: 'nights', label: 'Nights' }, { key: 'km', label: 'Distance' }, { key: 'flights', label: 'Flights' }, { key: 'farthest', label: 'Farthest' },
-]
+const STATS: (keyof Compared)[] = ['nights', 'km', 'flights', 'farthest']
 
 function Stat({ label, win, children }: { label: string; win: boolean; children: React.ReactNode }) {
   return (
@@ -25,7 +23,7 @@ function Stat({ label, win, children }: { label: string; win: boolean; children:
  * older card beside it, a mustard tick on every stat it wins. Tapping a card opens its pass below; MAP opens the map on it.
  */
 export function TripDeck({ cards, data, onOpen }: { cards: Card[]; data: Data; onOpen(card: Card): void }) {
-  const { u, U, cv } = useUnits()
+  const { u, cv } = useUnits()
   const [selected, setSelected] = useState(0)
   const row = useRef<HTMLDivElement>(null)
   const n = cards.length
@@ -63,11 +61,12 @@ export function TripDeck({ cards, data, onOpen }: { cards: Card[]; data: Data; o
                 <div className="caps">{date(c.departed)} <span className="arrow">→</span> {date(c.returned)}</div>
                 <h3 className="display">{c.title}</h3>
               </div>
-              <TripMap data={data} range={[c.departed, c.returned]} height={100} />
+              {/* Only the selected card and its neighbours carry a live map; the rest wait on blank stock until swiped near. */}
+              {Math.abs(i - selected) <= 1 ? <TripMap data={data} range={[c.departed, c.returned]} height={100} /> : <div className="placemap deck-blank" style={{ height: 100 }} aria-hidden />}
               <div className="deck-stats">
-                {STATS.map(({ key, label: l }) => (
-                  <Stat key={key} label={l} win={won?.[key] === 1}>
-                    {key === 'nights' ? c.nights : key === 'flights' ? c.flights : <>{n0(cv(key === 'km' ? c.km : c.farthestKm))}<small> {key === 'km' ? u : U}</small></>}
+                {STATS.map((key) => (
+                  <Stat key={key} label={key === 'km' ? u : key === 'nights' ? 'Nights' : key === 'flights' ? 'Flights' : 'Farthest'} win={won?.[key] === 1}>
+                    {key === 'nights' ? c.nights : key === 'flights' ? c.flights : <>{n0(cv(key === 'km' ? c.km : c.farthestKm))}{key === 'farthest' && <small> {u}</small>}</>}
                   </Stat>
                 ))}
               </div>
