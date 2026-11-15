@@ -6,7 +6,7 @@ import { placeName } from '../analytics/home'
 import { isHome } from '../analytics/geo'
 
 interface Arrival { key: number; id: string; nth: number; at: number; leaving?: boolean }
-const KEEP = 2
+const KEEP = 3
 const TTL_MS = 7000
 const LEAVE_MS = 420
 
@@ -27,7 +27,8 @@ export function ArrivalTags() {
     const nth = data.visits.filter((x) => x.lvl === 0 && x.place_id === v.place_id && x.start <= v.start).length
     // A place already on show is reprinted in place; the oldest tag beyond KEEP peels off instead of vanishing.
     setTags((t) => {
-      const kept = t.filter((x) => x.id !== v.place_id && !x.leaving)
+      const name = placeName(data.places[v.place_id], v.place_id)
+      const kept = t.filter((x) => x.id !== v.place_id && placeName(data.places[x.id], x.id) !== name && !x.leaving)
       const next = [{ key: v.id, id: v.place_id, nth, at: Date.now() }, ...kept]
       return [...next.slice(0, KEEP), ...next.slice(KEEP).map((x) => ({ ...x, leaving: true, at: Date.now() - TTL_MS + LEAVE_MS }))]
     })
