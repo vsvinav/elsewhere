@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { parseTimeline } from './parse'
 import { buildData, type Cities } from './derive'
@@ -6,14 +6,19 @@ import type { Data } from '../data/types'
 import type { Profile } from '../profile/profile'
 
 const SRC = new URL('../../../timeline.json', import.meta.url).pathname
-const pub = (f: string) => JSON.parse(readFileSync(new URL(`../../public/data/${f}.json`, import.meta.url), 'utf8'))
+const PUB = new URL('../../public/data/', import.meta.url)
+const pub = (f: string) => JSON.parse(readFileSync(new URL(`${f}.json`, PUB), 'utf8'))
 
-describe.skipIf(!existsSync(SRC))('in-browser pipeline matches the Python export', () => {
-  const parsed = parseTimeline(readFileSync(SRC, 'utf8'))
-  const cities = JSON.parse(readFileSync(new URL('../../public/cities.json', import.meta.url), 'utf8')) as Cities
-  const py = { visits: pub('visits'), activities: pub('activities'), trips: pub('trips'), daily: pub('daily'), places: pub('places'), meta: pub('meta'), profile: pub('profile') }
-  const profile: Profile = { name: null, units: 'km', homes: py.profile.homes ?? [{ ...py.profile.home, city: '', cc: '', from: 0, to: null }], works: py.profile.work ? [{ ...py.profile.work, from: 0, to: null }] : [] }
-  const data: Data = buildData(parsed, cities, { file: 'timeline.json', sha256: 'x' }, profile)
+describe.skipIf(!existsSync(SRC) || !existsSync(new URL('meta.json', PUB)))('in-browser pipeline matches the Python export', () => {
+  // Read lazily: a skipped describe still runs its body, and CI has neither file.
+  let py: Record<string, ReturnType<typeof pub>>, data: Data
+  beforeAll(() => {
+    const parsed = parseTimeline(readFileSync(SRC, 'utf8'))
+    const cities = JSON.parse(readFileSync(new URL('../../public/cities.json', import.meta.url), 'utf8')) as Cities
+    py = { visits: pub('visits'), activities: pub('activities'), trips: pub('trips'), daily: pub('daily'), places: pub('places'), meta: pub('meta'), profile: pub('profile') }
+    const profile: Profile = { name: null, units: 'km', homes: py.profile.homes ?? [{ ...py.profile.home, city: '', cc: '', from: 0, to: null }], works: py.profile.work ? [{ ...py.profile.work, from: 0, to: null }] : [] }
+    data = buildData(parsed, cities, { file: 'timeline.json', sha256: 'x' }, profile)
+  })
 
   it('parses the same records', () => {
     expect(data.visits.length).toBe(py.visits.length)
