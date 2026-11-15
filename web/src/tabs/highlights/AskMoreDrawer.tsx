@@ -92,6 +92,8 @@ interface Props {
 export function AskMoreDrawer({ data, highlight, open, onClose, onOpen }: Props) {
   const [chain, setChain] = useState<Step[]>([])
   const sheet = useRef<HTMLDivElement>(null)
+  const close = useRef(onClose)
+  close.current = onClose
   useEffect(() => { setChain([]) }, [highlight])
 
   const cur = chain.length ? chain[chain.length - 1].h : highlight
@@ -109,12 +111,12 @@ export function AskMoreDrawer({ data, highlight, open, onClose, onOpen }: Props)
     const was = document.activeElement as HTMLElement | null
     const first = sheet.current?.querySelector<HTMLElement>(FOCUSABLE)
     ;(first ?? sheet.current)?.focus()
-    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close.current() } }
     document.addEventListener('keydown', esc)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = prev; was?.focus?.() }
-  }, [open, onClose])
+  }, [open])
 
   // Tab cycles inside the sheet while it is open.
   const trap = (e: KeyboardEvent) => {
