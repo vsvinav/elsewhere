@@ -17,7 +17,7 @@ describe('Dial', () => {
 
   it('is labelled like a normal clock, 12 at the top', () => {
     const host = render(createElement(Dial, { hours, hand: 18.5, arc: [22, 28], label: '18:30' }))
-    const labels = Array.from(host.querySelectorAll('text.l:not(.dial-ampm)')).map((t) => t.textContent)
+    const labels = Array.from(host.querySelectorAll('text.l')).map((t) => t.textContent)
     expect(labels).toEqual(['12', '3', '6', '9'])
     expect(host.textContent).not.toContain('18 ')
     expect(host.textContent).not.toContain('00')
@@ -29,7 +29,7 @@ describe('Dial', () => {
 
   it('tags the headline with AM or PM and keeps the caller’s label', () => {
     const pm = render(createElement(Dial, { hours, hand: 18.5, label: '18:30' }))
-    expect(pm.querySelector('text.dial-n')!.textContent).toBe('18:30')
+    expect(pm.querySelector('text.dial-n')!.textContent).toBe('18:30PM')
     expect(pm.querySelector('.dial-ampm')!.textContent).toBe('PM')
     const am = render(createElement(Dial, { hours, hand: 7.25, label: '07:15' }))
     expect(am.querySelector('.dial-ampm')!.textContent).toBe('AM')

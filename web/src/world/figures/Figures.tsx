@@ -63,8 +63,7 @@ export function Dial({ hours, hand, arc, label }: { hours: number[]; hand: numbe
       {g.labels.map((l) => { const [x, y] = at(R + 10, l.angle); return <text key={l.text} x={x} y={y + 3} textAnchor="middle" className="l">{l.text}</text> })}
       <line x1={cx} y1={cy} x2={hx} y2={hy} className="c-red" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
       <circle className="c-red" cx={cx} cy={cy} r="4" fill="currentColor" />
-      <text x={cx} y={cy + 44} textAnchor="middle" className="n dial-n">{label}</text>
-      <text x={cx} y={cy + 54} textAnchor="middle" className="l dial-ampm">{g.hand.meridiem}</text>
+      <text x={cx} y={cy + 44} textAnchor="middle" className="n dial-n">{label}<tspan className="dial-ampm" dx="4">{g.hand.meridiem}</tspan></text>
     </svg>
   )
 }
