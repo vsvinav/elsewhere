@@ -1,0 +1,77 @@
+/* On this day: one pass at the top of Facts, and the "Ask for more" sheet it opens. */
+.bills.highlights { padding: 128px var(--gutter) 0; }
+.bills.highlights .pass { width: min(1280px, 100%); margin: 0 auto; }
+@media (max-width: 760px) { .bills.highlights { padding-top: 112px; } }
+
+.hl-card .hl-h { margin: 0; font: 900 clamp(40px, 5.2vw, 76px)/0.9 var(--display); text-transform: uppercase; letter-spacing: -0.01em; text-wrap: balance; max-width: 18ch; color: var(--red); }
+.hl-card.quiet .hl-h { color: var(--ink); }
+.hl-note { margin: 18px 0 0; font: 500 clamp(15px, 1.3vw, 18px)/1.45 var(--body); max-width: 56ch; color: var(--ink-2); }
+.hl-note + .hl-h { margin-top: 20px; }
+.hl-link { padding: 0; border: 0; background: none; color: var(--red); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* Tier 1: three facts, each a door. */
+.hl-facts { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 0; padding: 0; list-style: none; }
+.hl-facts.small { margin-top: 14px; }
+.hl-fact { display: inline-flex; align-items: center; gap: 12px; padding: 10px 14px; border: 2px solid var(--ink); background: none; color: var(--ink); cursor: pointer; transition: background 0.2s, color 0.2s, transform 0.2s; }
+.hl-fact:hover { background: var(--ink); color: var(--stock); transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--red); }
+.hl-fact .hl-week { display: inline-block; width: 70px; }
+.hl-fact .hl-week .fig.beds { max-height: 10px; display: block; }
+
+/* Tier 2: the day's map, framed as a door. */
+.hl-map { cursor: pointer; outline-offset: 4px; }
+.hl-map .placemap { border: 2px solid var(--ink); transition: box-shadow 0.2s; }
+.hl-map:hover .placemap { box-shadow: 6px 6px 0 var(--ink); }
+.hl-ask { margin-top: 24px; }
+.hl-pick { margin-top: auto; }
+.pass .stub .hl-pick .datepick-chip { color: var(--stock); border-color: var(--stock-3); }
+
+/* Tier 3: the sheet. */
+.hl-backdrop { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; background: rgba(20, 20, 20, 0.55); animation: hl-fade 0.2s ease both; }
+.hl-sheet { width: min(960px, 100%); max-height: 88dvh; display: flex; flex-direction: column; background: var(--stock); color: var(--ink); border-top: var(--rule); box-shadow: 0 -8px 0 var(--red); animation: hl-rise 0.32s var(--ease, ease) both; outline: 0; }
+.hl-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px var(--gutter, 24px); border-bottom: 2px solid var(--ink); }
+.hl-crumb { display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--ink-2); }
+.hl-crumb span + span::before { content: '›'; margin-right: 10px; color: var(--red); }
+.hl-crumb span:last-child { color: var(--ink); }
+.hl-close { width: 40px; height: 40px; border: 2px solid var(--ink); background: none; color: var(--ink); font: 900 22px/1 var(--display); cursor: pointer; }
+.hl-close:hover { background: var(--ink); color: var(--stock); }
+.hl-sheet-body { overflow-y: auto; padding: 20px var(--gutter, 24px) 40px; }
+.hl-lede { margin: 0 0 8px; font: 900 clamp(22px, 2.4vw, 32px)/1 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
+.hl-lede .hl-when { display: block; margin-top: 6px; font: 700 12px/1 var(--body); letter-spacing: 0.18em; color: var(--ink-3); }
+
+.hl-sheet .pass.hl-answer { margin-top: 24px; border-top: 3px solid var(--ink); }
+.hl-sheet .pass.hl-answer .body { padding: 18px 0 22px; }
+.hl-q-label { color: var(--ink-3); }
+.hl-a { margin: 10px 0 0; font: 900 clamp(34px, 4vw, 56px)/0.95 var(--display); text-transform: uppercase; letter-spacing: -0.01em; color: var(--red); text-wrap: balance; }
+.hl-d { margin: 8px 0 0; font: 600 clamp(16px, 1.4vw, 19px)/1.4 var(--body); color: var(--ink-2); }
+.hl-strip { margin-top: 18px; max-width: 320px; }
+.hl-strip .fig.beds { max-height: 28px; }
+.hl-open { margin-top: 18px; }
+.hl-replay { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.hl-ph { color: var(--red); font-variant-numeric: tabular-nums; }
+
+.hl-setlist, .hl-ledger { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.hl-row { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: baseline; width: 100%; padding: 10px 12px; border: 2px solid var(--ink); background: none; color: var(--ink); text-align: left; cursor: pointer; font: 600 16px/1.2 var(--body); }
+.hl-row:hover { background: var(--ink); color: var(--stock); }
+.hl-row b { font: 900 20px/1 var(--display); text-transform: uppercase; }
+.hl-row span { color: var(--ink-3); text-transform: capitalize; }
+.hl-row:hover span { color: var(--stock-3); }
+.hl-row em { font-style: normal; color: var(--red); }
+.hl-row small { font-variant-numeric: tabular-nums; }
+
+.hl-years { display: flex; gap: 14px; align-items: flex-end; margin-top: 22px; height: 180px; overflow-x: auto; }
+.hl-year { position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-width: 84px; height: 100%; text-align: center; }
+.hl-year i { display: block; width: 100%; background: var(--ink); margin-bottom: 8px; }
+.hl-year.now i { background: var(--red); }
+.hl-year b { font: 900 18px/1 var(--display); }
+.hl-year span { font: 600 13px/1.2 var(--body); margin-top: 4px; }
+.hl-year small { font: 500 11px/1 var(--body); color: var(--ink-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.hl-year em { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); font-style: normal; color: var(--red); }
+
+.hl-menu { display: grid; gap: 8px; margin-top: 26px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.hl-q { padding: 14px 16px; border: 2px solid var(--ink); background: none; color: var(--ink); text-align: left; cursor: pointer; font: 800 15px/1.15 var(--display); letter-spacing: 0.04em; text-transform: uppercase; transition: background 0.15s, color 0.15s; }
+.hl-q:hover { background: var(--red); border-color: var(--red); color: var(--stock); }
+.hl-end { margin: 26px 0 0; color: var(--ink-3); }
+
+@keyframes hl-fade { from { opacity: 0; } }
+@keyframes hl-rise { from { transform: translateY(40px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hl-backdrop, .hl-sheet { animation: none; } }
