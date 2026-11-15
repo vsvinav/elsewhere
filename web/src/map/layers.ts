@@ -2,6 +2,8 @@ import { isHome } from '../analytics/geo'
 import { cluster, type Group } from './cluster'
 import { IconLayer, PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Layer } from 'deck.gl'
 import { PathStyleExtension } from '@deck.gl/extensions'
+import { HeatmapLayer } from '@deck.gl/aggregation-layers'
+import { HEAT_INTENSITY, HEAT_RADIUS_PX, HEAT_STOPS, HEAT_THRESHOLD, heatWeight } from './heat'
 import { degPerPx, simplifyIdx } from './simplify'
 import { paceOf } from './camera'
 import { BIG_KM } from './pace'
@@ -165,7 +167,7 @@ function labelDots(dots: Dot[], zoom: number): Dot[] {
   return out
 }
 
-export interface PinOpts { hidden: Cat[]; selected: string | null; sizeBy: 'visits' | 'hours' }
+export interface PinOpts { hidden: Cat[]; selected: string | null; sizeBy: 'visits' | 'hours'; heat?: boolean }
 /** Every stop in the record as pins and nothing else: the Map tab. */
 export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   const c = prepared(data)
@@ -185,7 +187,14 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   const sel = o.selected ? c.all.find((d) => d.id === o.selected) ?? c.homes.find((d) => d.id === o.selected) : undefined
   const selHome = !!sel && c.homes.includes(sel)
   const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 } } as const
-  const layers: Layer[] = [
+  // Heat: every shown stop, grouped or not, weighed by visits in one aggregation pass; pins and clusters step aside, homes stay.
+  const stops: Layer[] = o.heat ? [
+    new HeatmapLayer<Dot>({
+      id: 'heat', data: c.shown.dots, getPosition: (d) => [d.lng, d.lat], getWeight: heatWeight,
+      radiusPixels: HEAT_RADIUS_PX, intensity: HEAT_INTENSITY, threshold: HEAT_THRESHOLD, colorRange: HEAT_STOPS,
+      aggregation: 'SUM', weightsTextureSize: 512, updateTriggers: { getWeight: [key], getPosition: [key] },
+    }),
+  ] : [
     // Groups: an ink disc sized by how many stops it holds, the count printed in stock.
     new ScatterplotLayer<Group<Dot>>({
       id: 'groups', data: groups, pickable: true, getPosition: (d) => [d.lng, d.lat],
@@ -203,6 +212,9 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
       getPosition: (d) => [d.lng, d.lat], getIcon: () => PIN, getColor: (d) => d.ink,
       getSize: size, sizeUnits: 'pixels', billboard: false, updateTriggers: { getSize: [o.sizeBy, k] },
     }),
+  ]
+  const layers: Layer[] = [
+    ...stops,
     // Homes stay put whatever is toggled: a red house with an ink outline.
     new IconLayer<Dot>({ id: 'home-back', data: c.homes, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: INK, getSize: 26 * k, sizeUnits: 'pixels', billboard: false }),
     new IconLayer<Dot>({ id: 'homes', data: c.homes, pickable: true, getPosition: (d) => [d.lng, d.lat], getIcon: () => HOUSE, getColor: RED, getSize: 20 * k, sizeUnits: 'pixels', billboard: false }),

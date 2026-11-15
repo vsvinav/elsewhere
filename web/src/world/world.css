@@ -572,6 +572,12 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .pins-size .lab { font: 800 11px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 6px; }
 .pins-size button { font: 800 12px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 10px 6px; border: 2px solid var(--ink); background: var(--stock); color: var(--ink-2); }
 .pins-size button.on { background: var(--ink); color: var(--stock); }
+.pins-heat-row { display: inline-flex; align-items: center; gap: 8px; }
+.pins-heat { font: 800 12px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 10px 6px; border: 2px solid var(--ink); background: var(--stock); color: var(--ink-2); }
+.pins-heat.on { background: var(--ink); color: var(--stock); }
+.heat-legend { display: inline-flex; align-items: center; gap: 6px; }
+.heat-legend small { font: 800 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.heat-bar { display: inline-block; width: 72px; height: 8px; border: 1px solid var(--ink); }
 .pins-fit { padding: 7px 12px 6px; }
 .pin-card { position: absolute; right: -3px; bottom: calc(100% + 12px); width: 260px; --tilt: -0.8deg; z-index: 6; }
 .pin-card .close { position: absolute; top: 6px; right: 8px; font: 700 20px/1 var(--body); background: none; border: 0; color: var(--ink-3); cursor: pointer; }
