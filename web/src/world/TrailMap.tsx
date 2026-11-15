@@ -17,7 +17,7 @@ export function TrailMap({ data, stops = [], height = H, className = '' }: { dat
     const paths = data.strokes
     const total = paths.reduce((s, p) => s + p.pts.length, 0)
     const step = Math.max(1, Math.ceil(total / MAX_PTS))
-    const raw = paths.map((p) => p.pts.filter((_, i) => i % step === 0).map(([, lat, lng]) => [lng, lat] as P)).filter((l) => l.length > 1)
+    const raw = paths.map((p) => p.pts.filter((_, i, a) => i % step === 0 || i === a.length - 1).map(([, lat, lng]) => [lng, lat] as P)).filter((l) => l.length > 1)
     const fl = data.activities.filter((a) => a.mode === 'FLYING' && a.m > 80_000).map((a) => [[a.s_lng, a.s_lat], [a.e_lng, a.e_lat]] as [P, P])
     const all = [...raw.flat(), ...fl.flat()]
     if (!all.length) return { lines: [], flights: [], pins: [], landPath: '' }
