@@ -6,8 +6,12 @@ import { HighlightCard } from './HighlightCard'
 /** The highlight card wired to the store: doors open the Map tab on the exact range. */
 export function HighlightSlot() {
   const raw = useRawData()
-  const setRange = useStore((s) => s.setRange), setPlayhead = useStore((s) => s.setPlayhead), setTab = useStore((s) => s.setTab)
-  const onOpen = useCallback((range: [number, number], playhead?: number) => { setRange(range); if (playhead != null) setPlayhead(playhead); setTab('map') }, [setRange, setPlayhead, setTab])
+  const goTo = useStore((s) => s.goTo), setTab = useStore((s) => s.setTab)
+  // A highlight is a door too: the origin tag reads "FROM · ON THIS DAY" and Back returns here.
+  const onOpen = useCallback((range: [number, number], playhead?: number, placeIds?: string[]) => {
+    goTo({ kind: 'range', from: range[0], to: range[1], label: 'On this day' })
+    useStore.setState((s) => ({ playhead: playhead ?? s.playhead, focus: placeIds?.length ? { ids: placeIds, n: s.focus?.n ?? 1 } : s.focus }))
+  }, [goTo])
   const onKeyStep = useCallback(() => setTab('home'), [setTab])
   return (
     <main className="bills highlights">
