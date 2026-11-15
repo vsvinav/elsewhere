@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { resetGoogleDown } from '../map/provider'
 
 /** Keys the visitor types in; they never leave the browser. Env values are the deploy's defaults. */
 export type MapProvider = 'auto' | 'google' | 'osm'
@@ -14,7 +15,7 @@ export const settings = {
   get: () => cur,
   set: (patch: Partial<Settings>) => { cur = { ...cur, ...patch }; localStorage.setItem(LS, JSON.stringify(cur)); subs.forEach((f) => f()) },
   /** A different key starts unchecked and un-accepted. */
-  setKey: (mapsKey: string) => { if (mapsKey !== cur.mapsKey) settings.set({ mapsKey, keyOk: null, mapsOk: null, keyError: '', limited: false }) },
+  setKey: (mapsKey: string) => { if (mapsKey !== cur.mapsKey) { resetGoogleDown(); settings.set({ mapsKey, keyOk: null, mapsOk: null, keyError: '', limited: false }) } },
   subscribe: (f: () => void) => { subs.add(f); return () => { subs.delete(f) } },
 }
 export const useSettings = () => useSyncExternalStore(settings.subscribe, settings.get)

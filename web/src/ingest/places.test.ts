@@ -5,7 +5,8 @@ const db = vi.hoisted(() => ({ stored: undefined as Record<string, unknown> | un
 vi.mock('./db', () => ({ kv: { get: async () => db.stored, set: async (_k: string, v: Record<string, unknown>) => { db.sets.push(JSON.parse(JSON.stringify(v))) } } }))
 const usage = vi.hoisted(() => ({ details: 0 }))
 vi.mock('../usage/usage', () => ({ tally: () => { usage.details++ } }))
-vi.mock('./settings', () => ({ settings: { get: () => ({ mapsKey: 'k', keyOk: null }) } }))
+const st = vi.hoisted(() => ({ keyOk: null as boolean | null }))
+vi.mock('./settings', () => ({ settings: { get: () => ({ mapsKey: 'k', keyOk: st.keyOk }) } }))
 
 import { apply, clusterName, lookup, need, onError, properName, reset, setKey, snapshot, subscribe } from './places'
 import type { Place } from '../data/types'
@@ -14,7 +15,7 @@ const place = (id: string, n = 2, extra: Partial<Place> = {}): Place => ({ place
 const ok = (name: string) => new Response(JSON.stringify({ displayName: { text: name }, types: ['cafe'], primaryType: 'cafe' }), { status: 200 })
 const settle = () => new Promise((r) => setTimeout(r, 20))
 
-beforeEach(() => { db.stored = undefined; db.sets.length = 0; usage.details = 0; reset(); vi.unstubAllGlobals() })
+beforeEach(() => { db.stored = undefined; db.sets.length = 0; usage.details = 0; st.keyOk = null; reset(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('need', () => {
   it('fetches each id once, skipping cached and home ids, and notifies subscribers', async () => {
@@ -27,7 +28,7 @@ describe('need', () => {
     setKey('k')
     need(['a', 'b', 'cached', 'home', 'a'], places)
     need(['a', 'b'], places)
-    await vi.waitFor(() => expect(snapshot().pending).toBe(0))
+    await vi.waitFor(() => { expect(Object.keys(snapshot().cache)).toHaveLength(3); expect(snapshot().pending).toBe(0) })
     expect(asked.sort()).toEqual(['a', 'b'])
     expect(usage.details).toBe(2)
     expect(seen).toContain(2)
@@ -46,7 +47,37 @@ describe('need', () => {
     expect(fetch).not.toHaveBeenCalled()
     expect(snapshot().pending).toBe(0)
   })
-  it('stops the pool and reports on error', async () => {
+  it('fetches nothing once the key has been refused', async () => {
+    st.keyOk = false
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    setKey('k')
+    need(['a'], { a: place('a') })
+    await settle()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it('retries a passing failure once, two seconds later, without stopping the pool', async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    vi.stubGlobal('fetch', async () => { calls++; if (calls === 1) throw new TypeError('Failed to fetch'); return ok('Back') })
+    const errors: Error[] = []
+    onError((e) => errors.push(e))
+    setKey('k')
+    need(['a'], { a: place('a') })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(calls).toBe(1)
+    expect(snapshot().pending).toBe(1)
+    await vi.advanceTimersByTimeAsync(1900)
+    expect(calls).toBe(1)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(calls).toBe(2)
+    expect(snapshot().cache.a?.name).toBe('Back')
+    need(['b'], { b: place('b') })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(calls).toBe(3)
+    expect(errors).toEqual([])
+  })
+  it('stops the pool and reports when the key is refused', async () => {
     let calls = 0
     vi.stubGlobal('fetch', async () => { calls++; return new Response(JSON.stringify({ error: { message: 'Key denied of service' } }), { status: 403 }) })
     const errors: string[] = []
@@ -72,8 +103,7 @@ describe('clusterName shares the cache with need', () => {
     const p = clusterName(['a'], places, 'k')
     need(['b'], places)
     expect(await p).toBe('Name a')
-    await vi.waitFor(() => expect(snapshot().pending).toBe(0))
-    expect(Object.keys(snapshot().cache).sort()).toEqual(['a', 'b'])
+    await vi.waitFor(() => { expect(Object.keys(snapshot().cache).sort()).toEqual(['a', 'b']); expect(snapshot().pending).toBe(0) })
     await vi.waitFor(() => expect(db.sets.length).toBeGreaterThan(0), { timeout: 2000 })
     expect(Object.keys(db.sets.at(-1)!).sort()).toEqual(['a', 'b'])
     // A later clusterName over the same ids pays nothing.

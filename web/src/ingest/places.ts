@@ -11,7 +11,7 @@ export interface Cached { name: string | null; address: string | null; types: st
 export type Progress = { done: number; total: number } | null
 export interface Snapshot { cache: Record<string, Cached>; pending: number; total: number }
 
-const CONCURRENCY = 4, SAVE_MS = 500
+const CONCURRENCY = 4, SAVE_MS = 500, BACKOFF_MS = 2_000
 
 // One in-memory copy of the places cache: every writer lands here, so none can overwrite another's results.
 let cache: Record<string, Cached> = {}
@@ -19,14 +19,23 @@ let loaded: Promise<void> | null = null
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 const queue: string[] = []
 const queued = new Set<string>()
-let running = 0, pending = 0, total = 0, key = '', stopped = false
+let running = 0, pending = 0, total = 0, key = '', stopped = false, paused = false
+// Ids that failed once for a passing reason (network, 429, 5xx) get one more go.
+const retried = new Set<string>()
 let snap: Snapshot = { cache, pending, total }
 const subs = new Set<() => void>()
 const errSubs = new Set<(e: Error) => void>()
 
-const emit = () => { snap = { cache, pending, total }; subs.forEach((f) => f()) }
+let emitting = false
+/** One notification per microtask, however many lookups land together. */
+const emit = () => { if (emitting) return; emitting = true; queueMicrotask(() => { emitting = false; snap = { cache, pending, total }; subs.forEach((f) => f()) }) }
 const load = () => (loaded ??= kv.get<Record<string, Cached>>('places').catch(() => undefined).then((c) => { cache = { ...(c ?? {}), ...cache }; emit() }))
-const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { kv.set('places', cache).catch(() => {}) }, SAVE_MS) }
+const flush = () => { if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = undefined; kv.set('places', cache).catch(() => {}) }
+const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(flush, SAVE_MS) }
+if (typeof window !== 'undefined') {
+  addEventListener('pagehide', flush)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush() })
+}
 const put = (id: string, c: Cached) => { cache = { ...cache, [id]: c }; save(); emit() }
 /** Lookups are counted for the stamp as they are asked for; the burst's total resets once everything has landed. */
 const ask = (n = 1) => { pending += n; total += n }
@@ -35,6 +44,8 @@ const track = <T>(p: Promise<T>): Promise<T> => { ask(); emit(); return p.finall
 /** Forget whatever is still waiting in the queue. */
 const dropQueue = () => { settle(queue.length); queue.forEach((q) => queued.delete(q)); queue.length = 0 }
 const canSpend = () => !!key && !stopped && settings.get().keyOk !== false
+/** Only a refused key stops the pool; anything else is worth another try. */
+const fatal = (e: Error & { status?: number }) => e.status === 401 || e.status === 403 || /API key|PERMISSION_DENIED|billing|not enabled/i.test(e.message)
 
 const photoUrl = (name: string, k: string) => `https://places.googleapis.com/v1/${name}/media?maxWidthPx=900&key=${k}`
 
@@ -55,19 +66,23 @@ export async function lookup(id: string, k: string): Promise<Cached> {
   if (res.status === 404 || res.status === 400) return { name: null, address: null, types: [], primary_type: null, photo: null }
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: { message?: string } } | null
-    throw new Error(body?.error?.message?.split(' of service')[0] ?? `Places API ${res.status}`)
+    throw Object.assign(new Error(body?.error?.message?.split(' of service')[0] ?? `Places API ${res.status}`), { status: res.status })
   }
   const j = await res.json() as { displayName?: { text: string }; formattedAddress?: string; types?: string[]; primaryType?: string; photos?: { name: string }[] }
   return { name: j.displayName?.text ?? null, address: j.formattedAddress ?? null, types: j.types ?? [], primary_type: j.primaryType ?? null, photo: j.photos?.[0]?.name ?? null }
 }
 
 function pump() {
-  while (running < CONCURRENCY && queue.length && canSpend()) {
+  while (running < CONCURRENCY && queue.length && !paused && canSpend()) {
     const id = queue.shift()!
     running++
     const k = key
-    lookup(id, k).then((c) => put(id, c), (e: Error) => { stopped = true; dropQueue(); errSubs.forEach((f) => f(e)) })
-      .finally(() => { running--; queued.delete(id); settle(); emit(); pump() })
+    const done = () => { queued.delete(id); settle() }
+    lookup(id, k).then((c) => { put(id, c); done() }, (e: Error) => {
+      if (fatal(e)) { done(); stopped = true; dropQueue(); errSubs.forEach((f) => f(e)) }
+      else if (retried.has(id)) done()
+      else { retried.add(id); queue.push(id); paused = true; setTimeout(() => { paused = false; pump() }, BACKOFF_MS) }
+    }).finally(() => { running--; emit(); pump() })
   }
 }
 
@@ -108,7 +123,7 @@ export function useNaming(): Progress {
 }
 /** Tests only: forget everything. */
 export function reset(): void {
-  cache = {}; loaded = null; clearTimeout(saveTimer); queue.length = 0; queued.clear(); running = 0; pending = 0; total = 0; key = ''; stopped = false; subs.clear(); errSubs.clear(); emit()
+  cache = {}; loaded = null; clearTimeout(saveTimer); saveTimer = undefined; queue.length = 0; queued.clear(); retried.clear(); running = 0; pending = 0; total = 0; key = ''; stopped = false; paused = false; subs.clear(); errSubs.clear(); snap = { cache, pending, total }
 }
 
 const ADDRESS_TYPES = new Set(['street_address', 'premise', 'subpremise', 'route', 'plus_code', 'postal_code', 'locality', 'sublocality', 'sublocality_level_1', 'neighborhood', 'political', 'geocode', 'intersection'])

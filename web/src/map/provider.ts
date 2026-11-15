@@ -7,6 +7,8 @@ export type Provider = 'google' | 'osm'
 let reason: string | null = null
 const subs = new Set<() => void>()
 export const markGoogleDown = (why: unknown = 'AuthFailure') => { if (reason) return; reason = typeof why === 'string' ? why : 'AuthFailure'; subs.forEach((f) => f()) }
+/** A corrected key deserves a fresh verdict from the Maps script. */
+export const resetGoogleDown = () => { if (!reason) return; reason = null; subs.forEach((f) => f()) }
 export const useGoogleDown = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f) } }, () => reason)
 
 /** What Google's error names mean for the person holding the key. */
