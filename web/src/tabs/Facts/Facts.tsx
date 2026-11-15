@@ -8,6 +8,7 @@ import { Fig } from '../../world/figures/Figures'
 import { Door } from '../../world/Door'
 import { bedText, SITE } from '../../share/text'
 import { HighlightSlot } from '../highlights/HighlightSlot'
+import { Passport } from './Passport'
 import './facts.css'
 
 const KIND: Record<Kind, string> = { explored: 'Explored', record: 'Record', scale: 'Scale', habit: 'Habit' }
@@ -112,6 +113,9 @@ export function Facts() {
           })}
         </main>
       )}
+      <main className="strip dense facts-passport">
+        <Passport />
+      </main>
     </>
   )
 }

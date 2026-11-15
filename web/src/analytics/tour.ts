@@ -23,19 +23,34 @@ export function nightsIn(v: Pick<Visit, 'start' | 'end' | 'tz'>): number {
   return Math.floor((v.end - first) / 86400) + 1
 }
 
+/** A night's sleep away from home: a lvl-0 visit that spans at least one local 03:00 and sits off the home radius. */
+export interface Sleep { v: Visit; nights: number }
+
+/** Every visit slept away from home, in record order, with its nights. */
+export function sleptAway(data: Data): { away: Sleep[]; nightsHome: number } {
+  const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
+  const away: Sleep[] = []
+  let nightsHome = 0
+  for (const v of data.visits) {
+    if (v.lvl !== 0) continue
+    const n = nightsIn(v)
+    if (!n) continue
+    if (isHome(data.places[v.place_id]) || distanceKm(homeOf(v.start), v) < 30) { nightsHome += n; continue }
+    away.push({ v, nights: n })
+  }
+  return { away, nightsHome }
+}
+
 /** Where you slept: nights per city away from home, like a tour's dates list. */
 export function tour(data: Data): Tour {
   const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
   const byCity = new Map<string, Stop>()
   const beds = new Map<string, Set<string>>()
-  let nightsHome = 0, nightsAway = 0
+  const { away, nightsHome } = sleptAway(data)
+  let nightsAway = 0
   let headline: HeadlineAct | null = null
-  for (const v of data.visits) {
-    if (v.lvl !== 0) continue
-    const n = nightsIn(v)
-    if (!n) continue
+  for (const { v, nights: n } of away) {
     const p = data.places[v.place_id]
-    if (isHome(data.places[v.place_id]) || distanceKm(homeOf(v.start), v) < 30) { nightsHome += n; continue }
     nightsAway += n
     const city = p?.city ?? 'Unknown city'
     const s = byCity.get(city) ?? { city, country: p?.country_code ?? null, nights: 0, visits: 0, first: v.start, last: v.end, lat: v.lat, lng: v.lng, placeIds: [] }
