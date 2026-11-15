@@ -134,8 +134,6 @@ web/src
 pipeline/        the optional Python pre-bake
 ```
 
-Design direction and specs live in [`docs/superpowers/specs`](docs/superpowers/specs); the shipped system is in [`web/DESIGN.md`](web/DESIGN.md) when present.
-
 ## Built with
 
 React 19 · Vite · deck.gl on Google Maps (MapLibre fallback) · d3-geo for the globe · Big Shoulders Display & Archivo.

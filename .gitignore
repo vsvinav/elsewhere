@@ -9,3 +9,12 @@ __pycache__/
 *.egg-info/
 web/dist/
 web/.env.local
+
+# internal working notes and tooling, never published
+docs/superpowers/
+PRODUCT.md
+.impeccable/
+.github/skills/impeccable/
+.github/agents/impeccable-*
+.github/hooks/impeccable.json
+**/DESIGN.md
