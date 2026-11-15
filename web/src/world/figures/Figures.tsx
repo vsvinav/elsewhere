@@ -3,10 +3,11 @@ import type { Figure } from '../../analytics/facts'
 import type { Night } from '../../analytics/beds'
 import { loadLand } from '../land'
 import './figures.css'
+import { dialGeometry } from './dial'
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i)
-const polar = (cx: number, cy: number, r: number, frac: number) => [cx + r * Math.sin(2 * Math.PI * frac), cy - r * Math.cos(2 * Math.PI * frac)] as const
 const n = (x: number) => Math.round(x).toLocaleString('en-US')
+/** Where the hourly bars start on the dial, in view units: mornings inside, afternoons outside, each ring at most RING_LEN long. */
+const AM_RING = 8, PM_RING = 23, RING_LEN = 12
 
 /** Share of a whole: a thin ghost ring with the filled arc in red. A floor on the arc so 3% still reads. */
 export function Ring({ pct, label }: { pct: number; label: string }) {
@@ -34,33 +35,35 @@ export function Scale({ value, ref, refLabel, unit, valueLabel = 'You' }: { valu
   )
 }
 
-/** 24-hour clock, midnight at the top: hour ticks, a red arc for the night window, faint bars for how often legs start each hour, and a hand pointing at the headline time. */
+/** A 12-hour clock face, 12 at the top: hour ticks, a red arc for the night window, faint bars for how often legs start each hour (mornings on the inner ring, afternoons on the outer), and a hand pointing at the headline time. */
 export function Dial({ hours, hand, arc, label }: { hours: number[]; hand: number; arc?: [number, number]; label: string }) {
-  const max = Math.max(1, ...hours), cx = 70, cy = 70, R = 56
-  const arcPath = (from: number, to: number, r: number) => {
-    const [x1, y1] = polar(cx, cy, r, from / 24), [x2, y2] = polar(cx, cy, r, to / 24)
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${to - from > 12 ? 1 : 0} 1 ${x2} ${y2}`
+  const cx = 70, cy = 70, R = 56
+  const g = dialGeometry(hours, hand, arc)
+  const at = (r: number, deg: number) => [cx + r * Math.cos((deg * Math.PI) / 180), cy + r * Math.sin((deg * Math.PI) / 180)] as const
+  const arcPath = (from: number, sweep: number, r: number) => {
+    const [x1, y1] = at(r, from), [x2, y2] = at(r, from + sweep)
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${x2} ${y2}`
   }
-  const [hx, hy] = polar(cx, cy, R - 14, hand / 24)
+  const [hx, hy] = at(R - 14, g.hand.angle)
   return (
     <svg className="fig dial" viewBox="-6 -6 152 152" role="img" aria-label={`Clock pointing at ${label}`}>
       <circle className="c-ink" cx={cx} cy={cy} r={R} fill="none" stroke="currentColor" strokeWidth="2" />
-      {arc && <path className="c-red" d={arcPath(arc[0], arc[1], R - 4)} fill="none" stroke="currentColor" strokeWidth="5" opacity="0.85" />}
-      {HOURS.map((h) => {
-        const v = hours[h] ?? 0, big = h % 6 === 0
-        const [x1, y1] = polar(cx, cy, R - (big ? 10 : 6), h / 24), [x2, y2] = polar(cx, cy, R - 1, h / 24)
-        const [bx1, by1] = polar(cx, cy, 10, (h + 0.5) / 24), [bx2, by2] = polar(cx, cy, 10 + (22 * v) / max, (h + 0.5) / 24)
-        return (
-          <g key={h}>
-            {v > 0 && <line x1={bx1} y1={by1} x2={bx2} y2={by2} className="c-ink" stroke="currentColor" strokeWidth="3" opacity="0.18" />}
-            <line x1={x1} y1={y1} x2={x2} y2={y2} className="c-ink" stroke="currentColor" strokeWidth={big ? 2.5 : 1.2} />
-          </g>
-        )
+      {g.arc && (g.arc.full
+        ? <circle className="c-red" cx={cx} cy={cy} r={R - 4} fill="none" stroke="currentColor" strokeWidth="5" opacity="0.85" />
+        : <path className="c-red" d={arcPath(g.arc.from, g.arc.sweep, R - 4)} fill="none" stroke="currentColor" strokeWidth="5" opacity="0.85" />)}
+      {g.bars.map((b) => {
+        const base = b.ring === 'am' ? AM_RING : PM_RING
+        const [x1, y1] = at(base, b.angle), [x2, y2] = at(base + RING_LEN * b.len, b.angle)
+        return <line key={b.hour} x1={x1} y1={y1} x2={x2} y2={y2} className={`c-ink dial-bar ${b.ring}`} stroke="currentColor" strokeWidth="3" opacity="0.18" />
       })}
-      {[0, 6, 12, 18].map((h) => { const [x, y] = polar(cx, cy, R + 10, h / 24); return <text key={h} x={x} y={y + 3} textAnchor="middle" className="l">{String(h).padStart(2, '0')}</text> })}
+      {g.ticks.map((t) => {
+        const [x1, y1] = at(R - (t.big ? 10 : 6), t.angle), [x2, y2] = at(R - 1, t.angle)
+        return <line key={t.hour} x1={x1} y1={y1} x2={x2} y2={y2} className="c-ink" stroke="currentColor" strokeWidth={t.big ? 2.5 : 1.2} />
+      })}
+      {g.labels.map((l) => { const [x, y] = at(R + 10, l.angle); return <text key={l.text} x={x} y={y + 3} textAnchor="middle" className="l">{l.text}</text> })}
       <line x1={cx} y1={cy} x2={hx} y2={hy} className="c-red" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
       <circle className="c-red" cx={cx} cy={cy} r="4" fill="currentColor" />
-      <text x={cx} y={cy + 44} textAnchor="middle" className="n dial-n">{label}</text>
+      <text x={cx} y={cy + 44} textAnchor="middle" className="n dial-n">{label}<tspan className="dial-ampm" dx="4">{g.hand.meridiem}</tspan></text>
     </svg>
   )
 }
