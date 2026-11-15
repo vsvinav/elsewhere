@@ -46,6 +46,8 @@
 .hl-strip { margin-top: 18px; max-width: 320px; }
 .hl-strip .fig.beds { max-height: 28px; }
 .hl-open { margin-top: 18px; }
+.hl-replay { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.hl-ph { color: var(--red); font-variant-numeric: tabular-nums; }
 
 .hl-setlist, .hl-ledger { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .hl-row { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: baseline; width: 100%; padding: 10px 12px; border: 2px solid var(--ink); background: none; color: var(--ink); text-align: left; cursor: pointer; font: 600 16px/1.2 var(--body); }

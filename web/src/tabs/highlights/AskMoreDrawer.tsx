@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Data } from '../../data/types'
-import { followUps, MAX_DEPTH, type Answer, type FollowUp, type FollowUpId, type Highlight } from '../../analytics/highlights'
+import { followUps, localDay, MAX_DEPTH, type Answer, type FollowUp, type FollowUpId, type Highlight, type RouteAnswer } from '../../analytics/highlights'
 import { Pass } from '../../world'
 import { Beds } from '../../world/figures/Figures'
 import { TripMap } from '../../world/TripMap'
 import { ago, dmy, headline, type OpenDoor } from './copy'
+import { useReplay } from './useReplay'
 
 const CRUMB: Record<FollowUpId, string> = {
   stay: 'the stay', distance: 'the distance', trip: 'the trip', route: 'the route', compare: 'compare years',
@@ -14,6 +15,20 @@ const CRUMB: Record<FollowUpId, string> = {
 interface Step { fu: FollowUp; h: Highlight }
 
 const FOCUSABLE = 'button:not([disabled]), [href], input, [tabindex]:not([tabindex="-1"])'
+
+/** The route on its own map with a ten-second replay of the trip; the door to the real map stays. */
+function RouteFigure({ data, a, tz }: { data: Data; a: RouteAnswer; tz: number }) {
+  const { playhead, playing, play } = useReplay(a.range)
+  return (
+    <>
+      <TripMap data={data} range={a.range} playhead={playhead ?? undefined} height={220} />
+      <div className="hl-replay">
+        <button type="button" className="btn" aria-pressed={playing} onClick={play}>{playing ? 'Replaying…' : playhead == null ? 'Play this route' : 'Play again'}</button>
+        {playhead != null && <span className="hl-ph caps" aria-live="polite">{dmy(localDay(playhead, tz))}</span>}
+      </div>
+    </>
+  )
+}
 
 /** One answer printed as a pass: title, detail, the figure for its kind, and a door to the map. */
 function AnswerPass({ data, step, onOpen }: { data: Data; step: Step; onOpen: OpenDoor }) {
@@ -43,22 +58,17 @@ function AnswerPass({ data, step, onOpen }: { data: Data; step: Step; onOpen: Op
           ))}
         </ol>
       )}
-      {a.kind === 'route' && (
-        <>
-          <TripMap data={data} range={a.range} height={220} />
-          <button type="button" className="btn" onClick={() => onOpen(a.range, a.range[0], a.placeIds)}>Play this route</button>
-        </>
-      )}
+      {a.kind === 'route' && <RouteFigure data={data} a={a} tz={step.h.tz} />}
       {a.kind === 'compare' && (() => {
-        const max = Math.max(1, ...a.years.map((y) => y.km))
+        const max = Math.max(1, ...a.years.map((y) => y.km ?? 0))
         return (
           <div className="hl-years" role="list">
             {a.years.map((y) => (
               <div key={y.year} role="listitem" className={`hl-year ${y.now ? 'now' : ''}`}>
-                <i style={{ height: `${Math.max(4, Math.round((y.km / max) * 100))}%` }} aria-hidden />
+                {y.km != null && <i style={{ height: `${Math.max(4, Math.round((y.km / max) * 100))}%` }} aria-hidden />}
                 <b>{y.year}</b>
                 <span>{y.city ?? '—'}</span>
-                <small>{Math.round(y.km).toLocaleString('en-US')} km</small>
+                {y.km != null && <small>{Math.round(y.km).toLocaleString('en-US')} km</small>}
                 {y.now && <em className="caps">now</em>}
               </div>
             ))}
@@ -72,7 +82,7 @@ function AnswerPass({ data, step, onOpen }: { data: Data; step: Step; onOpen: Op
           ))}
         </ol>
       )}
-      {a.kind !== 'route' && <button type="button" className="btn quiet hl-open" onClick={door(a)}>{a.kind === 'farthest' && !a.is ? `Open ${a.city ?? dmy(a.date)}` : a.kind === 'back' && a.last ? 'Open the last visit' : 'Open on the map'}</button>}
+      <button type="button" className="btn quiet hl-open" onClick={door(a)}>{a.kind === 'farthest' && !a.is ? `Open ${a.city ?? dmy(a.date)}` : a.kind === 'back' && a.last ? 'Open the last visit' : 'Open on the map'}</button>
     </Pass>
   )
 }
@@ -80,6 +90,8 @@ function AnswerPass({ data, step, onOpen }: { data: Data; step: Step; onOpen: Op
 interface Props {
   data: Data
   highlight: Highlight
+  /** YYYY-MM-DD, so "now" in the year comparison is the user's year. */
+  today: string
   open: boolean
   onClose(): void
   onOpen: OpenDoor
@@ -89,7 +101,7 @@ interface Props {
  * The "Ask for more" sheet: a menu of only the questions the record can answer about the
  * highlight; each answer prints as a pass and offers its own follow-ups, down to MAX_DEPTH.
  */
-export function AskMoreDrawer({ data, highlight, open, onClose, onOpen }: Props) {
+export function AskMoreDrawer({ data, highlight, today, open, onClose, onOpen }: Props) {
   const [chain, setChain] = useState<Step[]>([])
   const sheet = useRef<HTMLDivElement>(null)
   const close = useRef(onClose)
@@ -103,7 +115,7 @@ export function AskMoreDrawer({ data, highlight, open, onClose, onOpen }: Props)
     for (const s of chain) { if (s.fu.answer.kind === 'highlight') out.length = 0; else out.push(s.fu.id) }
     return out
   }, [chain])
-  const menu = useMemo(() => (open ? followUps(data, cur, chain.length, asked) : []), [data, cur, chain.length, asked, open])
+  const menu = useMemo(() => (open ? followUps(data, cur, chain.length, asked, today) : []), [data, cur, chain.length, asked, open, today])
   const crumbs = [highlight.city, ...chain.map((s) => (s.fu.answer.kind === 'highlight' ? s.fu.answer.highlight.city : CRUMB[s.fu.id]))]
 
   useEffect(() => {

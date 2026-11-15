@@ -9,7 +9,7 @@ import { MAX_DEPTH } from '../../analytics/highlights'
 import { HighlightCard } from './HighlightCard'
 import { ago, headline } from './copy'
 
-vi.mock('../../world/TripMap', () => ({ TripMap: ({ range }: { range: [number, number] }) => createElement('div', { className: 'tripmap', 'data-range': range.join(',') }) }))
+vi.mock('../../world/TripMap', () => ({ TripMap: ({ range, playhead }: { range: [number, number]; playhead?: number }) => createElement('div', { className: 'tripmap', 'data-range': range.join(','), 'data-playhead': playhead ?? '' }) }))
 
 const data = onThisDayData()
 type Open = [range: [number, number], playhead?: number, placeIds?: string[]]
@@ -61,10 +61,10 @@ describe('HighlightCard', () => {
     expect(q('.hl-note')!.textContent).toContain('Nothing from a 20 July yet')
   })
   it('record shorter than a year shows the farthest day with the start-date note', () => {
-    const d = onThisDayData(); d.meta.range = [at(2023, 3, 3), at(2023, 5, 1)]
+    const d = onThisDayData(); d.meta.range = [at(2023, 11, 11, 8), at(2024, 5, 1)]
     host = document.body.appendChild(document.createElement('div')); root = createRoot(host)
-    act(() => root.render(createElement(HighlightCard, { data: d, today: '2023-04-10', onOpen: () => {} })))
-    expect(q('.hl-note')!.textContent).toBe("Your record starts 3 March. Highlights begin on 3 March next year — meanwhile, here's your farthest day so far.")
+    act(() => root.render(createElement(HighlightCard, { data: d, today: '2024-04-10', onOpen: () => {} })))
+    expect(q('.hl-note')!.textContent).toBe("Your record starts 11 November. Highlights begin on 11 November next year — meanwhile, here's your farthest day so far.")
     expect(q('.hl-h')!.textContent).toContain('landed in Paris')
   })
   it('offers the key step when the city is unnamed', () => {
@@ -148,6 +148,50 @@ describe('AskMoreDrawer', () => {
     expect(q('.hl-crumb')!.textContent).toBe('KyotoParis')
     expect(q('.hl-lede')!.textContent).toContain(headline({ ...d, verb: 'landed in', city: 'Paris', scope: 'day', yearsAgo: 3 } as never))
     expect(all('.hl-q').map((b) => b.textContent)).toContain('How long did I stay?')
+  })
+  it('compare years marks today\'s year and drops the km when no home is set', () => {
+    mount({ today: '2025-11-14' })
+    click(askButton())
+    click(byText('.hl-q', 'compare'))
+    expect(all('.hl-year').map((y) => y.textContent)).toEqual(['2022Boston5 km', '2023Kyoto10,800 km', '2024Boston5 km'])
+    expect(q('.hl-year.now')).toBeNull()
+    act(() => root.unmount()); host.remove()
+    const d = onThisDayData(); d.profile.homes = []
+    host = document.body.appendChild(document.createElement('div')); root = createRoot(host)
+    act(() => root.render(createElement(HighlightCard, { data: d, today: '2024-11-14', onOpen: () => {} })))
+    click(askButton())
+    click(byText('.hl-q', 'compare'))
+    expect(all('.hl-year').map((y) => y.textContent)).toEqual(['2022Boston', '2023Kyoto', '2024Bostonnow'])
+    expect(q('.hl-year.now b')!.textContent).toBe('2024')
+    expect(all('.hl-year i')).toHaveLength(0)
+  })
+  it('the route pass replays the trip on its own map over ten seconds', () => {
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => { frames.push(cb); return frames.length })
+    const caf = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {})
+    const frame = (t: number) => { const cb = frames.pop(); frames.length = 0; if (cb) act(() => cb(t)) }
+    const calls = mount({ today: '2025-11-14' })
+    click(askButton())
+    click(byText('.hl-q', 'Show me the route'))
+    const pass = q('.hl-answer')!
+    const map = q('.tripmap', pass)!
+    const [r0, r1] = map.dataset.range!.split(',').map(Number)
+    expect(map.dataset.playhead).toBe('')
+    const play = byText('.hl-answer button', 'Play this route')!
+    expect(play.getAttribute('aria-pressed')).toBe('false')
+    click(play)
+    expect(play.getAttribute('aria-pressed')).toBe('true')
+    frame(1000); frame(6000)
+    expect(Number(map.dataset.playhead)).toBeCloseTo(r0 + (r1 - r0) / 2, -2)
+    expect(q('.hl-ph', pass)!.textContent).toBe('15 Nov 2023')
+    frame(11_000); frame(12_000)
+    expect(Number(map.dataset.playhead)).toBe(r1)
+    expect(play.getAttribute('aria-pressed')).toBe('false')
+    expect(frames).toHaveLength(0)
+    // The door to the real map survives beside the replay.
+    click(byText('.hl-answer button', 'Open on the map'))
+    expect(calls[0][0]).toEqual([r0, r1])
+    raf.mockRestore(); caf.mockRestore()
   })
   it('closes on Escape, on the backdrop, and on the close button, returning focus', () => {
     mount({ today: '2025-11-14' })

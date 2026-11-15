@@ -21,7 +21,7 @@ interface Props {
 const iso = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10)
 
 /** One day's card: headline, three facts, a scoped map, and the "Ask for more" sheet. */
-function Card({ data, h, lede, onOpen, onKeyStep, children }: { data: Data; h: Highlight; lede?: string; onOpen: OpenDoor; onKeyStep?(): void; children?: ReactNode }) {
+function Card({ data, h, today, lede, onOpen, onKeyStep, children }: { data: Data; h: Highlight; today: string; lede?: string; onOpen: OpenDoor; onKeyStep?(): void; children?: ReactNode }) {
   const [asking, setAsking] = useState(false)
   const open = () => onOpen(h.range, h.playhead, h.placeIds)
   return (
@@ -52,7 +52,7 @@ function Card({ data, h, lede, onOpen, onKeyStep, children }: { data: Data; h: H
         <TripMap data={data} range={h.range} height={260} />
       </div>
       <button type="button" className="btn hl-ask" onClick={() => setAsking(true)} aria-haspopup="dialog" aria-expanded={asking}>Ask for more</button>
-      <AskMoreDrawer data={data} highlight={h} open={asking} onClose={() => setAsking(false)} onOpen={onOpen} />
+      <AskMoreDrawer data={data} highlight={h} today={today} open={asking} onClose={() => setAsking(false)} onOpen={onOpen} />
     </Pass>
   )
 }
@@ -70,11 +70,11 @@ export function HighlightCard({ data, today, onOpen, onKeyStep }: Props) {
 
   if (state.kind === 'none') return null
   if (state.kind === 'short') {
-    return <Card data={data} h={state.highlight} onOpen={onOpen} onKeyStep={onKeyStep} lede={`Your record starts ${dayMonth(state.starts)}. Highlights begin on ${dayMonth(state.starts)} next year — meanwhile, here's your farthest day so far.`}>{picker}</Card>
+    return <Card data={data} h={state.highlight} today={today ?? localToday()} onOpen={onOpen} onKeyStep={onKeyStep} lede={`Your record starts ${dayMonth(state.starts)}. Highlights begin on ${dayMonth(state.starts)} next year — meanwhile, here's your farthest day so far.`}>{picker}</Card>
   }
   if (state.kind === 'quiet') {
     const near = state.nearest
-    if (showNearest && near) return <Card data={data} h={near} onOpen={onOpen} onKeyStep={onKeyStep} lede={`Nothing from a ${dayMonth(date)} yet — the nearest day with a story:`}>{picker}</Card>
+    if (showNearest && near) return <Card data={data} h={near} today={today ?? localToday()} onOpen={onOpen} onKeyStep={onKeyStep} lede={`Nothing from a ${dayMonth(date)} yet — the nearest day with a story:`}>{picker}</Card>
     return (
       <Pass className="hl-card quiet" share={false} stub={<><Field label="On this day">{dmy(date)}</Field>{picker}</>}>
         <h2 className="hl-h">Nothing from a {dayMonth(date)} yet.</h2>
@@ -84,5 +84,5 @@ export function HighlightCard({ data, today, onOpen, onKeyStep }: Props) {
       </Pass>
     )
   }
-  return <Card data={data} h={state.highlight} onOpen={onOpen} onKeyStep={onKeyStep}>{picker}</Card>
+  return <Card data={data} h={state.highlight} today={today ?? localToday()} onOpen={onOpen} onKeyStep={onKeyStep}>{picker}</Card>
 }
