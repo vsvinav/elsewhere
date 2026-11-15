@@ -1,0 +1,36 @@
+/* Trip deck: the trips as a hand of cards, swiped along the top of the Trips tab. */
+.deck-search { display: flex; align-items: center; gap: 16px; margin: 0 0 24px; padding: 0 16px; height: 48px; border: 2px solid var(--ink); background: var(--stock); }
+.deck-search .caps { color: var(--ink); font-size: 12px; }
+.deck-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: 500 18px/1 var(--body); outline: none; }
+.deck-search input::placeholder { color: var(--ghost); }
+.deck-search .n { color: var(--ink-3); font: 700 11px/1 var(--body); letter-spacing: 0.2em; }
+
+.deck { margin: 0 0 56px; }
+.deck-row { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 0; padding: 4px 4px 12px; scrollbar-width: none; }
+.deck-row::-webkit-scrollbar { display: none; }
+.deck-row:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+.deck-card { flex: 0 0 78%; max-width: 560px; scroll-snap-align: center; display: flex; flex-direction: column; border: 2px solid var(--ink); background: var(--stock); box-shadow: 6px 6px 0 var(--ink); transition: transform 0.25s var(--ease, ease), box-shadow 0.25s; }
+.deck-card.is-selected { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 var(--ink); }
+@media (min-width: 1001px) { .deck-card { flex-basis: 44%; } }
+.deck-head { padding: 16px 20px 14px; border-bottom: 2px solid var(--ink); }
+.deck-head .caps { color: var(--ink-3); font-size: 11px; }
+.deck-head .arrow { color: var(--red); }
+.deck-head h3 { margin: 8px 0 0; font-size: clamp(30px, 4vw, 44px); line-height: 0.9; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.deck-card .placemap { margin: 0; border: 0; border-bottom: 2px solid var(--ink); }
+.deck-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 14px 20px 10px; }
+.deck-stats .field .val.n { font-size: 34px; }
+.deck-stats .field .val.n small { font: 700 11px/1 var(--body); letter-spacing: 0.1em; }
+.deck-stats .lab { display: flex; align-items: center; gap: 6px; }
+.deck-stats .win { display: inline-grid; place-items: center; width: 14px; height: 14px; background: var(--mustard); color: var(--ink); font: 900 10px/1 var(--body); letter-spacing: 0; }
+@media (max-width: 760px) { .deck-stats { grid-template-columns: repeat(2, 1fr); } }
+.deck-foot { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px 16px; margin-top: auto; }
+.deck-open { border: 0; background: none; padding: 0; color: var(--red); font: 700 12px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer; }
+.deck-open:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.deck-map.door { display: inline-block; padding: 6px 10px; border: 2px solid var(--ink); font: 700 11px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; }
+.deck-map.door:hover { text-decoration: none; background: var(--ink); color: var(--stock); }
+.deck-nav { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+.deck-nav .caps { color: var(--ink-3); font-size: 11px; }
+.deck-nav button { width: 40px; height: 36px; border: 2px solid var(--ink); background: none; color: var(--ink); font: 700 16px/1 var(--body); cursor: pointer; }
+.deck-nav button:hover:not(:disabled) { background: var(--ink); color: var(--stock); }
+.deck-nav button:disabled { opacity: 0.35; cursor: default; }
+.deck-empty { padding: 40px 0; font: 600 18px/1.2 var(--body); }
