@@ -5,6 +5,7 @@ import { FlightMap } from '../../world/FlightMap'
 import { Bill, CountUp } from '../../world'
 import { n0 } from '../../world/fmt'
 import { useUnits } from '../../profile/units'
+import { SITE } from '../../share/text'
 
 /** The air record as a poster page: the earth, then each neighbourhood of airports, then the ledger. */
 export function Flights() {
@@ -24,11 +25,12 @@ export function Flights() {
   const near = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 0.1 && Math.abs(a[1] - b[1]) < 0.1
   const fromHops = useMemo(() => (from ? hops.filter((h) => near(h.s, from.p) || near(h.t, from.p)) : []), [hops, from])
   const fromPorts = useMemo(() => ports.filter((p) => fromHops.some((h) => near(h.s, p.p) || near(h.t, p.p))), [ports, fromHops])
+  const heroText = () => `${legs} flights on ${hops.length} routes · ${n0(cv(km))} ${units}${longest ? ` · longest ${n0(cv(longest.km))} ${units}, ${name(longest.s)} to ${name(longest.t)}` : ''}\n${SITE}`
   const dests = fromHops.map((h) => ({ name: name(near(h.s, from!.p) ? h.t : h.s), n: h.n, km: h.km })).sort((a, b) => b.n - a.n || b.km - a.km)
   if (!hops.length) return <main className="bills"><Bill share={false}><h2 className="word">No flights</h2><p className="lede">Nothing over 80 km in the air on record.</p></Bill></main>
   return (
     <main className="bills">
-      <Bill tone="ink" className="hero">
+      <Bill tone="ink" className="hero" text={heroText}>
         <div className="two globe-row">
           <div>
             <h1 className="title"><span className="misreg">Up</span><span className="misreg red">There</span></h1>
@@ -40,7 +42,7 @@ export function Flights() {
       </Bill>
 
       {from && (
-        <Bill>
+        <Bill text={() => `From ${from.name} · ${fromHops.reduce((s, h) => s + h.n, 0)} flights · ${fromHops.length} routes · ${n0(cv(fromHops.reduce((s, h) => s + h.km * h.n, 0)))} ${units}\n${SITE}`}>
           <div className="two globe-row">
             <div>
               <h2 className="word">From <span className={from.name.length > 8 ? 'red long' : 'red'}>{from.name}</span></h2>

@@ -39,6 +39,9 @@ type Props = { hops: Hop[]; ports: Port[]; mode?: 'globe' | 'region'; height?: n
  * Globe: the whole record on a turning earth, ink ocean and cream land, routes raised off it.
  * Region: a flat poster panel fitted to one cluster of airports, every name printed.
  */
+// Keep the drawn frame readable after present so a save can copy the canvas pixels.
+const DEVICE = { webgl: { preserveDrawingBuffer: true } }
+
 export function FlightMap({ hops, ports, mode = 'region', height = 520, className = '' }: Props) {
   const globe = mode === 'globe'
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null)
@@ -145,7 +148,7 @@ export function FlightMap({ hops, ports, mode = 'region', height = 520, classNam
   return (
     <div ref={ref} className={`flightmap ${mode} ${className}`} style={{ height }} aria-label={`${hops.length} flight routes between ${ports.length} airports`}>
       {view && (
-        <DeckGL ref={deckRef} views={globe ? new GlobeView({ resolution: 10 }) : new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => { setView(e.viewState as MapViewState) }}
+        <DeckGL ref={deckRef} deviceProps={DEVICE} views={globe ? new GlobeView({ resolution: 10 }) : new DeckMapView({ repeat: false })} viewState={view} onViewStateChange={(e) => { setView(e.viewState as MapViewState) }}
           controller={{ scrollZoom: globe, dragRotate: !globe, touchRotate: !globe, keyboard: false, inertia: 300 }} layers={layers} style={{ position: 'absolute', inset: '0' }}
           getCursor={({ isDragging }) => (isDragging ? 'grabbing' : 'grab')} />
       )}

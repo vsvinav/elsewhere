@@ -1,3 +1,5 @@
+import { snapshotCanvases } from './snapshot'
+
 const PAD = 72
 const SCALE = 2
 export type Format = 'free' | 'story' | 'post'
@@ -9,11 +11,17 @@ export async function saveCard(pass: HTMLElement, name: string, format: Format =
   const css = getComputedStyle(pass)
   const paper = css.backgroundColor && css.backgroundColor !== 'rgba(0, 0, 0, 0)' ? css.backgroundColor : getComputedStyle(document.documentElement).getPropertyValue('--stock').trim() || '#efe6d2'
   const ink = css.color
-  const card = await toCanvas(pass, {
-    pixelRatio: SCALE,
-    // controls and affordances are for the screen, not the print
-    filter: (n) => !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save'))),
-  })
+  // WebGL canvases (the globe) are frozen to images first so the print shows the frame on screen at the click.
+  const snap = snapshotCanvases(pass)
+  let card: HTMLCanvasElement
+  try {
+    await snap.ready
+    card = await toCanvas(pass, {
+      pixelRatio: SCALE,
+      // controls and affordances are for the screen, not the print
+      filter: (n) => !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save') || n.classList.contains('hint'))),
+    })
+  } finally { snap.restore() }
   const out = document.createElement('canvas')
   const g = out.getContext('2d')!
   if (format === 'free') {
