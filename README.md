@@ -15,6 +15,8 @@ Every city you slept in, every flight, every drive — replayed on a map. Runs e
 
 ## Quick start
 
+> New here? **[SETUP.md](SETUP.md)** walks through everything — export, web, Android, and the optional Google key — in plain language.
+
 ```bash
 git clone https://github.com/vsvinav/elsewhere && cd elsewhere/web
 npm install && npm run dev
