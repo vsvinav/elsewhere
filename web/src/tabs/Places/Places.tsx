@@ -9,6 +9,7 @@ import { date, hours, n0 } from '../../world/fmt'
 import type { Place } from '../../data/types'
 import { need } from '../../ingest/places'
 import { useInView } from '../../world/useInView'
+import { PhotoStrip, SnapButton } from '../../photos/Snap'
 
 type Sort = 'visits' | 'hours' | 'recent' | 'first'
 const SORT: Record<Sort, (a: Place, b: Place) => number> = {
@@ -63,7 +64,11 @@ export function Places() {
               <PlaceMap place={sel} height={360} />
               <Sticker place={sel} name={placeName(sel, open)} sub={[sel.city, sel.country_code].filter(Boolean).join(', ') || 'city not on record'} tilt={1.5} />
             </div>
-            <button className="btn quiet" onClick={() => setOpen(null)}>Back to all places</button>
+            <PhotoStrip place={{ id: open, lat: sel.lat, lng: sel.lng, name: placeName(sel, open), city: sel.city, address: sel.address }} />
+            <div className="snap-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 24 }}>
+              <SnapButton place={{ id: open, lat: sel.lat, lng: sel.lng, name: placeName(sel, open), city: sel.city, address: sel.address }} />
+              <button className="btn quiet" onClick={() => setOpen(null)}>Back to all places</button>
+            </div>
           </PrintIn>
         </Pass>
       ) : (

@@ -1,6 +1,7 @@
 import type { Data, Path } from '../data/types'
 import type { Profile } from '../profile/profile'
 import { kv } from './db'
+import { usePhotos } from '../photos/store'
 import type { Parsed } from './parse'
 import type { Job, Progress } from './worker'
 
@@ -51,4 +52,4 @@ export async function saveRecord(data: Data, parsed: Parsed): Promise<void> {
 }
 export const loadRecord = () => kv.get<Data>('record')
 export const loadRecordPaths = async () => (await kv.get<Path[]>('paths')) ?? []
-export const clearRecord = async () => { await kv.del('record'); await kv.del('paths'); await kv.del('parsed'); await kv.del('places') }
+export const clearRecord = async () => { await kv.del('record'); await kv.del('paths'); await kv.del('parsed'); await kv.del('places'); await usePhotos.getState().clear() }

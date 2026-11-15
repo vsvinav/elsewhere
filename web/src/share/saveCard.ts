@@ -49,12 +49,21 @@ export async function saveCard(pass: HTMLElement, name: string, format: Format =
     g.fillText('MY WORLD TOUR · FROM MY GOOGLE TIMELINE', out.width - pad, out.height - foot / 2 + 6 * SCALE)
   }
   const file = `elsewhere-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'card'}${format === 'free' ? '' : `-${format}`}.png`
-  // In the app shell (no download manager) hand the card to the system share sheet.
-  if ('Capacitor' in window && navigator.canShare) {
+  await deliver(out, file)
+}
+
+/** A phone or the shell: the system share sheet is where a picture goes. On a desktop it would only get in the way of the download. */
+export const handheld = () => typeof window !== 'undefined' && ('Capacitor' in window || matchMedia('(pointer: coarse)').matches)
+
+/** Hands the PNG to the share sheet on a handheld; downloads it otherwise, or when the share is refused or cancelled. */
+export async function deliver(out: HTMLCanvasElement, file: string, mobile = handheld()) {
+  if (mobile && navigator.canShare) {
     const blob = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/png'))
     if (blob) {
       const f = new File([blob], file, { type: 'image/png' })
-      if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'elsewhere' }).catch(() => {}); return }
+      if (navigator.canShare({ files: [f] })) {
+        try { await navigator.share({ files: [f], title: 'elsewhere' }); return } catch { /* cancelled or refused: fall through to the download */ }
+      }
     }
   }
   const a = document.createElement('a')
