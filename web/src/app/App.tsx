@@ -13,7 +13,7 @@ import { NamingStamp } from './NamingStamp'
 import { ReadyBar, readyFor, type Ready } from './ReadyBar'
 import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
-import { useStore } from '../store/useStore'
+import { syncTabFromHash, useStore } from '../store/useStore'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
 import { Stats } from '../tabs/Stats/Stats'
@@ -93,9 +93,8 @@ export function App() {
     return () => removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => {
-    const onHash = () => { const t = location.hash.slice(1); if (t && t !== useStore.getState().tab) useStore.getState().setTab(t as never) }
-    addEventListener('hashchange', onHash)
-    return () => removeEventListener('hashchange', onHash)
+    addEventListener('hashchange', syncTabFromHash)
+    return () => removeEventListener('hashchange', syncTabFromHash)
   }, [])
 
   const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }

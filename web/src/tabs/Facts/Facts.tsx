@@ -5,6 +5,7 @@ import { need } from '../../ingest/places'
 import { facts, type Fact, type Kind } from '../../analytics/facts'
 import { Bill, Field, Pass, PrintIn, Stamp } from '../../world'
 import { Fig } from '../../world/figures/Figures'
+import { Door } from '../../world/Door'
 import { bedText, SITE } from '../../share/text'
 import './facts.css'
 
@@ -100,7 +101,7 @@ export function Facts() {
                 </PrintIn>
               }>
                 <PrintIn>
-                  <h2 className="fact-h">{f.headline}</h2>
+                  <h2 className="fact-h"><Door target={f.door} className="fact-door">{f.headline}</Door></h2>
                   <p className="fact-p">{f.detail}</p>
                   {f.figure && wide && <div className="fact-wide"><Fig f={f.figure} /></div>}
                 </PrintIn>

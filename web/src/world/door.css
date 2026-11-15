@@ -1,0 +1,13 @@
+/* Every number is a door: it reads as the figure it wraps, underlines in red on hover, rings in ink on focus. */
+.door, [data-door] { cursor: pointer; }
+.door { display: inline; margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; font-variant-numeric: inherit; }
+.door:hover, [data-door]:hover { text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 0.08em; text-underline-offset: 0.12em; }
+.door:focus-visible, [data-door]:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.ink .door:focus-visible, .ink [data-door]:focus-visible { outline-color: var(--stock); }
+/* A door around a stamp or a whole block shows its hand with a red ring instead of an underline. */
+.door.block { display: inline-block; }
+.door.block:hover { text-decoration: none; outline: 3px solid var(--red); outline-offset: 4px; }
+/* A door that is a whole list row lays itself out exactly as the row did: the row's grid moves onto the button. */
+.door.row { display: grid; grid-template-columns: 1fr auto; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: inherit; width: 100%; }
+.door.row:hover { text-decoration: none; }
+.door.row:hover .n, .door.row:hover .where, .door.row:hover > span:first-child { text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 0.08em; text-underline-offset: 0.12em; }

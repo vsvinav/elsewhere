@@ -1,9 +1,10 @@
 import { PlacePhoto } from '../world/PlacePhoto'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useData } from '../data/DataContext'
+import { useData, useRawData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
+import { OriginTag } from './OriginTag'
 import { CATS, CAT_COLOR, CAT_LABEL, categoryOf } from '../analytics/category'
-import { isHome } from '../analytics/geo'
+import { boundsOf, isHome } from '../analytics/geo'
 import { placeName } from '../analytics/home'
 import { fmtDate } from '../analytics/format'
 import { useUnits } from '../profile/units'
@@ -15,6 +16,8 @@ const PAD = { top: 80, bottom: 260, left: 60, right: 60 }
 /** The Map tab's panel: what is pinned, a way to find one, and the open pin's tag. */
 export function PinHud() {
   const data = useData()
+  const raw = useRawData()
+  const focus = useStore((s) => s.focus)
   const hidden = useStore((s) => s.hiddenCats)
   const pin = useStore((s) => s.pin)
   const sizeBy = useStore((s) => s.pinSize)
@@ -40,22 +43,41 @@ export function PinHud() {
   }
   const homes = useMemo(() => Object.values(data.places).filter(isHome), [data])
   const fit = useCallback(() => {
-    const pts = [...shown.map((s) => s.p), ...homes]
-    if (!pts.length) return
-    const lngs = pts.map((p) => p.lng), lats = pts.map((p) => p.lat)
-    liveCam.get()?.fit([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)], PAD)
+    const b = boundsOf([...shown.map((s) => s.p), ...homes])
+    if (b) liveCam.get()?.fit(b[0], b[1], PAD)
   }, [shown, homes])
   // Opening the tab, or changing the range, frames every pin; the camera may be a beat behind on first mount.
+  // A door's focus frames instead, below.
   const fitted = useRef('')
   useEffect(() => {
     const key = `${data.meta.range[0]}-${data.meta.range[1]}`
     if (fitted.current === key) return
-    const t = setTimeout(() => { if (liveCam.get()) { fitted.current = key; fit() } }, 150)
+    const t = setTimeout(() => { if (liveCam.get() && !useStore.getState().focus) { fitted.current = key; fit() } }, 150)
     return () => clearTimeout(t)
   }, [data, fit])
+  // A door frames what it named: one pin up close, a set of pins, or every pin in its window. Waits for the camera.
+  useEffect(() => {
+    if (!focus) return
+    let tries = 0, t = 0
+    const frame = () => {
+      const cam = liveCam.get()
+      if (!cam) { if (tries++ < 20) t = window.setTimeout(frame, 150); return }
+      fitted.current = `${data.meta.range[0]}-${data.meta.range[1]}`
+      if (!focus.ids) { fit(); return }
+      const pts = focus.ids.map((id) => raw.places[id]).filter(Boolean)
+      if (!pts.length) { fit(); return }
+      if (pts.length === 1) { cam.move({ lng: pts[0].lng, lat: pts[0].lat }, 15); return }
+      const b = boundsOf(pts)!
+      cam.fit(b[0], b[1], PAD)
+    }
+    t = window.setTimeout(frame, 150)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus])
 
   return (
     <div className="hud pins">
+      <OriginTag />
       <div className="hud-cats" aria-label="Kinds of stop">
         {CATS.filter((c) => counts[c]).map((c) => {
           const on = !hidden.includes(c)

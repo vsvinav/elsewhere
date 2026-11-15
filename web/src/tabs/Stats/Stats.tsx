@@ -6,6 +6,10 @@ import { explorationScore } from '../../analytics/explore'
 import { CountUp, Field, Pass, PrintIn } from '../../world'
 import { date, hours, label, month, n0, WEEKDAYS } from '../../world/fmt'
 import { useUnits } from '../../profile/units'
+import { Door, doorProps } from '../../world/Door'
+import { cityIndex, monthRange } from '../../analytics/doors'
+import { isHome, isWork } from '../../analytics/geo'
+import type { Door as Target } from '../../store/useStore'
 
 const TOP_MODES = 3
 const CLS = ['orange', 'blue', '']
@@ -18,6 +22,18 @@ export function Stats() {
   const hasWork = !!(data.profile.works?.length || data.profile.work)
   const commute = useMemo(() => commuteStats(data, data.meta.range), [data])
   const explore = useMemo(() => explorationScore(data, data.meta.range), [data])
+  // Where each figure leads; the place book is indexed once per record.
+  const d = useMemo(() => {
+    const [r0, r1] = data.meta.range
+    const byCity = cityIndex(data.places)
+    const homeWork = Object.entries(data.places).filter(([, p]) => isHome(p) || isWork(p)).map(([id]) => id)
+    return {
+      whole: (label: string): Target => ({ kind: 'range', from: r0, to: r1, label }),
+      month: (key: string, label: string): Target => { const [a, b] = monthRange(key); return { kind: 'range', from: Math.max(r0, a), to: Math.min(r1, b), label } },
+      city: (city: string, label: string): Target => ({ kind: 'places', placeIds: byCity.get(city) ?? [], label }),
+      commute: (label: string): Target => (homeWork.length ? { kind: 'places', placeIds: homeWork, label } : { kind: 'range', from: r0, to: r1, label }),
+    }
+  }, [data])
 
   const totals: Record<string, number> = {}
   for (const m of s.months) for (const [k, v] of Object.entries(m.byMode)) totals[k] = (totals[k] ?? 0) + v
@@ -43,20 +59,20 @@ export function Stats() {
     <main className="strip dense">
       <Pass stripe stub={
         <PrintIn>
-          <Field label="Best month" big>{best ? <CountUp value={best.total} /> : null}</Field>
-          <Field label="Which">{best ? month(best.key) : null}</Field>
-          <Field label="Average per month" big><CountUp value={avg} /></Field>
-          <Field label="Months on record" big>{s.months.length}</Field>
+          <Field label="Best month" big>{best ? <Door target={d.month(best.key, `Best month · ${month(best.key)} · ${n0(cv(best.total))} ${u}`)}><CountUp value={best.total} /></Door> : null}</Field>
+          <Field label="Which">{best ? <Door target={d.month(best.key, `Best month · ${month(best.key)}`)}>{month(best.key)}</Door> : null}</Field>
+          <Field label="Average per month" big><Door target={d.whole(`Average per month · ${n0(cv(avg))} ${u}`)}><CountUp value={avg} /></Door></Field>
+          <Field label="Months on record" big><Door target={d.whole(`${s.months.length} months on record`)}>{s.months.length}</Door></Field>
         </PrintIn>
       }>
         <PrintIn>
           <div className="fields"><Field label="Distance by month">Top three modes in colour, the rest in grey</Field></div>
-          <div className="big"><CountUp value={maxMonth} /><small>KM PEAK</small></div>
-          <div className="columns" role="img" aria-label="Distance per month, stacked by mode">
+          <div className="big">{best ? <Door target={d.month(best.key, `Peak month · ${month(best.key)} · ${n0(cv(maxMonth))} ${u}`)}><CountUp value={maxMonth} /><small>KM PEAK</small></Door> : <><CountUp value={maxMonth} /><small>KM PEAK</small></>}</div>
+          <div className="columns" aria-label="Distance per month, stacked by mode">
             {s.months.map((m) => {
               const other = m.total - modes.reduce((a, k) => a + (m.byMode[k] ?? 0), 0)
               return (
-                <div className="col" key={m.key} tabIndex={0}>
+                <div className="col" key={m.key} {...doorProps(d.month(m.key, `${month(m.key)} · ${n0(cv(m.total))} ${u}`))}>
                   <span className="tip">{month(m.key)} · {n0(cv(m.total))} {u}</span>
                   <i className="ghost" style={{ height: `${(100 * other) / maxMonth}%` }} />
                   {[...modes].reverse().map((k, i) => <i key={k} className={CLS[modes.length - 1 - i]} style={{ height: `${(100 * (m.byMode[k] ?? 0)) / maxMonth}%` }} />)}
@@ -73,7 +89,7 @@ export function Stats() {
         <PrintIn>
           <Field label="Peak hour">{peak.v ? `${WEEKDAYS[peak.d]} ${String(peak.h).padStart(2, '0')}:00` : null}</Field>
           <Field label="Busiest day out">{byDay[topDay] ? WEEKDAYS[topDay] : null}</Field>
-          <Field label="Hours away" big><CountUp value={byDay.reduce((a, b) => a + b, 0)} /></Field>
+          <Field label="Hours away" big><Door target={d.whole(`${n0(byDay.reduce((a, b) => a + b, 0))} hours away`)}><CountUp value={byDay.reduce((a, b) => a + b, 0)} /></Door></Field>
         </PrintIn>
       }>
         <PrintIn>
@@ -92,15 +108,15 @@ export function Stats() {
 
       <Pass stub={
         <PrintIn>
-          <Field label="Away" big><Pct n={pct(s.dayTypes.away)} /></Field>
-          <Field label="Work" big><Pct n={pct(s.dayTypes.work)} /></Field>
-          <Field label="Out" big><Pct n={pct(s.dayTypes.out)} /></Field>
-          <Field label="Home" big><Pct n={pct(s.dayTypes.home)} /></Field>
+          <Field label="Away" big><Door target={d.whole(`${pct(s.dayTypes.away)}% of days away`)}><Pct n={pct(s.dayTypes.away)} /></Door></Field>
+          <Field label="Work" big><Door target={d.commute(`${pct(s.dayTypes.work)}% of days at work`)}><Pct n={pct(s.dayTypes.work)} /></Door></Field>
+          <Field label="Out" big><Door target={d.whole(`${pct(s.dayTypes.out)}% of days out`)}><Pct n={pct(s.dayTypes.out)} /></Door></Field>
+          <Field label="Home" big><Door target={d.commute(`${pct(s.dayTypes.home)}% of days home`)}><Pct n={pct(s.dayTypes.home)} /></Door></Field>
         </PrintIn>
       }>
         <PrintIn>
           <div className="fields"><Field label="Kinds of days">Away = over {n0(cv(100))} {u} from home · Work = 2 h+ at work · Out = 3 h+ elsewhere</Field></div>
-          <div className="big"><CountUp value={s.dayTypes.away} /><small>DAYS AWAY</small></div>
+          <div className="big"><Door target={d.whole(`${n0(s.dayTypes.away)} days away`)}><CountUp value={s.dayTypes.away} /><small>DAYS AWAY</small></Door></div>
           <div className="strip100" aria-hidden>
             <span className="other" style={{ width: `${pct(s.dayTypes.away)}%` }}>Away</span>
             {hasWork && <span className="work" style={{ width: `${pct(s.dayTypes.work)}%` }}>Work</span>}
@@ -113,15 +129,15 @@ export function Stats() {
       {hasWork && (
       <Pass stub={
         <PrintIn>
-          <Field label="Legs on record" big><CountUp value={commute.legs.length} /></Field>
-          <Field label="To work · median">{commute.to_work.n ? `${Math.round(commute.to_work.median_min)} min` : null}</Field>
-          <Field label="To home · median">{commute.to_home.n ? `${Math.round(commute.to_home.median_min)} min` : null}</Field>
-          <Field label="Bad day (p90)">{commute.legs.length ? `${Math.round(Math.max(commute.to_work.p90_min, commute.to_home.p90_min))} min` : null}</Field>
+          <Field label="Legs on record" big><Door target={d.commute(`${n0(commute.legs.length)} commute legs`)}><CountUp value={commute.legs.length} /></Door></Field>
+          <Field label="To work · median">{commute.to_work.n ? <Door target={d.commute(`To work · ${Math.round(commute.to_work.median_min)} min`)}>{Math.round(commute.to_work.median_min)} min</Door> : null}</Field>
+          <Field label="To home · median">{commute.to_home.n ? <Door target={d.commute(`To home · ${Math.round(commute.to_home.median_min)} min`)}>{Math.round(commute.to_home.median_min)} min</Door> : null}</Field>
+          <Field label="Bad day (p90)">{commute.legs.length ? <Door target={d.commute(`Bad day · ${Math.round(Math.max(commute.to_work.p90_min, commute.to_home.p90_min))} min`)}>{Math.round(Math.max(commute.to_work.p90_min, commute.to_home.p90_min))} min</Door> : null}</Field>
         </PrintIn>
       }>
         <PrintIn>
           <div className="fields"><Field label="Commute">Home ↔ work legs under 3 hours</Field><Field label="Usually by">{usualMode && label(usualMode)}</Field></div>
-          <div className="big">{commute.legs.length ? <><CountUp value={commute.median_all} /><small>MIN DOOR TO DOOR</small></> : <span className="ghost">—</span>}</div>
+          <div className="big">{commute.legs.length ? <Door target={d.commute(`${Math.round(commute.median_all)} min door to door`)}><CountUp value={commute.median_all} /><small>MIN DOOR TO DOOR</small></Door> : <span className="ghost">—</span>}</div>
           {commute.legs.length > 0 && (
             <>
               <div className="legend"><span className="orange">Leaving home</span><span>Leaving work</span></div>
@@ -136,16 +152,16 @@ export function Stats() {
 
       <Pass stub={
         <PrintIn>
-          <Field label="New places" big><CountUp value={newTotal} /></Field>
-          <Field label="Per month" big><CountUp value={newTotal / Math.max(1, explore.length)} /></Field>
-          <Field label="Lapsed" big><CountUp value={explore.reduce((a, b) => a + b.lapsed, 0)} /></Field>
+          <Field label="New places" big><Door target={d.whole(`${n0(newTotal)} new places`)}><CountUp value={newTotal} /></Door></Field>
+          <Field label="Per month" big><Door target={d.whole(`${n0(newTotal / Math.max(1, explore.length))} new places a month`)}><CountUp value={newTotal / Math.max(1, explore.length)} /></Door></Field>
+          <Field label="Lapsed" big><Door target={d.whole(`${n0(explore.reduce((a, b) => a + b.lapsed, 0))} lapsed places`)}><CountUp value={explore.reduce((a, b) => a + b.lapsed, 0)} /></Door></Field>
         </PrintIn>
       }>
         <PrintIn>
           <div className="fields"><Field label="Exploration">First visits, returns, and places that went quiet, by month</Field></div>
-          <div className="columns" role="img" aria-label="New, repeat and lapsed places per month">
+          <div className="columns" aria-label="New, repeat and lapsed places per month">
             {explore.map((b) => (
-              <div className="col" key={b.key} tabIndex={0}>
+              <div className="col" key={b.key} {...doorProps(d.month(b.key, `${month(b.key)} · ${b.new} new · ${b.repeat} repeat · ${b.lapsed} lapsed`))}>
                 <span className="tip">{month(b.key)} · {b.new} new · {b.repeat} repeat · {b.lapsed} lapsed</span>
                 <i className="ghost" style={{ height: `${(100 * b.lapsed) / maxExplore}%` }} />
                 <i className="blue" style={{ height: `${(100 * b.repeat) / maxExplore}%` }} />
@@ -160,15 +176,15 @@ export function Stats() {
 
       <Pass>
         <PrintIn>
-          <div className="fields"><Field label="Cities">{s.cities.length} cities in {new Set(s.cities.map((c) => c.country).filter(Boolean)).size} countries, by time spent</Field></div>
+          <div className="fields"><Field label="Cities"><Door target={d.whole(`${s.cities.length} cities`)}>{s.cities.length} cities</Door> in <Door target={d.whole(`${new Set(s.cities.map((c) => c.country).filter(Boolean)).size} countries`)}>{new Set(s.cities.map((c) => c.country).filter(Boolean)).size} countries</Door>, by time spent</Field></div>
           <table className="ptable compact">
             <thead><tr><th>City</th><th>Time</th><th>Visits</th><th>Places</th><th>First</th><th>Last</th></tr></thead>
             <tbody>
               {s.cities.slice(0, 25).map((c) => (
                 <tr key={c.city}>
-                  <td>{c.city}<small>{c.country}</small></td>
-                  <td>{hours(c.hours)}</td><td>{n0(c.visits)}</td><td>{n0(c.places)}</td>
-                  <td className="t">{date(c.first)}</td><td className="t">{date(c.last)}</td>
+                  <td><Door target={d.city(c.city, `${c.city} · ${hours(c.hours)} · ${n0(c.visits)} visits · ${n0(c.places)} places`)}>{c.city}<small>{c.country}</small></Door></td>
+                  <td><Door target={d.city(c.city, `${c.city} · ${hours(c.hours)}`)}>{hours(c.hours)}</Door></td><td><Door target={d.city(c.city, `${c.city} · ${n0(c.visits)} visits`)}>{n0(c.visits)}</Door></td><td><Door target={d.city(c.city, `${c.city} · ${n0(c.places)} places`)}>{n0(c.places)}</Door></td>
+                  <td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · first visit ${date(c.first)}` }}>{date(c.first)}</Door></td><td className="t"><Door target={{ kind: 'range', from: c.first, to: c.last, label: `${c.city} · last visit ${date(c.last)}` }}>{date(c.last)}</Door></td>
                 </tr>
               ))}
             </tbody>

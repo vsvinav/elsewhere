@@ -77,3 +77,42 @@ test('facts: a cut range only counts what happened inside it, but keeps firsts f
   expect(f.map((x) => x.id)).not.toContain('hermit')
   expect(f.find((x) => x.id === 'furthest')?.detail).toMatch(/January 8, 2025/)
 })
+
+test('facts: each one carries a door to the window or the pins that made it', () => {
+  const f = facts(data, 'km')
+  const door = (id: string) => f.find((x) => x.id === id)!.door
+  // Whole-record scale facts open the whole range.
+  expect(door('laps')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 10 * D })
+  expect(door('walked')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 10 * D })
+  // The hermit stretch is the stay itself.
+  expect(door('hermit')).toMatchObject({ kind: 'range', from: JAN, to: JAN + 4 * D - 12 * H })
+  // Furthest and longest stay open the pin, with the playhead on the visit.
+  expect(door('furthest')).toMatchObject({ kind: 'place', placeId: expect.stringMatching(/^hotel/), at: expect.any(Number) })
+  expect(door('longest-stay')).toMatchObject({ kind: 'place', placeId: 'hotel', at: JAN + 4 * D })
+  // Countries: one pin per country.
+  const c = door('countries')
+  expect(c?.kind).toBe('places')
+  expect(c && c.kind === 'places' && c.placeIds.length).toBe(2)
+  expect(c && c.kind === 'places' && c.placeIds).toContain('home')
+  // Every fact's door reads as its headline.
+  for (const x of f) expect(x.door?.label).toBe(x.headline)
+})
+
+test('facts: a record of 100k visits, doors included, comes back in one pass', () => {
+  const N = 100_000, P = 4_000
+  const places: Record<string, ReturnType<typeof place>> = { home: place('home', 'Boston', 'US', 42.36, -71.06) }
+  for (let i = 0; i < P; i++) places[`p${i}`] = place(null, `City${i % 400}`, `C${i % 150}`, 40 + (i % 90) / 10, -70 + (i % 300) / 10, { primary_type: ['cafe', 'bar', 'gym', 'airport', 'supermarket', 'restaurant', 'train_station', 'clothing_store'][i % 8], name: `P${i}`, n_visits: 1 + (i % 9), total_hours: 2 + (i % 5) })
+  const visits = []
+  for (let i = 0; i < N; i++) {
+    const t = JAN + i * 1800
+    const id = i % 3 === 0 ? 'home' : `p${i % P}`
+    visits.push(v(t, t + 1500, id, places[id].lat, places[id].lng))
+  }
+  const big = { ...data, visits, places, meta: { range: [JAN, JAN + N * 1800] } } as unknown as Data
+  const t0 = performance.now()
+  const f = facts(big, 'km')
+  const ms = performance.now() - t0
+  expect(f.length).toBeGreaterThan(5)
+  for (const x of f) expect(x.door).toBeDefined()
+  expect(ms).toBeLessThan(3000)
+})
