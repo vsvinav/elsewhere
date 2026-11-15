@@ -31,6 +31,7 @@
 .facts-kinds button[aria-pressed='true'] b { color: var(--mustard); }
 @media (prefers-reduced-motion: reduce) { .feature-bar, .feature-card { animation: none; } }
 
+.pass.fact .fact-door { display: block; text-align: left; }
 .pass.fact .fact-h { margin: 0; font: 900 clamp(40px, 5.2vw, 76px)/0.9 var(--display); text-transform: uppercase; letter-spacing: -0.01em; text-wrap: balance; max-width: 14ch; }
 .pass.fact.explored .fact-h, .pass.fact.record .fact-h { color: var(--red); }
 .pass.fact .fact-p { margin: 20px 0 0; font: 500 clamp(16px, 1.4vw, 19px)/1.4 var(--body); max-width: 52ch; color: var(--ink-2); }

@@ -78,11 +78,16 @@ describe('Tour', () => {
 describe('Numbers', () => {
   it('a city row opens its pins; its first and last dates open the window', () => {
     wrap(<Stats />)
-    const cell = screen.getByRole('button', { name: /^Open on the map: Paris · / })
-    fireEvent.click(cell)
+    fireEvent.click(screen.getByRole('button', { name: /^Open on the map: Paris · \d+ visits$/ }))
     expect(useStore.getState().tab).toBe('map')
     expect(useStore.getState().focus?.ids?.length).toBeGreaterThan(0)
     expect(useStore.getState().focus!.ids!.every((id) => data.places[id].city === 'Paris')).toBe(true)
+
+    const dates = screen.getAllByRole('button', { name: /^Open on the map: Paris · [A-Z]{3} \d+, \d{4} → / })
+    expect(dates).toHaveLength(2)
+    fireEvent.keyDown(dates[1], { key: ' ' })
+    const r = useStore.getState().range!
+    expect(data.visits.some((v) => data.places[v.place_id]?.city === 'Paris' && v.start >= r[0] && v.end <= r[1])).toBe(true)
   })
 
   it('the best month opens that month', () => {
