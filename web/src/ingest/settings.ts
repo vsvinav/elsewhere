@@ -6,10 +6,12 @@ import type { LlmConfig } from '../ask/llm'
 export type MapProvider = 'auto' | 'google' | 'osm'
 /** `keyOk` (Places) and `mapsOk` (Maps JavaScript) are null until the key has been checked; `limited` records that the visitor accepted free maps after a failed check. */
 /** `llm` is the visitor's own model provider for Ask Elsewhere; like the Maps key it is sent straight from the browser. */
-export interface Settings { mapsKey: string; mapId: string; mapProvider: MapProvider; keyOk: boolean | null; mapsOk: boolean | null; keyError: string; limited: boolean; llm: LlmConfig }
+/** `relayUrl` is the Crew relay this browser pairs and listens through; empty turns Crew off. */
+export interface Settings { mapsKey: string; mapId: string; mapProvider: MapProvider; keyOk: boolean | null; mapsOk: boolean | null; keyError: string; limited: boolean; llm: LlmConfig; relayUrl: string }
 const LS = 'elsewhere.settings'
 export const DEFAULT_LLM: LlmConfig = { provider: 'openai', key: '', model: '', baseUrl: '' }
-const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '', mapProvider: 'auto', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: DEFAULT_LLM }
+export const DEFAULT_RELAY = 'https://relay.elsewhere.app'
+const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '', mapProvider: 'auto', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: DEFAULT_LLM, relayUrl: DEFAULT_RELAY }
 
 const stored = (): Partial<Settings> => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}') } catch { return {} } }
 // Older blobs lack `llm` or carry only part of it.

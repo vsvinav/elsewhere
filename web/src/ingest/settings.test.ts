@@ -19,6 +19,15 @@ describe('settings', () => {
     expect(DEFAULT_LLM).toEqual({ provider: 'openai', key: '', model: '', baseUrl: '' })
   })
 
+  it('an older blob gets the default relay; an emptied relay stays empty', async () => {
+    mem.set('elsewhere.settings', JSON.stringify({ mapsKey: 'AIza' }))
+    const { settings, DEFAULT_RELAY } = await import('./settings')
+    expect(DEFAULT_RELAY).toBe('https://relay.elsewhere.app')
+    expect(settings.get().relayUrl).toBe(DEFAULT_RELAY)
+    settings.set({ relayUrl: '' })
+    expect(JSON.parse(mem.get('elsewhere.settings')!).relayUrl).toBe('')
+  })
+
   it('fills in missing llm fields inside a partial blob', async () => {
     mem.set('elsewhere.settings', JSON.stringify({ llm: { provider: 'gemini', key: 'g' } }))
     const { settings } = await import('./settings')

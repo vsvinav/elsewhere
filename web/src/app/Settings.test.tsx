@@ -36,21 +36,30 @@ const setValue = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
 const okFetch = (async () => Response.json({ choices: [{ message: { content: 'OK' } }] })) as unknown as typeof fetch
 
 beforeEach(() => {
-  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' } })
+  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://relay.elsewhere.app' })
   profile.set({ name: 'V', units: 'km', homes: [], works: [] })
   document.body.innerHTML = ''
 })
 
 describe('Settings', () => {
-  it('prints the four sections under the title', () => {
+  it('prints the five sections under the title', () => {
     const { host, unmount } = mount()
     expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
-    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'UNITS', 'DATA'])
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'CREW', 'UNITS', 'DATA'])
     expect(host.querySelector('label[for=st-map-id]')?.textContent).toBe('Map ID · optional')
     expect(host.querySelector('label[for=st-map-tiles]')?.textContent).toBe('Map provider')
     expect([...host.querySelectorAll('#st-map-tiles option')].map((o) => o.textContent)).toEqual(['Auto', 'Google', 'OpenStreetMap'])
     expect(host.textContent).toContain('Your key is stored in this browser only and is sent straight to the provider you choose.')
     for (const el of host.querySelectorAll('input:not([type=radio]), select')) expect(host.querySelector(`label[for="${el.id}"]`), `label for #${el.id}`).not.toBeNull()
+    unmount()
+  })
+
+  it('Relay URL edits land in settings', () => {
+    const { host, unmount } = mount()
+    const el = input(host, 'st-relay')!
+    expect(el.value).toBe('https://relay.elsewhere.app')
+    act(() => { el.focus(); setValue(el, ' https://relay.example.org/ '); el.blur() })
+    expect(settings.get().relayUrl).toBe('https://relay.example.org')
     unmount()
   })
 

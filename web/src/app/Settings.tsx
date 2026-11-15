@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useRecord } from './App'
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, TEST_PROMPT, askLlm, modelOf, type LlmProvider } from '../ask/llm'
-import { settings, useSettings, type MapProvider } from '../ingest/settings'
+import { DEFAULT_RELAY, settings, useSettings, type MapProvider } from '../ingest/settings'
 import { profile, useProfile } from '../profile/profile'
 import { KeyCheck } from '../profile/KeyCheck'
 import { useStore } from '../store/useStore'
@@ -10,7 +10,8 @@ import { Field } from '../world'
 import './settings.css'
 
 export const SETTINGS_TITLE = 'SETTINGS'
-export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', units: 'UNITS', data: 'DATA' } as const
+export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', units: 'UNITS', data: 'DATA' } as const
+export const RELAY_CAPTION = 'Friends pair and share through this relay. It holds only device ids and encrypted pings; leave it empty to turn Crew off.'
 export const PROVIDER_LABEL: Record<LlmProvider, string> = { openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini', custom: 'Ollama / custom' }
 export const LLM_CAPTION = 'Your key is stored in this browser only and is sent straight to the provider you choose.'
 export const NO_KEY_STATUS = 'Add a key first'
@@ -26,6 +27,7 @@ export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
       <h1>{SETTINGS_TITLE}</h1>
       <MapsSection />
       <AskSection fetchFn={fetchFn} />
+      <CrewSection />
       <UnitsSection />
       <DataSection />
     </main>
@@ -118,6 +120,24 @@ function AskSection({ fetchFn }: { fetchFn: typeof fetch }) {
         <span role="status" className={`st-status${status.text.startsWith('Connected') ? ' ok' : ''}`}>{status.text}</span>
       </div>
       <p className="fine">{LLM_CAPTION}</p>
+    </section>
+  )
+}
+
+function CrewSection() {
+  const { relayUrl } = useSettings()
+  const [url, setUrl] = useState(relayUrl)
+  const save = () => settings.set({ relayUrl: url.trim().replace(/\/+$/, '') })
+  return (
+    <section className="setting">
+      <h2>{SECTION.crew}</h2>
+      <div className="fields keys">
+        <div className="field">
+          <label className="lab" htmlFor="st-relay">Relay URL</label>
+          <input id="st-relay" className="val wide" value={url} onChange={(e) => setUrl(e.target.value)} onBlur={save} placeholder={DEFAULT_RELAY} spellCheck={false} autoComplete="off" />
+        </div>
+      </div>
+      <p className="fine">{RELAY_CAPTION}</p>
     </section>
   )
 }
