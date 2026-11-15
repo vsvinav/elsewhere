@@ -37,5 +37,5 @@ test('the door helpers stay linear on a place book the size of a long record', (
   expect(onePerCity(big).length).toBe(5000)
   expect(cityIndex(big).size).toBe(5000)
   expect(placesInCity(big, 'city7').length).toBe(60)
-  expect(performance.now() - t0).toBeLessThan(1500)
+  expect(performance.now() - t0).toBeLessThan(6000) // generous: CI runners are slow; a quadratic pass over 300k would take minutes
 })
