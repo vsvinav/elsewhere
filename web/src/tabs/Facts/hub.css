@@ -1,5 +1,7 @@
-/* Play deck: six poster cards along the top of the Facts tab, swiped like the trip deck, each opening its full pass. */
-.hub-deck { margin: 0 0 32px; }
+/* Play deck: five poster cards in a strip under the Fun Facts hero, swiped like the trip deck, each opening its full pass. */
+.facts-play { margin-top: 24px; }
+.facts-play .hub-label { display: block; margin: 0 0 14px; font-size: 11px; letter-spacing: 0.26em; color: var(--ink-3); }
+.hub-deck { margin: 0; }
 .hub-row { align-items: stretch; }
 .hub-card { flex: 0 0 300px; max-width: 300px; min-height: 380px; padding: 18px; border-width: 3px; transform: rotate(var(--tilt, 0deg)); color: var(--ink); }
 .hub-card.is-selected { transform: rotate(0deg) translate(-2px, -2px); }
@@ -40,11 +42,6 @@
 .dots button { width: auto; height: auto; padding: 4px; border: 0; background: none; cursor: pointer; }
 .dots i { display: block; width: 8px; height: 8px; border: 2px solid var(--ink); background: none; }
 .dots i.on { background: var(--ink); }
-
-.hub-all { margin: 0 0 24px; }
-.hub-all > button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 0; border: 0; border-top: 3px solid var(--ink); border-bottom: 3px solid var(--ink); background: none; color: var(--ink); font: 900 22px/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
-.hub-all > button .caps { font-size: 11px; color: var(--ink-3); }
-.hub-all > button:hover { color: var(--red); }
 
 @media (max-width: 760px) {
   .hub-card { flex-basis: 290px; max-width: 290px; }

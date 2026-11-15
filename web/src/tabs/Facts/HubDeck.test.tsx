@@ -7,7 +7,7 @@ vi.hoisted(() => {
   const mem = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k), clear: () => mem.clear() })
 })
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { onThisDayData } from '../../test/onThisDay'
 import { sampleData } from '../../test/sample'
@@ -34,17 +34,18 @@ beforeEach(() => { localStorage.clear(); location.hash = 'facts'; useStore.setSt
 afterEach(cleanup)
 
 describe('HubDeck', () => {
-  it('deals six cards in order, each with its kind label, the first one selected', () => {
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
+  it('deals five cards in order, each with its kind label, the first one selected, and no On this day card', () => {
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
     const all = cards()
-    expect(all.map((c) => c.querySelector('.caps')!.textContent)).toEqual(['Today', 'On this day', 'Streaks', 'Passport', 'Compare', 'Rhythm'])
-    expect(all.map((c) => c.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false'])
-    expect(dots()).toEqual([true, false, false, false, false, false])
+    expect(all.map((c) => c.querySelector('.caps')!.textContent)).toEqual(['Today', 'Streaks', 'Passport', 'Compare', 'Rhythm'])
+    expect(all.map((c) => c.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false', 'false'])
+    expect(dots()).toEqual([true, false, false, false, false])
+    expect(screen.queryByText('On this day')).toBeNull()
   })
 
   it("today's fact is the day's deterministic pick and OPEN asks for its kind", () => {
     const open = vi.fn()
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
     const pick = todaysFact(facts, TODAY)!
     const card = cards()[0]
     expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe(pick.headline)
@@ -53,32 +54,10 @@ describe('HubDeck', () => {
     expect(open).toHaveBeenCalledWith(pick.kind)
   })
 
-  it('on this day names the city and opens the map on that day', () => {
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
-    const card = cards()[1]
-    expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe('Paris')
-    expect(card.textContent).toContain('15 Nov 2022 — you landed in Paris.')
-    fireEvent.click(within(card).getByRole('button', { name: 'Open on the map' }))
-    const s = useStore.getState()
-    expect(s.tab).toBe('map')
-    expect(s.origin?.label).toBe('On this day')
-    expect(s.range![0]).toBeGreaterThanOrEqual(Date.UTC(2022, 10, 14) / 1000)
-    expect(s.range![1]).toBeLessThanOrEqual(Date.UTC(2022, 10, 18) / 1000)
-  })
-
-  it('a record under a year old shows its farthest day without claiming it happened on this day', () => {
-    const short = { ...data, meta: { ...data.meta, range: [Date.UTC(2023, 10, 11, 8) / 1000, Date.UTC(2024, 4, 1) / 1000] } } as typeof data
-    wrap(<HubDeck data={short} raw={short} facts={facts} today="2024-04-10" units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
-    const card = cards()[1]
-    expect(card.textContent).toContain('landed in Paris')
-    expect(card.textContent).toContain("Your record starts 11 November — meanwhile, here's your farthest day so far.")
-    expect(card.textContent).not.toContain('On this day, earlier this year')
-  })
-
   it('streaks prints the longest run away, the weeks with something new, and the streak still running', () => {
     const open = vi.fn()
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
-    const card = cards()[2]
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
+    const card = cards()[1]
     const rows = within(card).getAllByRole('listitem').map((r) => r.textContent)
     expect(rows[0]).toMatch(/^7Longest away streak/)
     expect(rows[1]).toMatch(/Weeks with a new place/)
@@ -89,8 +68,8 @@ describe('HubDeck', () => {
 
   it('the passport card carries the booklet count and OPEN goes to the full booklet', () => {
     const open = vi.fn()
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={open} />)
-    const card = cards()[3]
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={open} />)
+    const card = cards()[2]
     expect(card.querySelector('.passport.compact')).not.toBeNull()
     expect(card.textContent).toMatch(/Stamped\d+ \/ \d+/)
     fireEvent.click(within(card).getByRole('button', { name: 'Open passport' }))
@@ -98,8 +77,8 @@ describe('HubDeck', () => {
   })
 
   it('compare years starts on the latest two and a tap on a chip cycles it past the other', () => {
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
-    const card = cards()[4]
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
+    const card = cards()[3]
     const chips = () => within(card).getAllByRole('button', { name: /^Compare year/ }).map((b) => b.textContent)
     expect(chips()).toEqual(['2024', '2025'])
     fireEvent.click(within(card).getByRole('button', { name: 'Compare year 2024' }))
@@ -112,8 +91,8 @@ describe('HubDeck', () => {
 
   it('rhythm shows the busiest hour over a mini grid and opens the habits', () => {
     const open = vi.fn()
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
-    const card = cards()[5]
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={open} onOpenPassport={() => {}} />)
+    const card = cards()[4]
     expect(within(card).getByRole('heading', { level: 3 }).textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d\d:00$/)
     expect(card.textContent).toMatch(/Busiest: (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d\d:00/)
     expect(card.querySelectorAll('.heat-mini i')).toHaveLength(7 * 24)
@@ -122,25 +101,17 @@ describe('HubDeck', () => {
   })
 
   it('the arrow keys and the dots move the selection along the deck', () => {
-    wrap(<HubDeck data={data} raw={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
+    wrap(<HubDeck data={data} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />)
     fireEvent.keyDown(deck(), { key: 'ArrowRight' })
     expect(cards()[1].getAttribute('aria-selected')).toBe('true')
     expect(dots()[1]).toBe(true)
     fireEvent.keyDown(deck(), { key: 'ArrowLeft' })
     fireEvent.keyDown(deck(), { key: 'ArrowLeft' })
     expect(cards()[0].getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Card 6 of 6' }))
-    expect(cards()[5].getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Previous card' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Card 5 of 5' }))
     expect(cards()[4].getAttribute('aria-selected')).toBe('true')
-  })
-
-  it('a day with nothing on record prints a quiet card without a door', () => {
-    const quiet = { ...data, visits: data.visits.filter((v) => v.place_id === 'sydney-hotel'), daily: data.daily.slice(0, 1) }
-    wrap(<HubDeck data={quiet} raw={quiet} facts={facts} today={TODAY} units="km" onOpenKind={() => {}} onOpenPassport={() => {}} />, quiet)
-    const card = cards()[1]
-    expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe('Quiet day')
-    expect(within(card).queryByRole('button', { name: 'Open on the map' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous card' }))
+    expect(cards()[3].getAttribute('aria-selected')).toBe('true')
   })
 })
 
@@ -149,23 +120,64 @@ describe('Facts with the deck', () => {
   const rec: Record_ = { mine: false, stage: null, importError: null, enrichError: null, importFile() {}, reset() {}, editProfile() {} }
   const wrapFacts = () => render(<RecordContext.Provider value={rec}><DataContext.Provider value={sample}><Facts /></DataContext.Provider></RecordContext.Provider>)
 
-  it('keeps every fact behind an ALL FACTS disclosure, collapsed until asked', () => {
+  it('prints On this day full width above the Fun Facts hero, the deck under a PLAY label, and every pass in the open', () => {
     wrapFacts()
-    expect(deck()).toBeTruthy()
-    const all = screen.getByRole('button', { name: /^All facts/ })
-    expect(all.getAttribute('aria-expanded')).toBe('false')
-    expect(document.querySelectorAll('.facts .fact-h')).toHaveLength(0)
-    fireEvent.click(all)
-    expect(all.getAttribute('aria-expanded')).toBe('true')
+    const slot = document.querySelector('main.highlights')!
+    const hero = document.querySelector<HTMLElement>('main.facts-head')!
+    const play = document.querySelector<HTMLElement>('main.facts-play')!
+    const list = document.querySelector('main.facts')!
+    expect(slot).not.toBeNull()
+    expect(slot.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(hero.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(play.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(hero).getByRole('heading', { level: 1 }).textContent).toBe('FunFacts')
+    expect(play.contains(deck())).toBe(true)
+    expect(within(play).getByText('Play')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^All facts/ })).toBeNull()
     expect(document.querySelectorAll('.facts .fact-h').length).toBeGreaterThan(3)
   })
 
-  it("OPEN on today's fact unfolds the list filtered to that kind", () => {
+  it('the hero turns one quip at a time every six seconds, holds under the pointer, and the arrows step it', () => {
+    vi.useFakeTimers()
+    try {
+      wrapFacts()
+      const quip = () => document.querySelector('.feature-card .quip')!.textContent
+      const count = () => document.querySelector('.feature-top .field')!.textContent
+      const first = quip()
+      expect(count()).toMatch(/1 of \d+$/)
+      act(() => { vi.advanceTimersByTime(6000) })
+      const second = quip()
+      expect(second).not.toBe(first)
+      expect(count()).toMatch(/2 of \d+$/)
+      fireEvent.pointerEnter(document.querySelector('.feature') as HTMLElement)
+      act(() => { vi.advanceTimersByTime(12000) })
+      expect(quip()).toBe(second)
+      fireEvent.pointerLeave(document.querySelector('.feature') as HTMLElement)
+      fireEvent.click(screen.getByRole('button', { name: 'Previous fact' }))
+      expect(quip()).toBe(first)
+      fireEvent.click(screen.getByRole('button', { name: 'Next fact' }))
+      expect(quip()).toBe(second)
+      expect(screen.getByRole('button', { name: 'Shuffle' })).toBeTruthy()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('the kind chips in the hero foot filter the list below', () => {
+    wrapFacts()
+    const chips = within(screen.getByRole('group', { name: 'Show only' })).getAllByRole('button')
+    expect(chips.length).toBeGreaterThan(1)
+    fireEvent.click(chips[1])
+    expect(chips[1].getAttribute('aria-pressed')).toBe('true')
+    const kind = chips[1].textContent!.replace(/\s*\d+$/, '').toLowerCase()
+    const passes = document.querySelectorAll('.facts .pass.fact')
+    expect(passes.length).toBeGreaterThan(0)
+    for (const p of passes) expect(p.classList.contains(kind)).toBe(true)
+  })
+
+  it("OPEN on today's fact filters the list to that kind", () => {
     wrapFacts()
     const card = cards()[0]
     const kind = card.className.match(/kind-(\w+)/)![1]
     fireEvent.click(within(card).getByRole('button', { name: /^Open/ }))
-    expect(screen.getByRole('button', { name: /^All facts/ }).getAttribute('aria-expanded')).toBe('true')
     const passes = document.querySelectorAll('.facts .pass.fact')
     expect(passes.length).toBeGreaterThan(0)
     for (const p of passes) expect(p.classList.contains(kind)).toBe(true)
