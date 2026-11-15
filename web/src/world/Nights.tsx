@@ -4,6 +4,7 @@ import { bedStrip } from '../analytics/beds'
 import { bedText } from '../share/text'
 import { Bill, CountUp } from './index'
 import { Beds } from './figures/Figures'
+import { Door } from './Door'
 
 const yearOf = (ts: number) => new Date(ts * 1000).getUTCFullYear()
 const mon = (ts: number) => new Date(ts * 1000).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: 'numeric' })
@@ -26,7 +27,7 @@ export function Nights({ range, name }: { range: [number, number]; name?: string
           <h2 className="word">Nights</h2>
           <p className="lede">{away.length} of {known} nights somewhere other than home{cities ? `, across ${cities} ${cities === 1 ? 'city' : 'cities'}` : ''}. {fresh ? `${fresh} of them in a city you'd never slept in before.` : 'None of them anywhere new.'}</p>
         </div>
-        <div className="num"><CountUp value={away.length} /><small>away</small></div>
+        <div className="num"><Door target={{ kind: 'range', from: range[0], to: range[1], label: `${away.length} nights away` }}><CountUp value={away.length} /><small>away</small></Door></div>
       </div>
       <Beds nights={nights} className="tall" />
       <div className="legend"><span className="ink">Home</span><span className="orange">Somewhere new</span><span className="mustard">Been before</span><span className="ghost">No record</span></div>
