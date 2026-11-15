@@ -49,8 +49,8 @@ export async function saveCard(pass: HTMLElement, name: string, format: Format =
     g.fillText('MY WORLD TOUR · FROM MY GOOGLE TIMELINE', out.width - pad, out.height - foot / 2 + 6 * SCALE)
   }
   const file = `elsewhere-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'card'}${format === 'free' ? '' : `-${format}`}.png`
-  // In the app shell (no download manager) hand the card to the system share sheet.
-  if ('Capacitor' in window && navigator.canShare) {
+  // Wherever the browser can share a file, hand the card to the system share sheet; otherwise download it.
+  if (navigator.canShare) {
     const blob = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/png'))
     if (blob) {
       const f = new File([blob], file, { type: 'image/png' })

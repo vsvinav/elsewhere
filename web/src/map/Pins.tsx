@@ -11,6 +11,7 @@ import { useUnits } from '../profile/units'
 import { liveCam } from './live'
 import { need } from '../ingest/places'
 import { heatCss } from './heat'
+import { PhotoStrip, SnapButton } from '../photos/Snap'
 
 const PAD = { top: 80, bottom: 260, left: 60, right: 60 }
 
@@ -131,14 +132,17 @@ function PinCard({ id, onClose }: { id: string; onClose(): void }) {
   const tz = visits[0]?.tz ?? 0
   const home = data.profile.home
   const kmFromHome = Math.round(Math.hypot((p.lat - home.lat) * 111, (p.lng - home.lng) * 111 * Math.cos((home.lat * Math.PI) / 180)))
+  const snapPlace = { id, lat: p.lat, lng: p.lng, name: placeName(p, id), city: p.city, address: p.address }
   return (
     <div className="tag pin-card">
       <button className="close" onClick={onClose} aria-label="Close">×</button>
+      <SnapButton place={snapPlace} variant="stamp" />
       <div>
         <PlacePhoto place={p} />
         <div className="lab"><i className="ink" style={{ background: CAT_COLOR[cat] }} />{p.primary_type?.replace(/_/g, ' ') ?? CAT_LABEL[cat]}</div>
         <div className="name">{placeName(p, id)}</div>
         <div className="sub">{[p.address ?? p.city, p.country_code].filter(Boolean).join(' · ') || 'city not on record'}</div>
+        <PhotoStrip place={snapPlace} compact />
       </div>
       <dl className="pin-facts">
         <div><dt>Visits</dt><dd>{p.n_visits}</dd></div>
