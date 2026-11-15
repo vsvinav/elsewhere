@@ -13,10 +13,14 @@ const data = {
   paths: [], places: {}, meta: { range: [0, 20 * H] },
 } as unknown as Data
 
-test('a flight a few segments ahead is found inside the horizon and not beyond it', () => {
-  expect(upcomingBig(data, 1 * H, 12 * H)?.mode).toBe('FLYING')
-  expect(upcomingBig(data, 1 * H, 9 * H)).toBeNull()
-  expect(upcomingBig(data, 10 * H + 1, 20 * H)).toBeNull()
+test('a flight a few segments ahead is found by screen time, steady whatever the current segment is', () => {
+  // From inside the first stay at 1x: ~1.5 s of stay left + 2.5 s walk + 2 s stay before the flight ≈ 6 s.
+  expect(upcomingBig(data, 1 * H, 1, 8)?.seg.mode).toBe('FLYING')
+  expect(upcomingBig(data, 1 * H, 1, 3)).toBeNull()
+  expect(upcomingBig(data, 1 * H, 4, 3)?.seg.mode).toBe('FLYING')
+  expect(upcomingBig(data, 10 * H + 1, 1, 60)).toBeNull()
+  const a = upcomingBig(data, 9.5 * H, 1, 8)!, b = upcomingBig(data, 9.9 * H, 1, 8)!
+  expect(a.inS).toBeGreaterThan(b.inS)
 })
 test('big legs keep screen time at any speed; small ones shrink', () => {
   const flight: Segment = { kind: 'activity', start: 0, end: 6 * H, s: A, e: B, mode: 'FLYING', km: 4300 }

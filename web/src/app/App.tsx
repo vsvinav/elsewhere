@@ -25,7 +25,7 @@ const MapScreen = lazy(() => import('../map/MapScreen').then((m) => ({ default: 
 export interface Record_ { mine: boolean; stage: string | null; importError: Error | null; enrichError: Error | null; importFile(f: File): void; reset(): void; editProfile(): void }
 /** Used to parse a fresh import before the visitor has answered the home question; the real profile re-derives. */
 const PROVISIONAL: Profile = { name: null, units: 'km', homes: [{ lat: 0, lng: 0, city: '', cc: '', from: 0, to: null }], works: [] }
-const RecordContext = createContext<Record_ | null>(null)
+export const RecordContext = createContext<Record_ | null>(null)
 export const useRecord = () => useContext(RecordContext)!
 
 export function App() {

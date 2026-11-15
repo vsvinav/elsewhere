@@ -11,8 +11,9 @@ import { frameFor } from './frame'
 const POS_PERIOD_S = 1.8
 const ZOOM_PERIOD_S = 2.6
 const MIN_ZOOM = 3
-// Real seconds before a big leg at which the camera starts opening up for it.
-const LEAD_REAL_S = 2.5
+// Real seconds before a big leg at which the camera starts opening up for it; the pull-out itself happens in the last part of that window.
+const LEAD_REAL_S = 3
+const PULL_REAL_S = 1.8
 // Real seconds of recent positions that decide how far in the camera may settle while you linger in one area.
 const DWELL_REAL_S = 6
 
@@ -24,27 +25,21 @@ const DWELL_REAL_S = 6
 export function useFollow(map: Cam | null) {
   const data = useData()
   const spr = useRef<{ lng: Spring; lat: Spring; zoom: Spring } | null>(null)
-  const zoomOffset = useRef(0)
   const lastTarget = useRef(0)
   const zWant = useRef<number | null>(null)
   const recent = useRef<{ t: number; lng: number; lat: number }[]>([])
+  const anticip = useRef<{ start: number; k: number } | null>(null)
 
   useEffect(() => {
     if (!map) return
-    const detach = map.on('dragstart', () => useStore.getState().setFollow(false))
-    const userZoom = { current: false }
-    const onWheel = () => { userZoom.current = true }
-    const idle = map.on('idle', () => {
-      if (userZoom.current && spr.current) {
-        const z = map.zoom()
-        zoomOffset.current += z - spr.current.zoom.x
-        spr.current.zoom.x = z; spr.current.zoom.v = 0
-        userZoom.current = false
-      }
-    })
+    // Dragging or zooming by hand hands the camera over; the Follow button takes it back.
+    const off = () => useStore.getState().setFollow(false)
+    const detach = map.on('dragstart', off)
     const div = map.div
-    div.addEventListener('wheel', onWheel, { passive: true })
-    return () => { detach(); idle(); div.removeEventListener('wheel', onWheel) }
+    const onTouch = (e: TouchEvent) => { if (e.touches.length > 1) off() }
+    div.addEventListener('wheel', off, { passive: true })
+    div.addEventListener('touchstart', onTouch, { passive: true })
+    return () => { detach(); div.removeEventListener('wheel', off); div.removeEventListener('touchstart', onTouch) }
   }, [map])
 
   useEffect(() => {
@@ -54,7 +49,7 @@ export function useFollow(map: Cam | null) {
       raf = requestAnimationFrame(tick)
       const t = performance.now(), dt = Math.min(0.25, (t - last) / 1000); last = t
       const s = useStore.getState()
-      if (!s.follow) { spr.current = null; zWant.current = null; recent.current = []; return }
+      if (!s.follow) { spr.current = null; zWant.current = null; recent.current = []; anticip.current = null; return }
       const now = s.playhead ?? data.meta.range[0]
       const here = positionAt(data, now)
       if (!here) return
@@ -73,16 +68,21 @@ export function useFollow(map: Cam | null) {
       const cap = Math.max(zoomCapFor(s.rate), Math.min(settled, zoomCapFor(s.rate) + 5))
       let want = Math.min(cap, Math.max(MIN_ZOOM, f.zoom)), center = f.center
       // Look ahead a few real seconds: a flight or long drive coming up opens the frame now, so it never cuts in abruptly.
-      const big = seg.kind === 'activity' && seg.km >= BIG_KM ? null : upcomingBig(data, now, now + s.rate * LEAD_REAL_S)
-      if (big) {
-        const k = Math.min(1, Math.max(0, 1 - (big.start - now) / (s.rate * LEAD_REAL_S))) ** 0.7
+      const up = seg.kind === 'activity' && seg.km >= BIG_KM ? null : upcomingBig(data, now, s.speed, LEAD_REAL_S)
+      if (up) {
+        // Smoothstep over the last PULL_REAL_S, and never back off once begun, so the frame opens once and stays open.
+        const x = Math.min(1, Math.max(0, 1 - up.inS / PULL_REAL_S)), raw = x * x * (3 - 2 * x)
+        const prev = anticip.current?.start === up.seg.start ? anticip.current.k : 0
+        const k = Math.max(prev, raw)
+        anticip.current = { start: up.seg.start, k }
+        const big = up.seg
         const bigZoom = Math.max(MIN_ZOOM, fitZoom(big.s, big.e, div.clientWidth * 0.72, div.clientHeight * 0.72))
         want = Math.min(want, want + (bigZoom - want) * k)
         const mid = { lng: (big.s.lng + big.e.lng) / 2, lat: (big.s.lat + big.e.lat) / 2 }
         center = { lng: center.lng + (mid.lng - center.lng) * 0.3 * k, lat: center.lat + (mid.lat - center.lat) * 0.3 * k }
-      }
+      } else if (anticip.current && anticip.current.start <= now) anticip.current = null
       zWant.current = approachZoom(zWant.current ?? want, want, dt, s.rate)
-      const zTarget = zWant.current + zoomOffset.current
+      const zTarget = zWant.current
 
       if (!spr.current) {
         const c = map.center()

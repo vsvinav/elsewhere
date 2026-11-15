@@ -472,8 +472,8 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .arrivals .tag { --tilt: -2deg; }
 .arrivals .tag.on { animation: slap 360ms var(--ease) both; }
 @keyframes slap { from { transform: rotate(-6deg) scale(1.12); opacity: 0; } to { transform: rotate(var(--tilt)) scale(1); opacity: 1; } }
-.arrivals .tag.off { animation: peel 420ms var(--ease) both; }
-@keyframes peel { from { transform: rotate(var(--tilt)) scale(1); opacity: 1; } to { transform: rotate(4deg) translateX(40px) scale(0.92); opacity: 0; } }
+.arrivals .tag.off { animation: tag-off 420ms var(--ease) both; }
+@keyframes tag-off { from { transform: rotate(var(--tilt)) scale(1); opacity: 1; } to { transform: rotate(4deg) translateX(40px) scale(0.92); opacity: 0; } }
 .tag.hover { position: absolute; width: 220px; pointer-events: none; z-index: 6; padding: 8px 8px 12px; --tilt: 0deg; }
 .tag.hover .name { font-size: 20px; min-height: 0; }
 
