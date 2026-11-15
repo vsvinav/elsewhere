@@ -51,7 +51,8 @@ export interface DistanceAnswer extends Base { kind: 'distance'; km: number; leg
 export interface SetlistCity extends Door { city: string; nights: number; first: boolean }
 export interface TripAnswer extends Base { kind: 'trip'; trip: Trip; cities: SetlistCity[] }
 export interface RouteAnswer extends Base { kind: 'route'; legs: number; km: number; kmByMode: Record<string, number> }
-export interface YearCol { year: number; city: string | null; km: number; now: boolean }
+/** `km` is null when no home is set, so there is nothing to measure from. */
+export interface YearCol { year: number; city: string | null; km: number | null; now: boolean }
 export interface CompareAnswer extends Base { kind: 'compare'; years: YearCol[] }
 export interface Stop extends Door { place_id: string; name: string; type: string | null; hours: number; start: number }
 export interface DidAnswer extends Base { kind: 'did'; stops: Stop[] }
@@ -114,7 +115,7 @@ interface Index {
   firstInCity: Map<string, string>
   /** Top-level visits per city in start order. */
   byCity: Map<string, Visit[]>
-  /** Sorted distinct local day numbers with a visit in each city. */
+  /** Sorted distinct local day numbers covered by a visit in each city. */
   cityDays: Map<string, number[]>
   centroid: Map<string, LngLat>
   farthest: Daily | null
@@ -143,11 +144,13 @@ export function indexOf(data: Data): Index {
     const a = dayNum(v.start, v.tz), b = dayNum(v.end, v.tz)
     for (let d = a; d <= b; d++) { const k = dateOf(d); const l = byDay.get(k); if (l) l.push(v); else byDay.set(k, [v]) }
     // The 03:00 instants inside the stay, each claimed by the first visit that covers it.
-    for (let d = dayNum(v.start - NIGHT_HOUR * 3600, v.tz) + 1; d * DAY - v.tz * 60 + NIGHT_HOUR * 3600 <= v.end; d++) if (!nightPid.has(d)) nightPid.set(d, v.place_id)
+    for (let d = Math.ceil((v.start + v.tz * 60 - NIGHT_HOUR * 3600) / DAY); d * DAY - v.tz * 60 + NIGHT_HOUR * 3600 <= v.end; d++) if (!nightPid.has(d)) nightPid.set(d, v.place_id)
     const city = data.places[v.place_id]?.city
     if (!city) continue
     const l = byCity.get(city); if (l) l.push(v); else byCity.set(city, [v])
-    const cd = cityDays.get(city); if (!cd) cityDays.set(city, [a]); else if (cd[cd.length - 1] !== a) cd.push(a)
+    // Visits come in start order, so a day at or before the last pushed one is already covered.
+    let cd = cityDays.get(city); if (!cd) { cd = []; cityDays.set(city, cd) }
+    for (let d = Math.max(a, (cd[cd.length - 1] ?? -Infinity) + 1); d <= b; d++) cd.push(d)
     if (!atHome(v) && !firstInCity.has(city)) firstInCity.set(city, dateOf(a))
     const s = sums.get(city); if (s) { s.lat += v.lat; s.lng += v.lng; s.n++ } else sums.set(city, { lat: v.lat, lng: v.lng, n: 1 })
   }
@@ -213,7 +216,8 @@ function verbFor(data: Data, ix: Index, date: string, lead: Visit, start: number
   const acts = data.activities
   let i = lastStarted(acts, start)
   if (i < 0 || acts[i].end < start) i++
-  if (i < acts.length && acts[i].start < end && lensOf(acts[i].mode) === 'fly') return 'landed in'
+  // The day's first leg is a flight that got you to the first stop: it ended before the stop, or at it.
+  if (i < acts.length && acts[i].start < end && lensOf(acts[i].mode) === 'fly' && (acts[i].end <= lead.start || distanceKm({ lat: acts[i].e_lat, lng: acts[i].e_lng }, lead) < 150)) return 'landed in'
   const city = data.places[lead.place_id]?.city ?? null
   if ((ix.nights.get(numOf(date))?.city ?? null) !== city) return 'arrived in'
   return 'were in'
@@ -286,7 +290,7 @@ export function highlightFor(data: Data, date: string): Highlight | null {
       if (score <= 0) continue
       if (!best || score > best.score || (score === best.score && (y < best.y || (y === best.y && Math.abs(off) < Math.abs(best.off))))) best = { date: d, y, off, score }
     }
-    return best ? highlightOn(data, best.date, yearOf(date) - best.y, scope) : null
+    return best ? highlightOn(data, best.date, yearOf(date) - yearOf(best.date), scope) : null
   }
   return pick([0], 'day') ?? pick([-3, -2, -1, 1, 2, 3], 'week')
 }
@@ -306,7 +310,9 @@ export function highlightState(data: Data, date: string): HighlightState {
   if (r1 - r0 < 365 * DAY && pastYears(data, date).every((y) => midnightUTC(sameDayIn(date, y)) + 3 * DAY < r0)) {
     const top = positive.sort((a, b) => scoreDay(data, ix, b.date) - scoreDay(data, ix, a.date) || a.date.localeCompare(b.date))[0]
     if (!top) return { kind: 'none' }
-    return { kind: 'short', starts: localDay(r0, 0), highlight: highlightOn(data, top.date, yearOf(date) - yearOf(top.date)) }
+    // The record starts on the first visit's own local day, not the UTC day of the range.
+    const first = data.visits[lastStarted(data.visits, r0 - 1) + 1]
+    return { kind: 'short', starts: first ? localDay(first.start, first.tz) : localDay(r0, 0), highlight: highlightOn(data, top.date, yearOf(date) - yearOf(top.date)) }
   }
   const h = highlightFor(data, date)
   if (h) return { kind: 'highlight', highlight: h }
@@ -400,8 +406,8 @@ export function routeRange(data: Data, h: Highlight): RouteAnswer | null {
   return { kind: 'route', legs, km, kmByMode, title: `${legs} leg${legs === 1 ? '' : 's'}`, detail: `${n0(km)} km · ${fmtSpan(localDay(range[0], h.tz), localDay(range[1], h.tz))}`, range, placeIds: h.placeIds, playhead: range[0] }
 }
 
-/** Where you were on this month/day in every year of the record. O(years). */
-export function compareYears(data: Data, h: Highlight): CompareAnswer | null {
+/** Where you were on this month/day in every year of the record; `now` marks today's year. O(years). */
+export function compareYears(data: Data, h: Highlight, today = localToday()): CompareAnswer | null {
   const ix = indexOf(data)
   const y0 = new Date(data.meta.range[0] * 1000).getUTCFullYear(), y1 = new Date(data.meta.range[1] * 1000).getUTCFullYear()
   const years: YearCol[] = []
@@ -412,12 +418,13 @@ export function compareYears(data: Data, h: Highlight): CompareAnswer | null {
     if (!d) continue
     const visits = ix.byDay.get(date)
     const city = visits?.length ? cityOf(data, leadVisit(ix, visits)).city : d.cities[0] ?? null
-    years.push({ year: y, city, km: d.max_dist_from_home_km, now: y === yearOf(h.date) })
+    years.push({ year: y, city, km: ix.hasHome ? d.max_dist_from_home_km : null, now: y === yearOf(today) })
     if (visits) for (const v of visits) ids.push(v.place_id)
   }
   if (years.length < 2) return null
-  const far = years.reduce((a, b) => (b.km > a.km ? b : a))
-  return { kind: 'compare', years, title: `${years.length} years`, detail: `farthest ${far.year}: ${far.city ?? 'unknown'}, ${n0(far.km)} km`, range: [midnightUTC(sameDayIn(h.date, years[0].year)), midnightUTC(sameDayIn(h.date, years[years.length - 1].year)) + DAY], placeIds: [...new Set(ids)] }
+  const far = years.reduce((a, b) => ((b.km ?? 0) > (a.km ?? 0) ? b : a))
+  const detail = ix.hasHome ? `farthest ${far.year}: ${far.city ?? 'unknown'}, ${n0(far.km ?? 0)} km` : years.map((y) => y.city ?? '—').join(' · ')
+  return { kind: 'compare', years, title: `${years.length} years`, detail, range: [midnightUTC(sameDayIn(h.date, years[0].year)), midnightUTC(sameDayIn(h.date, years[years.length - 1].year)) + DAY], placeIds: [...new Set(ids)] }
 }
 
 /** Every stop that day with its hours, clipped to the day. O(visits on the day). */
@@ -474,7 +481,7 @@ export function thisTimeLastYear(data: Data, h: Highlight): HighlightAnswer | nu
   return { kind: 'highlight', highlight: hl, title: `${hl.verb} ${hl.city}`, detail: dmy(date), range: hl.range, placeIds: hl.placeIds, playhead: hl.playhead }
 }
 
-const QUESTIONS: [FollowUpId, string, (data: Data, h: Highlight) => Answer | null][] = [
+const QUESTIONS: [FollowUpId, string, (data: Data, h: Highlight, today: string) => Answer | null][] = [
   ['stay', 'How long did I stay?', stayLength],
   ['distance', 'How far from home?', distanceFromHome],
   ['trip', 'What else happened that trip?', tripSetlist],
@@ -487,13 +494,13 @@ const QUESTIONS: [FollowUpId, string, (data: Data, h: Highlight) => Answer | nul
 ]
 
 /** Only the questions that have an answer for this highlight, answers pre-computed. Empty past MAX_DEPTH. */
-export function followUps(data: Data, h: Highlight, depth = 0, exclude: Iterable<FollowUpId> = []): FollowUp[] {
+export function followUps(data: Data, h: Highlight, depth = 0, exclude: Iterable<FollowUpId> = [], today = localToday()): FollowUp[] {
   if (depth >= MAX_DEPTH) return []
   const skip = new Set(exclude)
   const out: FollowUp[] = []
   for (const [id, question, fn] of QUESTIONS) {
     if (skip.has(id)) continue
-    const answer = fn(data, h)
+    const answer = fn(data, h, today)
     if (answer) out.push({ id, question, answer })
   }
   return out

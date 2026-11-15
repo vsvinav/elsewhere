@@ -4,7 +4,7 @@ import {
   stayLength, distanceFromHome, tripSetlist, routeRange, compareYears, whatDidIDo, haveIBeenBack, farthestEver, thisTimeLastYear,
 } from './highlights'
 import type { Data, Daily, Trip, Visit, Activity } from '../data/types'
-import { onThisDayData as fixture, at, v, place, day, trip, BOS, KYO } from '../test/onThisDay'
+import { onThisDayData as fixture, at, v, a, place, day, trip, homeNight, BOS, KYO, PAR } from '../test/onThisDay'
 
 const data = fixture()
 
@@ -48,12 +48,27 @@ describe('picking the highlight', () => {
     expect(h.scope).toBe('week')
     expect(['2023-11-17', '2023-11-18']).toContain(h.date)
   })
+  it('counts years from the picked date when widening crosses New Year', () => {
+    const d = fixture()
+    d.visits = [...d.visits, v(at(2022, 12, 29, 20), at(2022, 12, 31, 9), 'kyoto-hotel', KYO)].sort((x, y) => x.start - y.start)
+    d.daily = [...d.daily, day('2022-12-30', { max_dist_from_home_km: 10_800, cities: ['Kyoto'], hours_other: 24 })]
+    const h = highlightFor(d, '2025-01-02')!
+    expect(h.date).toBe('2022-12-30'); expect(h.scope).toBe('week'); expect(h.yearsAgo).toBe(3)
+  })
   it('returns null on a quiet day', () => {
     expect(highlightFor(data, '2025-07-20')).toBeNull()
   })
   it('only looks at past years, never the current one', () => {
     expect(highlightFor(data, '2025-05-03')).toBeNull()
     expect(highlightFor(data, '2026-05-03')!.date).toBe('2025-05-03')
+  })
+})
+
+describe('index', () => {
+  it('a stay that begins exactly at 03:00 local claims that night', () => {
+    const d = fixture()
+    d.visits = [...d.visits, v(at(2024, 8, 20, 3), at(2024, 8, 20, 12), 'kyoto-hotel', KYO)].sort((x, y) => x.start - y.start)
+    expect(indexOf(d).nightPid.get(at(2024, 8, 20) / 86400)).toBe('kyoto-hotel')
   })
 })
 
@@ -65,6 +80,16 @@ describe('headline verb', () => {
   it('"landed in" when the first leg of the day is a flight', () => {
     const h = highlightOn(data, '2022-11-15', 3)
     expect(h.verb).toBe('landed in'); expect(h.city).toBe('Paris')
+  })
+  it('not "landed in" when the flight leaves after the day\'s first stop', () => {
+    const d = fixture()
+    const PVD = { lat: 41.82, lng: -71.41 }
+    d.visits = [...d.visits, v(at(2024, 6, 1, 9), at(2024, 6, 1, 17), 'pvd-office', PVD), v(at(2024, 6, 1, 21), at(2024, 6, 2, 9), 'paris-hotel', PAR), homeNight(2024, 6, 1)].sort((x, y) => x.start - y.start)
+    d.activities = [...d.activities, a(at(2024, 6, 1, 18), at(2024, 6, 1, 20, 30), 'FLYING', 5_500_000, PVD, PAR)].sort((x, y) => x.start - y.start)
+    d.places['pvd-office'] = place(PVD, 'Providence', 'US', 'Office')
+    const h = highlightOn(d, '2024-06-01', 1)
+    expect(h.city).toBe('Providence')
+    expect(h.verb).toBe('arrived in')
   })
   it('"arrived in" when the first visit is a new city after sleeping elsewhere', () => {
     const h = highlightOn(data, '2023-11-17', 2)
@@ -132,10 +157,19 @@ describe('empty states', () => {
   })
   it('record shorter than a year shows the top-scoring day instead', () => {
     const d = fixture()
-    d.meta.range = [at(2023, 3, 3), at(2023, 5, 1)]
+    d.meta.range = [at(2023, 11, 11, 8), at(2024, 5, 1)]
+    const s = highlightState(d, '2024-04-10')
+    expect(s.kind).toBe('short')
+    if (s.kind === 'short') { expect(s.starts).toBe('2023-11-11'); expect(s.highlight.date).toBe('2022-11-15') }
+  })
+  it('short record dates its start by the first visit\'s local day', () => {
+    const d = fixture()
+    // Record opens 23:30 UTC on 2 March, which is already 3 March in Tokyo.
+    d.visits = [...d.visits, { ...v(at(2023, 3, 2, 23, 30), at(2023, 3, 3, 9), 'kyoto-hotel', KYO), tz: 540 }].sort((x, y) => x.start - y.start)
+    d.meta.range = [at(2023, 3, 2, 23, 30), at(2023, 5, 1)]
     const s = highlightState(d, '2023-04-10')
     expect(s.kind).toBe('short')
-    if (s.kind === 'short') { expect(s.starts).toBe('2023-03-03'); expect(s.highlight.date).toBe('2022-11-15') }
+    if (s.kind === 'short') expect(s.starts).toBe('2023-03-03')
   })
 })
 
@@ -179,13 +213,23 @@ describe('follow-ups', () => {
     expect(r.legs).toBe(3)
     expect(r.km).toBeCloseTo(21_645)
   })
-  it('compareYears gives one column per year with the city and distance', () => {
-    const c = compareYears(data, kyoto)!
+  it('compareYears gives one column per year with the city and distance, marking today\'s year', () => {
+    const c = compareYears(data, kyoto, '2024-11-14')!
     expect(c.years).toEqual([
       { year: 2022, city: 'Boston', km: 5, now: false },
-      { year: 2023, city: 'Kyoto', km: 10_800, now: true },
-      { year: 2024, city: 'Boston', km: 5, now: false },
+      { year: 2023, city: 'Kyoto', km: 10_800, now: false },
+      { year: 2024, city: 'Boston', km: 5, now: true },
     ])
+    expect(c.detail).toBe('farthest 2023: Kyoto, 10,800 km')
+    expect(compareYears(data, kyoto, '2025-11-14')!.years.every((y) => !y.now)).toBe(true)
+  })
+  it('compareYears drops the distances when no home is set', () => {
+    const d = fixture(); d.profile.homes = []
+    const c = compareYears(d, highlightOn(d, '2023-11-14', 2), '2024-11-14')!
+    expect(c.years.map((y) => [y.city, y.km])).toEqual([['Boston', null], ['Kyoto', null], ['Boston', null]])
+    expect(c.detail).toBe('Boston · Kyoto · Boston')
+  })
+  it('compareYears needs two years', () => {
     const d = fixture(); d.daily = d.daily.filter((x) => x.date === '2023-02-28')
     expect(compareYears(d, highlightOn(d, '2023-02-28', 2))).toBeNull()
   })
@@ -197,6 +241,8 @@ describe('follow-ups', () => {
   it('haveIBeenBack counts returns after the stay ended and dates the last', () => {
     // 15 Nov (temple) is still the same stay; May 2025 is the one return.
     expect(haveIBeenBack(data, kyoto)).toMatchObject({ times: 1, last: '2025-05-04', title: 'Once', detail: 'last 4 May 2025' })
+    // The hotel covers 11–17 Nov: a restaurant on the 16th, two days after the 13th, is still this stay.
+    expect(haveIBeenBack(data, highlightOn(data, '2023-11-13', 2))).toMatchObject({ times: 1, title: 'Once' })
     expect(haveIBeenBack(data, paris)).toMatchObject({ times: 0, last: null, title: 'Never', detail: '2 years and counting' })
   })
   it('farthestEver compares against the record', () => {

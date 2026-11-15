@@ -2,7 +2,7 @@ import type { Activity, Daily, Data, Trip, Visit } from '../data/types'
 
 /**
  * Four years of a made-up record for the "on this day" tests: Boston home, a Sydney week, a Paris
- * day trip on 15 Nov 2022, a Kyoto + Osaka week in Nov 2023, an ordinary work day on 15 Nov 2024
+ * day trip on 15 Nov 2022, a Kyoto + Osaka week in Nov 2023 (hotel 11–17, temple on the 15th, dinner out on the 16th), an ordinary work day on 15 Nov 2024
  * and a return to Kyoto in May 2025. Each `onThisDayData()` call builds a fresh copy.
  */
 export const at = (y: number, m: number, d: number, h = 0, min = 0) => Date.UTC(y, m - 1, d, h, min) / 1000
@@ -21,7 +21,7 @@ export const day = (date: string, x: Partial<Daily>): Daily =>
 export const trip = (start: number, end: number, nights: number, cities: string[], km: number): Trip =>
   ({ start, end, nights, max_dist_from_home_km: km, total_km_by_mode: { FLYING: km * 2 }, anchor_cities: cities, memory: null })
 
-const homeNight = (y: number, m: number, d: number) => v(at(y, m, d - 1, 20), at(y, m, d, 8), 'home', BOS, 'INFERRED_HOME')
+export const homeNight = (y: number, m: number, d: number) => v(at(y, m, d - 1, 20), at(y, m, d, 8), 'home', BOS, 'INFERRED_HOME')
 
 export function onThisDayData(): Data {
   id = 0
@@ -37,6 +37,7 @@ export function onThisDayData(): Data {
     // Kyoto week, Nov 2023.
     v(at(2023, 11, 11, 23), at(2023, 11, 17, 9), 'kyoto-hotel', KYO),
     v(at(2023, 11, 15, 10), at(2023, 11, 15, 13), 'kinkakuji', KYO),
+    v(at(2023, 11, 16, 19), at(2023, 11, 16, 21), 'kyoto-restaurant', KYO),
     v(at(2023, 11, 17, 12), at(2023, 11, 18, 9), 'osaka-hotel', OSA),
     // An ordinary work day in 2024.
     homeNight(2024, 11, 15),
@@ -61,6 +62,7 @@ export function onThisDayData(): Data {
       louvre: place(PAR, 'Paris', 'FR', 'Louvre', null, 'museum'), 'paris-hotel': place(PAR, 'Paris', 'FR', 'Paris Hotel', null, 'lodging'),
       'nyc-hotel': place(NYC, 'New York', 'US', 'NYC Hotel'),
       'kyoto-hotel': place(KYO, 'Kyoto', 'JP', 'Kyoto Hotel', null, 'lodging'), kinkakuji: place(KYO, 'Kyoto', 'JP', 'Kinkaku-ji', null, 'temple'),
+      'kyoto-restaurant': place(KYO, 'Kyoto', 'JP', 'Izakaya', null, 'restaurant'),
       'osaka-hotel': place(OSA, 'Osaka', 'JP', 'Osaka Hotel', null, 'lodging'),
     },
     daily: [
