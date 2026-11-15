@@ -4,7 +4,7 @@ import { useData, useRawData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { OriginTag } from './OriginTag'
 import { CATS, CAT_COLOR, CAT_LABEL, categoryOf } from '../analytics/category'
-import { isHome } from '../analytics/geo'
+import { boundsOf, isHome } from '../analytics/geo'
 import { placeName } from '../analytics/home'
 import { fmtDate } from '../analytics/format'
 import { useUnits } from '../profile/units'
@@ -43,10 +43,8 @@ export function PinHud() {
   }
   const homes = useMemo(() => Object.values(data.places).filter(isHome), [data])
   const fit = useCallback(() => {
-    const pts = [...shown.map((s) => s.p), ...homes]
-    if (!pts.length) return
-    const lngs = pts.map((p) => p.lng), lats = pts.map((p) => p.lat)
-    liveCam.get()?.fit([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)], PAD)
+    const b = boundsOf([...shown.map((s) => s.p), ...homes])
+    if (b) liveCam.get()?.fit(b[0], b[1], PAD)
   }, [shown, homes])
   // Opening the tab, or changing the range, frames every pin; the camera may be a beat behind on first mount.
   // A door's focus frames instead, below.
@@ -69,8 +67,8 @@ export function PinHud() {
       const pts = focus.ids.map((id) => raw.places[id]).filter(Boolean)
       if (!pts.length) { fit(); return }
       if (pts.length === 1) { cam.move({ lng: pts[0].lng, lat: pts[0].lat }, 15); return }
-      const lngs = pts.map((p) => p.lng), lats = pts.map((p) => p.lat)
-      cam.fit([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)], PAD)
+      const b = boundsOf(pts)!
+      cam.fit(b[0], b[1], PAD)
     }
     t = window.setTimeout(frame, 150)
     return () => clearTimeout(t)

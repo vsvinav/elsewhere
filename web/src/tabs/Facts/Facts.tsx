@@ -101,7 +101,7 @@ export function Facts() {
                 </PrintIn>
               }>
                 <PrintIn>
-                  <Door target={f.door} className="fact-door"><h2 className="fact-h">{f.headline}</h2></Door>
+                  <h2 className="fact-h"><Door target={f.door} className="fact-door">{f.headline}</Door></h2>
                   <p className="fact-p">{f.detail}</p>
                   {f.figure && wide && <div className="fact-wide"><Fig f={f.figure} /></div>}
                 </PrintIn>

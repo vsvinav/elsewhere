@@ -7,3 +7,7 @@
 /* A door around a stamp or a whole block shows its hand with a red ring instead of an underline. */
 .door.block { display: inline-block; }
 .door.block:hover { text-decoration: none; outline: 3px solid var(--red); outline-offset: 4px; }
+/* A door that is a whole list row lays itself out exactly as the row did: the row's grid moves onto the button. */
+.door.row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: inherit; width: 100%; }
+.door.row:hover { text-decoration: none; }
+.door.row:hover .n, .door.row:hover .where, .door.row:hover > span:first-child { text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 0.08em; text-underline-offset: 0.12em; }

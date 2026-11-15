@@ -12,7 +12,7 @@ import { YourRecord } from '../../app/YourRecord'
 import { useProfile } from '../../profile/profile'
 import { useUnits } from '../../profile/units'
 import { PlaceRow } from '../../world/PlaceRow'
-import { Door, doorProps } from '../../world/Door'
+import { Door } from '../../world/Door'
 import { dateRange, onePerCity, onePerCountry, tripId } from '../../analytics/doors'
 import { isHome } from '../../analytics/geo'
 import type { Door as Target } from '../../store/useStore'
@@ -70,10 +70,10 @@ export function Home() {
           <div>
             <ol className="dates" aria-label="Where you slept">
               {sixStops.map((s) => (
-                <li key={s.city} {...doorProps(d.stop(s))}>
+                <li key={s.city}><Door className="row" target={d.stop(s)}>
                   <span className="where">{s.city}{s.country && <small>{s.country}</small>}</span>
                   <span className="n">{s.nights}<small>{s.nights === 1 ? 'night' : 'nights'}</small></span>
-                </li>
+                </Door></li>
               ))}
               {t.stops.length > 6 && <li className="more"><button className="caps" style={{ color: 'inherit', letterSpacing: 'inherit' }} onClick={() => setTab('trips')}>+ {t.stops.length - 6} more cities →</button></li>}
               {!t.stops.length && <li className="more">No nights away on record</li>}
@@ -97,10 +97,10 @@ export function Home() {
               <h2 className="word">{act.city}</h2>
               <p className="lede"><Door target={d.act!}>{n0(cv(act.km))} {u} from home</Door>. <Door target={d.actNights!}>{act.nights} {act.nights === 1 ? 'night' : 'nights'}, {date(act.start)} → {date(act.end)}</Door>.</p>
               <ol className="dates" style={{ marginTop: 40 }}>
-                {f.longestTrip && d.longestTrip && <li {...doorProps(d.longestTrip)}><span className="where">Longest trip<small>{f.longestTrip.anchor_cities.slice(0, 2).join(' · ') || 'away'}</small></span><span className="n">{f.longestTrip.nights}<small>nights</small></span></li>}
-                <li {...doorProps(d.nightsAway)}><span className="where">Nights away</span><span className="n">{n0(t.nightsAway)}</span></li>
-                <li {...doorProps(d.nightsHome)}><span className="where">Nights home</span><span className="n">{n0(t.nightsHome)}</span></li>
-                <li {...doorProps(d.whole(`${f.trips} ${f.trips === 1 ? 'trip' : 'trips'}`))}><span className="where">Trips</span><span className="n">{f.trips}</span></li>
+                {f.longestTrip && d.longestTrip && <li><Door className="row" target={d.longestTrip}><span className="where">Longest trip<small>{f.longestTrip.anchor_cities.slice(0, 2).join(' · ') || 'away'}</small></span><span className="n">{f.longestTrip.nights}<small>nights</small></span></Door></li>}
+                <li><Door className="row" target={d.nightsAway}><span className="where">Nights away</span><span className="n">{n0(t.nightsAway)}</span></Door></li>
+                <li><Door className="row" target={d.nightsHome}><span className="where">Nights home</span><span className="n">{n0(t.nightsHome)}</span></Door></li>
+                <li><Door className="row" target={d.whole(`${f.trips} ${f.trips === 1 ? 'trip' : 'trips'}`)}><span className="where">Trips</span><span className="n">{f.trips}</span></Door></li>
               </ol>
             </div>
             <div style={{ display: 'grid', justifyItems: 'end', paddingTop: 24 }}>
@@ -117,11 +117,11 @@ export function Home() {
         <div className="num"><Door target={d.whole(`${n0(cv(f.totalKm))} ${u} on record`)}><CountUp value={cv(f.totalKm)} /><small>{u}</small></Door></div>
         <ol className="setlist" aria-label="Distance by mode">
           {f.kmByMode.map(([m, km]) => (
-            <li key={m} {...doorProps(d.whole(`${label(m)} · ${n0(cv(km))} ${u}`))}>
+            <li key={m}><Door className="row" target={d.whole(`${label(m)} · ${n0(cv(km))} ${u}`)}>
               <span>{label(m)}</span>
               <span className="track"><i className={INK[lensOf(m)] ?? ''} style={{ width: `${(100 * km) / f.kmByMode[0][1]}%` }} /></span>
               <span className="n">{n0(cv(km))}<small>{u}</small></span>
-            </li>
+            </Door></li>
           ))}
         </ol>
         <div className="foot">
@@ -139,7 +139,7 @@ export function Home() {
           </div>
           <ol className="dates" aria-label="Most visited third places">
             {f.thirdPlaces.map((p) => (
-              <PlaceRow key={p.id} id={p.id} places={data.places} {...doorProps({ kind: 'place', placeId: p.id, label: `${p.name} · ${p.place.n_visits} visits` })}><span className="where">{p.name}{p.place.city && <small>{p.place.city}</small>}</span><span className="n">{p.place.n_visits}<small>visits</small></span></PlaceRow>
+              <PlaceRow key={p.id} id={p.id} places={data.places}><Door className="row" target={{ kind: 'place', placeId: p.id, label: `${p.name} · ${p.place.n_visits} visits` }}><span className="where">{p.name}{p.place.city && <small>{p.place.city}</small>}</span><span className="n">{p.place.n_visits}<small>visits</small></span></Door></PlaceRow>
             ))}
           </ol>
         </div>
@@ -156,7 +156,10 @@ export function Home() {
         <table className="ptable">
           <thead><tr><th>Year</th><th>{u}</th><th>Places</th><th>Trips</th><th>Flights</th></tr></thead>
           <tbody>
-            {f.years.map((y) => <tr key={y.year} {...doorProps(d.year(y.year, `${y.year} · ${n0(cv(y.km))} ${u} · ${n0(y.places)} places · ${y.trips} trips · ${y.flights} flights`))}><td>{y.year}</td><td>{n0(cv(y.km))}</td><td>{n0(y.places)}</td><td>{y.trips}</td><td>{y.flights}</td></tr>)}
+            {f.years.map((y) => {
+              const yr = (label: string) => d.year(y.year, `${y.year} · ${label}`)
+              return <tr key={y.year}><td><Door target={yr(`${n0(cv(y.km))} ${u} · ${n0(y.places)} places · ${y.trips} trips · ${y.flights} flights`)}>{y.year}</Door></td><td><Door target={yr(`${n0(cv(y.km))} ${u}`)}>{n0(cv(y.km))}</Door></td><td><Door target={yr(`${n0(y.places)} places`)}>{n0(y.places)}</Door></td><td><Door target={yr(`${y.trips} trips`)}>{y.trips}</Door></td><td><Door target={yr(`${y.flights} flights`)}>{y.flights}</Door></td></tr>
+            })}
           </tbody>
         </table>
       </Bill>

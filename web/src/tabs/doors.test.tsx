@@ -35,8 +35,8 @@ describe('Tour', () => {
     wrap(<Home />)
     const paris = tour(data).stops.find((s) => s.city === 'Paris')!
     const row = screen.getAllByRole('button', { name: `Open on the map: Paris · ${paris.nights} nights` })[0]
-    expect(row.getAttribute('tabindex')).toBe('0')
-    fireEvent.keyDown(row, { key: 'Enter' })
+    expect(row.tagName).toBe('BUTTON')
+    fireEvent.click(row)
     const s = useStore.getState()
     expect(s.tab).toBe('map')
     expect(s.range).toEqual([paris.first, paris.last])
@@ -67,6 +67,17 @@ describe('Tour', () => {
     expect(useStore.getState().focus?.ids).toEqual([pin])
   })
 
+  it('keeps the list, rows and cells semantic: the door sits inside them', () => {
+    wrap(<Home />)
+    const list = screen.getByRole('list', { name: 'Where you slept' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items.length).toBeGreaterThan(0)
+    for (const li of items) expect(li.getAttribute('role')).toBeNull()
+    expect(within(items[0]).getByRole('button').getAttribute('aria-label')).toMatch(/^Open on the map: /)
+    for (const el of document.querySelectorAll('li[role], tr[role], td[role], button h2, button li')) throw new Error(`bad nesting: ${el.outerHTML.slice(0, 80)}`)
+    for (const row of screen.getAllByRole('row')) expect(row.getAttribute('role')).toBeNull()
+  })
+
   it('every readable figure is a door, and every door has a label', () => {
     wrap(<Home />)
     const all = doors()
@@ -85,7 +96,7 @@ describe('Numbers', () => {
 
     const dates = screen.getAllByRole('button', { name: /^Open on the map: Paris · [A-Z]{3} \d+, \d{4} → / })
     expect(dates).toHaveLength(2)
-    fireEvent.keyDown(dates[1], { key: ' ' })
+    fireEvent.click(dates[1])
     const r = useStore.getState().range!
     expect(data.visits.some((v) => data.places[v.place_id]?.city === 'Paris' && v.start >= r[0] && v.end <= r[1])).toBe(true)
   })
@@ -105,8 +116,10 @@ describe('Facts', () => {
     wrap(<Facts />)
     const heads = document.querySelectorAll('.facts .fact-h')
     expect(heads.length).toBeGreaterThan(3)
-    for (const h of heads) expect(h.closest('button')?.getAttribute('aria-label')).toMatch(/^Open on the map: /)
-    fireEvent.click(heads[0].closest('button')!)
+    for (const h of heads) expect(h.closest('button')).toBeNull()
+    for (const h of heads) expect(h.querySelector('button')?.getAttribute('aria-label')).toMatch(/^Open on the map: /)
+    expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThanOrEqual(heads.length)
+    fireEvent.click(heads[0].querySelector('button')!)
     expect(useStore.getState().tab).toBe('map')
     expect(useStore.getState().origin?.backTab).toBe('home')
   })

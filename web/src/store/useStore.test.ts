@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useStore, type Door } from './useStore'
+import { syncTabFromHash, useStore, type Door } from './useStore'
 
 const reset = () => { location.hash = 'home'; useStore.setState({ tab: 'home', range: null, pin: null, playhead: null, origin: null, focus: null, hiddenCats: ['food'] as never, playing: false }) }
 
@@ -15,7 +15,7 @@ describe('goTo', () => {
     expect(s.range).toEqual([100, 200])
     expect(s.playhead).toBe(100)
     expect(s.pin).toBeNull()
-    expect(s.origin).toEqual({ label: 'Lisbon · 14 nights', backTab: 'home', scrollY: 420 })
+    expect(s.origin).toMatchObject({ label: 'Lisbon · 14 nights', backTab: 'home', scrollY: 420 })
     // Every pin in the window gets framed.
     expect(s.focus).toMatchObject({ ids: null })
   })
@@ -94,5 +94,67 @@ describe('origin', () => {
     useStore.getState().setPlayhead(3)
     useStore.getState().setTab('play')
     expect(useStore.getState().origin).not.toBeNull()
+  })
+
+  it('is left behind when the reader walks off the map by the nav', () => {
+    useStore.getState().goTo({ kind: 'places', placeIds: ['a', 'b'], label: 'x' })
+    useStore.getState().setTab('stats')
+    expect(useStore.getState().origin).toBeNull()
+    expect(useStore.getState().focus).toBeNull()
+  })
+
+  it('survives closing the pin card or tapping empty map, and re-picking the same pin', () => {
+    useStore.getState().goTo({ kind: 'place', placeId: 'a', label: 'y' })
+    useStore.getState().setPin(null)
+    expect(useStore.getState().origin).not.toBeNull()
+    expect(useStore.getState().pin).toBeNull()
+    useStore.getState().goTo({ kind: 'place', placeId: 'a', label: 'y' })
+    useStore.getState().setPin('a')
+    expect(useStore.getState().origin).not.toBeNull()
+  })
+
+  it('goBack walks the history back one step when the door is still the latest entry', () => {
+    useStore.setState({ tab: 'stats' })
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {})
+    const replace = vi.spyOn(history, 'replaceState')
+    useStore.getState().goTo({ kind: 'range', from: 1, to: 2, label: 'x' })
+    useStore.getState().goBack()
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalledWith(null, '', '#stats')
+    expect(useStore.getState().tab).toBe('stats')
+
+    // Once something else has been pushed on top, the tab is rewritten in place instead.
+    useStore.getState().goTo({ kind: 'range', from: 1, to: 2, label: 'x' })
+    history.pushState(null, '', '#map')
+    useStore.getState().goBack()
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith(null, '', '#stats')
+    back.mockRestore(); replace.mockRestore()
+  })
+})
+
+describe('browser Back', () => {
+  it('returns to the figure from a fresh load that never wrote a hash', () => {
+    history.replaceState(null, '', location.pathname)
+    useStore.setState({ tab: 'home' })
+    useStore.getState().goTo({ kind: 'range', from: 1, to: 2, label: 'x' })
+    expect(location.hash).toBe('#map')
+    history.replaceState(null, '', location.pathname)
+    syncTabFromHash()
+    const s = useStore.getState()
+    expect(s.tab).toBe('home')
+    expect(s.origin).toBeNull()
+    expect(s.focus).toBeNull()
+  })
+
+  it('follows a hash to another tab, and ignores a hash for the tab already open', () => {
+    useStore.getState().goTo({ kind: 'range', from: 1, to: 2, label: 'x' })
+    history.replaceState(null, '', '#stats')
+    syncTabFromHash()
+    expect(useStore.getState().tab).toBe('stats')
+    expect(useStore.getState().origin).toBeNull()
+    const before = useStore.getState()
+    syncTabFromHash()
+    expect(useStore.getState()).toBe(before)
   })
 })

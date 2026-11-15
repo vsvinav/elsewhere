@@ -14,7 +14,8 @@ export type Door =
   | { kind: 'trip'; tripId: string; from: number; to: number; label: string }
   | { kind: 'places'; placeIds: string[]; label: string }
 /** The figure the reader walked through, and the way back to it. */
-export interface Origin { label: string; backTab: Tab; scrollY: number }
+/** `key` is stamped on the history entry the door pushed, so going back can tell whether that entry is still on top. */
+export interface Origin { label: string; backTab: Tab; scrollY: number; key: number }
 /** What the Map frames once its camera is live: these pins, or every pin in the range when `ids` is null. `n` bumps per door. */
 export interface Focus { ids: string[] | null; n: number }
 
@@ -51,8 +52,10 @@ export interface Store {
   setHoverPlace(h: Store['hoverPlace']): void
   /** Walk through a figure: open the map on what made it, remembering the way back. */
   goTo(door: Door): void
-  /** Return to the tab the door was on; the caller restores the scroll from `origin`. */
+  /** Return to the tab the door was on, stepping the history back if the door is still its latest entry; the caller restores the scroll. */
   goBack(): void
+  /** Leave the door's view in state only, for when the history has already moved. Returns the origin left behind. */
+  leaveDoor(): Origin | null
   origin: Origin | null
   focus: Focus | null
 }
@@ -79,7 +82,8 @@ const onMap = (t: Tab) => t === 'map' || t === 'play'
 
 export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
-  setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}) }) },
+  // Walking off the map by the nav leaves the door's origin and framing behind.
+  setTab: (tab) => { location.hash = tab; set({ tab, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) }) },
   playhead: null,
   playing: false,
   speed: 1,
@@ -92,7 +96,8 @@ export const useStore = create<Store>((set, get) => ({
   toggleCat: (c) => set((s) => ({ hiddenCats: s.hiddenCats.includes(c) ? s.hiddenCats.filter((x) => x !== c) : [...s.hiddenCats, c] })),
   setHiddenCats: (hiddenCats) => set({ hiddenCats }),
   pin: null,
-  setPin: (pin) => set({ pin, origin: null, focus: null }),
+  // Only picking a different pin counts as leaving the door; closing the card or re-tapping it does not.
+  setPin: (pin) => set((s) => (pin && pin !== s.pin ? { pin, origin: null, focus: null } : { pin })),
   pinSize: 'visits',
   setPinSize: (pinSize) => set({ pinSize }),
   range: null,
@@ -108,9 +113,10 @@ export const useStore = create<Store>((set, get) => ({
   goTo: (door) => {
     const s = get()
     // A door opened from the map itself keeps the first way back.
-    const origin: Origin = onMap(s.tab) && s.origin ? { ...s.origin, label: door.label } : { label: door.label, backTab: onMap(s.tab) ? 'home' : s.tab, scrollY: onMap(s.tab) ? 0 : window.scrollY }
     const n = (s.focus?.n ?? 0) + 1
+    const origin: Origin = onMap(s.tab) && s.origin ? { ...s.origin, label: door.label } : { label: door.label, backTab: onMap(s.tab) ? 'home' : s.tab, scrollY: onMap(s.tab) ? 0 : window.scrollY, key: n }
     location.hash = 'map'
+    history.replaceState({ door: origin.key }, '')
     const base = { tab: 'map' as Tab, playing: false, origin }
     switch (door.kind) {
       case 'range':
@@ -122,10 +128,30 @@ export const useStore = create<Store>((set, get) => ({
         set({ ...base, pin: null, hiddenCats: [], focus: { ids: door.placeIds, n } }); break
     }
   },
-  goBack: () => {
+  leaveDoor: () => {
     const o = get().origin
+    if (o) set({ tab: o.backTab, playing: false, origin: null, focus: null })
+    return o
+  },
+  goBack: () => {
+    const o = get().leaveDoor()
     if (!o) return
-    get().setTab(o.backTab)
-    set({ origin: null, focus: null })
+    if ((history.state as { door?: number } | null)?.door === o.key) history.back()
+    else history.replaceState(null, '', `#${o.backTab}`)
   },
 }))
+
+/**
+ * Mirror the address bar into the store after the browser moves through history. An empty hash is the front door:
+ * a fresh load never writes one, so Back from the first door lands there. Returning through a door's origin also
+ * restores where the reader was on the page.
+ */
+export function syncTabFromHash() {
+  const t = (location.hash.slice(1) || 'home') as Tab
+  const { tab, origin, setTab, leaveDoor } = useStore.getState()
+  if (t === tab) return
+  if (origin && t === origin.backTab) {
+    leaveDoor()
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollTo({ top: origin.scrollY })))
+  } else if ((TABS as readonly string[]).includes(t)) setTab(t)
+}
