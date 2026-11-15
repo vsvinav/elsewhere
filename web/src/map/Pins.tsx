@@ -10,6 +10,7 @@ import { fmtDate } from '../analytics/format'
 import { useUnits } from '../profile/units'
 import { liveCam } from './live'
 import { need } from '../ingest/places'
+import { heatCss } from './heat'
 
 const PAD = { top: 80, bottom: 260, left: 60, right: 60 }
 
@@ -21,7 +22,8 @@ export function PinHud() {
   const hidden = useStore((s) => s.hiddenCats)
   const pin = useStore((s) => s.pin)
   const sizeBy = useStore((s) => s.pinSize)
-  const { toggleCat, setHiddenCats, setPin, setPinSize } = useStore.getState()
+  const heat = useStore((s) => s.heat)
+  const { toggleCat, setHiddenCats, setPin, setPinSize, setHeat } = useStore.getState()
   const [q, setQ] = useState('')
 
   const stops = useMemo(() => Object.entries(data.places).filter(([, p]) => !isHome(p)).map(([id, p]) => ({ id, p, cat: categoryOf(p) })), [data])
@@ -103,6 +105,14 @@ export function PinHud() {
         <div className="pins-size" role="radiogroup" aria-label="Pin size">
           <span className="lab">Size by</span>
           {(['visits', 'hours'] as const).map((k) => <button key={k} role="radio" aria-checked={sizeBy === k} className={sizeBy === k ? 'on' : ''} onClick={() => setPinSize(k)}>{k}</button>)}
+        </div>
+        <div className="pins-heat-row">
+          <button className={`pins-heat${heat ? ' on' : ''}`} aria-pressed={heat} title="Show where you go most" onClick={() => setHeat(!heat)}>HEAT</button>
+          {heat && (
+            <span className="heat-legend" aria-label="Cool to warm: warmest where you go most">
+              <small>COOL</small><i className="heat-bar" style={{ background: heatCss() }} /><small>WARM</small>
+            </span>
+          )}
         </div>
         <button className="btn quiet pins-fit" onClick={fit}>Fit pins</button>
       </div>

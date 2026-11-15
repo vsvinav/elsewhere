@@ -41,6 +41,9 @@ export interface Store {
   setPin(id: string | null): void
   pinSize: 'visits' | 'hours'
   setPinSize(k: 'visits' | 'hours'): void
+  /** Map tab: draw the stops as a heatmap of how often you go, instead of pins. */
+  heat: boolean
+  setHeat(on: boolean): void
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
   setRange(r: [number, number] | null): void
@@ -102,6 +105,8 @@ export const useStore = create<Store>((set, get) => ({
   setPin: (pin) => set((s) => (pin && pin !== s.pin ? { pin, origin: null, focus: null } : { pin })),
   pinSize: 'visits',
   setPinSize: (pinSize) => set({ pinSize }),
+  heat: false,
+  setHeat: (heat) => set({ heat }),
   range: null,
   setRange: (range) => set({ range, playhead: range ? range[0] : null, origin: null, focus: null }),
   hoverPlace: null,

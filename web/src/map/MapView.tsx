@@ -43,7 +43,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: s.tab === 'map' ? pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize }) : mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) })
+      overlay.setProps({ layers: s.tab === 'map' ? pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize, heat: s.heat }) : mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) })
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()
