@@ -1,8 +1,12 @@
 import { isHome } from '../analytics/geo'
 import { cluster, type Group } from './cluster'
 import { IconLayer, PathLayer, ScatterplotLayer, TextLayer, TripsLayer, type Layer } from 'deck.gl'
+import { PathStyleExtension } from '@deck.gl/extensions'
+import { degPerPx, simplifyIdx } from './simplify'
+import { paceOf } from './camera'
+import { BIG_KM } from './pace'
 import type { Data, Place } from '../data/types'
-import { whereaboutsAt } from '../analytics/position'
+import { bearing, segmentAt, whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
 import { legsOf } from '../analytics/legs'
 import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
@@ -11,8 +15,21 @@ type RGBA = [number, number, number, number]
 const STOCK: RGBA = [239, 230, 210, 255]
 const INK: RGBA = [20, 20, 20, 255]
 const RED: RGBA = [214, 60, 32, 255]
-export const LONG_TRAIL_S = 7 * 86400
+// The wake is measured in screen time, so it reads the same at a stroll and at a day a second.
+const WAKE_REAL_S = 16
 const HEAD_REAL_S = 4
+const MIN_WAKE_S = 3 * 3600, MAX_WAKE_S = 30 * 86400
+export const wakeLength = (rate: number) => Math.min(MAX_WAKE_S, Math.max(MIN_WAKE_S, rate * WAKE_REAL_S))
+// The wake eases toward its target over ~2 s, so a pace change never snaps finished routes in or out of view.
+let wakeShown = 0, wakeAt = 0
+function easedWake(rate: number): number {
+  const t = performance.now(), want = wakeLength(rate)
+  if (!wakeShown || t - wakeAt > 2000) wakeShown = want
+  else wakeShown += (want - wakeShown) * Math.min(1, (t - wakeAt) / 2000)
+  wakeAt = t
+  return wakeShown
+}
+const DASH = [new PathStyleExtension({ dash: true })]
 
 interface Trail { path: [number, number][]; ts: number[]; color: RGBA; t0: number; t1: number; lens: Lens; guessed: boolean }
 const rgba = (hex: string): RGBA => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 255]
@@ -20,13 +37,36 @@ const INK_OF = Object.fromEntries(Object.entries(LENS_COLOR).map(([k, v]) => [k,
 
 // Position markers, drawn as masks so they take the ink of the current movement.
 const svg = (d: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32"><path fill="#000" d="${d}"/></svg>`)}`
-const ICON: Record<Lens | 'still', { url: string; width: number; height: number; mask: true }> = {
+const ICON: Record<Lens | 'still' | 'ff', { url: string; width: number; height: number; mask: true }> = {
   fly: { url: svg('M16 2c1.2 0 2 1 2 2.6V12l11 6.5v3l-11-3.4v6.2l3 2.2V29l-5-1.5L11 29v-2.5l3-2.2v-6.2L3 21.5v-3L14 12V4.6C14 3 14.8 2 16 2z'), width: 64, height: 64, mask: true },
   drive: { url: svg('M9 6h14l3 8h2a2 2 0 0 1 2 2v7h-3v2a2 2 0 0 1-4 0v-2H9v2a2 2 0 0 1-4 0v-2H2v-7a2 2 0 0 1 2-2h2l3-8zm1.5 2.5L8.6 14h14.8l-1.9-5.5h-11zM7 17.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm18 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'), width: 64, height: 64, mask: true },
   transit: { url: svg('M8 4h16a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3l2 3v1h-3l-2-3H11l-2 3H6v-1l2-3a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zm0 4v6h7V8H8zm9 0v6h7V8h-7zM9.5 17a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm13 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'), width: 64, height: 64, mask: true },
   foot: { url: svg('M18 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-3.5 6.5 3 .5 2 3.5 4 2v2.5l-4.5-2-1.5-2-1 5 3 3.5V30h-2.5l-3-5.5-3 5.5H9l3.5-7.5 1-6-2 1.5V22H9v-6l5.5-6.5z'), width: 64, height: 64, mask: true },
   all: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
   still: { url: svg('M16 16m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0'), width: 64, height: 64, mask: true },
+  // Fast-forward chevrons: shown when the replay is too quick for the vehicle to matter.
+  ff: { url: svg('M22 16a6 6 0 1 1-12 0 6 6 0 0 1 12 0zM2 13h8v2H2zm-2 2.5h9v1.5H0zM3 18h7v2H3z'), width: 64, height: 64, mask: true },
+}
+type StampKind = keyof typeof ICON
+// The stamp only changes once the new kind has held for a beat, so fast replay does not strobe between icons.
+const STAMP_HOLD_MS = 350
+const FF_PACE = 8
+let stamp = { shown: 'still' as StampKind, pending: 'still' as StampKind, since: 0 }
+// The stamp's ring grows and shrinks over a few frames instead of snapping between still and moving.
+let ringR = 0, ringAt = 0
+function easedRing(want: number): number {
+  const t = performance.now()
+  if (!ringR || t - ringAt > 500) ringR = want
+  else ringR += (want - ringR) * Math.min(1, (t - ringAt) / 180)
+  ringAt = t
+  return ringR
+}
+function stampKind(kind: StampKind, rate: number, bigLeg: boolean): StampKind {
+  const want: StampKind = kind !== 'still' && !bigLeg && paceOf(rate) >= FF_PACE ? 'ff' : kind
+  const t = performance.now()
+  if (want !== stamp.pending) { stamp.pending = want; stamp.since = t }
+  if (want !== stamp.shown && t - stamp.since >= STAMP_HOLD_MS) stamp.shown = want
+  return stamp.shown
 }
 // The map pin: a teardrop with a stock hole, anchored at its point.
 const PIN = { url: svg('M16 1C9.9 1 5 5.9 5 12c0 8 11 19 11 19s11-11 11-19c0-6.1-4.9-11-11-11zm0 6.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z'), width: 64, height: 64, anchorY: 64, mask: true as const }
@@ -42,9 +82,9 @@ export function buildTrails(data: Data, t0: number): Trail[] {
 }
 
 // Trails key on the record's geometry and dots on its places, so a place-name flush never re-uploads 80k points.
-let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; dots: Dot[]; all: Dot[]; shown: { key: string; dots: Dot[]; labels: Map<number, Dot[]>; clusters: Map<number, { singles: Dot[]; groups: Group<Dot>[] }> }; homes: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null } | null = null
+let cache: { paths: Data['paths']; places: Data['places']; trails: Trail[]; byLens: Map<Lens, Trail[]>; simp: Map<string, Trail[]>; dots: Dot[]; all: Dot[]; shown: { key: string; dots: Dot[]; labels: Map<number, Dot[]>; clusters: Map<number, { singles: Dot[]; groups: Group<Dot>[] }> }; homes: Dot[]; labels: Map<number, Dot[]>; active: Trail[]; activeIdx: number[]; activeOf: Trail[] | null; revealed: Dot[]; revealedDay: number; revealedOf: Dot[] | null } | null = null
 function prepared(data: Data) {
-  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), dots: [], all: [], shown: { key: '', dots: [], labels: new Map(), clusters: new Map() }, homes: [], labels: new Map(), active: [], activeIdx: [], activeOf: null }
+  if (cache?.paths !== data.paths) cache = { paths: data.paths, places: null as never, trails: buildTrails(data, data.meta.range[0]), byLens: new Map(), simp: new Map(), dots: [], all: [], shown: { key: '', dots: [], labels: new Map(), clusters: new Map() }, homes: [], labels: new Map(), active: [], activeIdx: [], activeOf: null, revealed: [], revealedDay: -1, revealedOf: null }
   if (cache.places !== data.places) {
     cache.places = data.places
     // Replay dots are the places you kept going back to; the Map tab pins every stop.
@@ -66,10 +106,45 @@ function activeTrails(c: NonNullable<typeof cache>, all: Trail[], from: number, 
   if (!same) { c.activeOf = all; c.activeIdx = idx; c.active = idx.map((i) => all[i]) }
   return c.active
 }
+/** Where the drawn trail's head is at `t` (seconds from t0): the marker is placed from the same simplified points the GPU draws, so it never leads or trails the line. */
+function trailHead(trails: Trail[], t: number): { lng: number; lat: number; heading: number } | null {
+  let lo = 0, hi = trails.length - 1
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (trails[m].t0 <= t) lo = m; else hi = m - 1 }
+  const tr = trails[lo]
+  if (!tr || tr.t0 > t || tr.t1 < t) return null
+  const ts = tr.ts
+  let i = 1
+  while (i < ts.length - 1 && ts[i] < t) i++
+  const [x0, y0] = tr.path[i - 1], [x1, y1] = tr.path[i]
+  const k = ts[i] > ts[i - 1] ? (t - ts[i - 1]) / (ts[i] - ts[i - 1]) : 1
+  return { lng: x0 + (x1 - x0) * k, lat: y0 + (y1 - y0) * k, heading: bearing({ lng: x0, lat: y0 }, { lng: x1, lat: y1 }) }
+}
+/** Dots visited by `reveal`, cached per day so the array is stable between frames. */
+function revealed(c: NonNullable<typeof cache>, dots: Dot[], reveal: number): Dot[] {
+  const day = Math.floor(reveal / 86400)
+  if (c.revealedDay !== day || c.revealedOf !== dots) { c.revealedDay = day; c.revealedOf = dots; c.revealed = dots.filter((d) => d.first_ts <= (day + 1) * 86400) }
+  return c.revealed
+}
 function lensTrails(c: NonNullable<typeof cache>, lens: Lens): Trail[] {
   let t = c.byLens.get(lens)
   if (!t) c.byLens.set(lens, (t = lens === 'all' ? c.trails : c.trails.filter((x) => x.lens === lens)))
   return t
+}
+/** Trails thinned to ~1.5 px at a whole-number zoom: GPS jitter is never drawn, and the GPU gets a fraction of the points when zoomed out. */
+function simplified(c: NonNullable<typeof cache>, lens: Lens, zoom: number): Trail[] {
+  const zb = Math.max(2, Math.min(16, Math.round(zoom)))
+  const key = `${lens}:${zb}`
+  let out = c.simp.get(key)
+  if (!out) {
+    const tol = degPerPx(zb) * 1.5
+    out = lensTrails(c, lens).map((t) => {
+      if (t.path.length <= 2) return t
+      const idx = simplifyIdx(t.path, tol)
+      return idx.length === t.path.length ? t : { ...t, path: idx.map((i) => t.path[i]), ts: idx.map((i) => t.ts[i]) }
+    })
+    c.simp.set(key, out)
+  }
+  return out
 }
 
 /** Greedy screen-space culling: most-visited label wins its box; nothing below zoom 6. */
@@ -149,7 +224,7 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
 export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
   const c = prepared(data)
   const { dots, labels } = c
-  const trails = lensTrails(c, lens)
+  const trails = simplified(c, lens, zoom)
   const zb = Math.floor(zoom * 2) / 2
   let labelled = labels.get(zb)
   if (!labelled) labels.set(zb, (labelled = labelDots(dots, zb)))
@@ -159,47 +234,54 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
     // Paused: the whole record as hairlines, like the strip printed on the pass.
     layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => [d.color[0], d.color[1], d.color[2], d.lens === 'fly' ? 140 : d.guessed ? 50 : 90], widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))
   }
-  const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails) => new TripsLayer<Trail>({
+  const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails, dashed = false) => new TripsLayer<Trail>({
     id, data, getPath: (d) => d.path, getTimestamps: (d) => d.ts, getColor: (d) => { const c = color(d); return d.guessed ? [c[0], c[1], c[2], 110] : c },
-    currentTime: now - t0, trailLength: length, fadeTrail: true, widthMinPixels: width, widthMaxPixels: width * 2, capRounded: true, jointRounded: true, opacity,
+    currentTime: now - t0, trailLength: length, fadeTrail: true, widthUnits: 'pixels', getWidth: width, widthMinPixels: width, widthMaxPixels: width * 2, capRounded: !dashed, jointRounded: true, opacity,
+    ...(dashed ? { extensions: DASH, getDashArray: [5, 4], dashUnits: 'pixels' as const } : {}),
   })
-  const headLen = HEAD_REAL_S * rate
+  const headLen = HEAD_REAL_S * rate, wake = easedWake(rate)
   const head = activeTrails(c, trails, now - t0 - headLen * 1.6, now - t0)
   layers.push(
-    // Week-long wake over everything in its ink, then a wide head in the leg's own ink over only the live trails.
-    trail('trail-long', LONG_TRAIL_S, (d) => d.color, 2.5, playing ? 0.85 : 0.4),
-    trail('trail-head', headLen, (d) => d.color, 7, 1, head),
+    // A dotted wake that fades over ~16 s of screen time, then a solid head in the leg's own ink over only the live trails.
+    trail('trail-long', wake, (d) => d.color, 2.5, playing ? 0.8 : 0.4, trails, true),
+    trail('trail-head', headLen, (d) => d.color, 6, 1, head),
+  )
+  // Only places already visited exist on the map; a fresh one fades in over a second of screen time, labels first without their halo so nothing ghosts.
+  const fadeSpan = Math.max(60, rate * 1.2)
+  const shownDots = revealed(c, dots, reveal), arriving = labelled.filter((d) => d.first_ts <= reveal && reveal - d.first_ts < fadeSpan), settled = labelled.filter((d) => reveal - d.first_ts >= fadeSpan)
+  const alpha = (d: Dot) => Math.min(1, (reveal - d.first_ts) / fadeSpan)
+  const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 }, getSize: 11, getPixelOffset: [12, 0] as [number, number], getTextAnchor: 'start' as const, getAlignmentBaseline: 'center' as const }
+  layers.push(
     new ScatterplotLayer<Dot>({
-      id: 'places', data: dots, pickable: true,
+      id: 'places', data: shownDots, pickable: true,
       getPosition: (d) => [d.lng, d.lat],
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
-      getFillColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 220 : 0],
-      stroked: true, getLineColor: (d) => [STOCK[0], STOCK[1], STOCK[2], d.first_ts <= reveal ? 255 : 0], lineWidthMinPixels: 2,
-      updateTriggers: { getFillColor: [Math.floor(reveal / 86400)], getLineColor: [Math.floor(reveal / 86400)] },
+      getFillColor: (d) => [INK[0], INK[1], INK[2], 220 * alpha(d)],
+      stroked: true, getLineColor: (d) => [STOCK[0], STOCK[1], STOCK[2], 255 * alpha(d)], lineWidthMinPixels: 2,
+      updateTriggers: { getFillColor: reveal, getLineColor: reveal },
     }),
-    new TextLayer<Dot>({
-      id: 'labels', data: labelled,
-      getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(),
-      getColor: (d) => [INK[0], INK[1], INK[2], d.first_ts <= reveal ? 255 : 0],
-      getSize: 11, getPixelOffset: [12, 0], fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 },
-      outlineWidth: 2, outlineColor: [239, 230, 210, 235],
-      getTextAnchor: 'start', getAlignmentBaseline: 'center',
-      updateTriggers: { getColor: [Math.floor(reveal / 86400)] },
-    }),
+    new TextLayer<Dot>({ id: 'labels', data: settled, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(), getColor: INK, ...font, outlineWidth: 2, outlineColor: [239, 230, 210, 235] }),
+    new TextLayer<Dot>({ id: 'labels-in', data: arriving, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(), getColor: (d) => [INK[0], INK[1], INK[2], 255 * alpha(d)], ...font, updateTriggers: { getColor: reveal } }),
   )
-  const w = whereaboutsAt(data, now)
+  const at = whereaboutsAt(data, now)
+  const w = at && at.mode !== 'STILL' ? { ...at, ...(trailHead(trails, now - t0) ?? {}) } : at
   if (w) {
-    const still = w.mode === 'STILL', kind = still ? 'still' : lensOf(w.mode), ink = still ? INK : INK_OF[kind as Lens]
-    const turns = kind === 'fly' || kind === 'drive'
+    const still = w.mode === 'STILL'
+    const seg = still ? null : segmentAt(data, now)
+    const kind = stampKind(still ? 'still' : lensOf(w.mode), rate, !!seg && seg.kind === 'activity' && seg.km >= BIG_KM)
+    const ink = kind === 'still' || kind === 'ff' ? INK : INK_OF[kind]
+    const turns = kind === 'fly' || kind === 'drive' || kind === 'ff'
+    const small = kind === 'still'
+    const r = easedRing(small ? 11 : 20)
     layers.push(
       // The stamp: a stock disc with the leg's ink ring, and the vehicle inside turned the way it is going.
       new ScatterplotLayer<typeof w>({
-        id: 'here-ring', data: [w], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: still ? 11 : 20, radiusMaxPixels: still ? 11 : 20,
-        getFillColor: STOCK, stroked: true, getLineColor: ink, lineWidthMinPixels: 3, updateTriggers: { getLineColor: kind, getRadius: still },
+        id: 'here-ring', data: [w], getPosition: (d) => [d.lng, d.lat], getRadius: 1, radiusMinPixels: r, radiusMaxPixels: r,
+        getFillColor: STOCK, stroked: true, getLineColor: ink, lineWidthMinPixels: 3, updateTriggers: { getLineColor: kind },
       }),
       new IconLayer<typeof w>({
         id: 'here', data: [w], getPosition: (d) => [d.lng, d.lat], getIcon: () => ICON[kind], getColor: ink,
-        getSize: still ? 12 : 27, sizeUnits: 'pixels', getAngle: (d) => (turns ? -d.heading : 0), billboard: false,
+        getSize: r * 1.3, sizeUnits: 'pixels', getAngle: (d) => (turns ? -d.heading : 0), billboard: false,
         updateTriggers: { getIcon: kind, getColor: kind, getAngle: turns },
       }),
     )

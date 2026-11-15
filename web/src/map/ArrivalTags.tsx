@@ -5,9 +5,10 @@ import { useStore, useThrottledPlayhead } from '../store/useStore'
 import { placeName } from '../analytics/home'
 import { isHome } from '../analytics/geo'
 
-interface Arrival { key: number; id: string; nth: number; at: number }
-const KEEP = 3
+interface Arrival { key: number; id: string; nth: number; at: number; leaving?: boolean }
+const KEEP = 2
 const TTL_MS = 7000
+const LEAVE_MS = 420
 
 /** Luggage tags that print when the playhead arrives somewhere new. */
 export function ArrivalTags() {
@@ -24,11 +25,20 @@ export function ArrivalTags() {
     lastVisit.current = v.id
     if (isHome(data.places[v.place_id])) return
     const nth = data.visits.filter((x) => x.lvl === 0 && x.place_id === v.place_id && x.start <= v.start).length
-    setTags((t) => [{ key: v.id, id: v.place_id, nth, at: Date.now() }, ...t].slice(0, KEEP))
+    // A place already on show is reprinted in place; the oldest tag beyond KEEP peels off instead of vanishing.
+    setTags((t) => {
+      const kept = t.filter((x) => x.id !== v.place_id && !x.leaving)
+      const next = [{ key: v.id, id: v.place_id, nth, at: Date.now() }, ...kept]
+      return [...next.slice(0, KEEP), ...next.slice(KEEP).map((x) => ({ ...x, leaving: true, at: Date.now() - TTL_MS + LEAVE_MS }))]
+    })
   }, [playhead, playing, data])
 
   useEffect(() => {
-    const i = setInterval(() => setTags((t) => t.filter((x) => Date.now() - x.at < TTL_MS)), 500)
+    const i = setInterval(() => setTags((t) => {
+      const now = Date.now()
+      const out = t.filter((x) => now - x.at < TTL_MS).map((x) => (now - x.at >= TTL_MS - LEAVE_MS ? { ...x, leaving: true } : x))
+      return out.length === t.length && out.every((x, i) => x === t[i]) ? t : out
+    }), 100)
     return () => clearInterval(i)
   }, [])
 
@@ -37,7 +47,7 @@ export function ArrivalTags() {
       {tags.map((t) => {
         const p = data.places[t.id]
         return (
-          <div className="tag print on" key={t.key}>
+          <div className={`tag print ${t.leaving ? 'off' : 'on'}`} key={t.key}>
             <div>
               <PlacePhoto place={p} lazy={false} />
               <div className="lab">{t.nth === 1 ? 'First visit' : `Visit nº ${t.nth}`}</div>

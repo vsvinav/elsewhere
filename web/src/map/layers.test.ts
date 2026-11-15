@@ -1,4 +1,4 @@
-import { buildTrails } from './layers'
+import { buildTrails, wakeLength } from './layers'
 import type { Data } from '../data/types'
 
 test('a leg with a GPS trace is drawn once; an untraced flight gets a synthetic arc', () => {
@@ -12,4 +12,10 @@ test('a leg with a GPS trace is drawn once; an untraced flight gets a synthetic 
   } as unknown as Data
   const t = buildTrails(d, 0)
   expect(t.map((x) => x.lens)).toEqual(['drive', 'fly'])
+})
+
+test('the wake is sixteen seconds of screen time, clamped between three hours and a month', () => {
+  expect(wakeLength(3600)).toBe(16 * 3600)
+  expect(wakeLength(60)).toBe(3 * 3600)
+  expect(wakeLength(10 * 86400)).toBe(30 * 86400)
 })
