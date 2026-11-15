@@ -82,7 +82,8 @@ export function App() {
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,
     importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); if (profileStore.get()) useStore.getState().setTab('home') }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
-    reset: () => { profileStore.set(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch(setError) },
+    // Without a bundled sample, starting over lands on the front door, same as a first visit.
+    reset: () => { profileStore.set(null); setRecord(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e))) },
     editProfile: () => setEditing(true),
   }), [mine, stage, importError, enrichError, adopt])
   // Chrome tucks away once the first bill has scrolled off; the heads underneath print clean.
@@ -156,7 +157,7 @@ function LoadFailed({ error }: { error: Error }) {
           <Field label="Status">Couldn't load the record</Field>
           <Field label="Detail">{error instanceof DataLoadError ? error.url : error.message}</Field>
         </div>
-        <p className="drop">Run <code>python -m pipeline build timeline.json</code> and reload.</p>
+        {import.meta.env.DEV && <p className="drop">Run <code>python -m pipeline build timeline.json</code> and reload.</p>}
       </Pass>
     </main>
   )
