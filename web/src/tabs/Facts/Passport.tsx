@@ -80,6 +80,21 @@ function PageView({ page, index, total, current, fresh }: { page: Page; index: n
 }
 
 /** The booklet: a page per country and one of milestones, swiped or arrowed through, every earned stamp a door. */
+/** The booklet folded to one line: the stamped count and the latest few stamps, for the Play deck. */
+export function PassportCompact({ max = 3 }: { max?: number }) {
+  const raw = useRawData()
+  const pass = useMemo(() => passport(raw), [raw])
+  const earned = useMemo(() => earnedIds(pass), [pass])
+  const total = pass.pages.reduce((a, p) => a + p.stamps.length, 0)
+  const latest = useMemo(() => pass.pages.flatMap((p) => p.stamps).filter((s) => s.earnedAt != null).sort((a, b) => b.earnedAt! - a.earnedAt!).slice(0, max), [pass, max])
+  return (
+    <div className="passport compact">
+      <Field label="Stamped">{earned.length} / {total}</Field>
+      <div className="pstamps">{latest.map((s) => <StampView key={s.id} s={s} fresh={false} />)}</div>
+    </div>
+  )
+}
+
 export function Passport() {
   const raw = useRawData()
   const pass = useMemo(() => passport(raw), [raw])

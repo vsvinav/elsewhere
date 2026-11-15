@@ -113,6 +113,7 @@ describe('Numbers', () => {
 describe('Facts', () => {
   it('every fact headline is a door to what made it', () => {
     wrap(<Facts />)
+    fireEvent.click(screen.getByRole('button', { name: /^All facts/ }))
     const heads = document.querySelectorAll('.facts .fact-h')
     expect(heads.length).toBeGreaterThan(3)
     for (const h of heads) expect(h.closest('button')).toBeNull()
