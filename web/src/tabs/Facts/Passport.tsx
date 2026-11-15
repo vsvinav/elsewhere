@@ -93,13 +93,15 @@ export function Passport() {
   const go = (i: number) => {
     const next = Math.max(0, Math.min(n - 1, i))
     setAt(next)
-    const el = ref.current
-    if (el && typeof el.scrollTo === 'function') el.scrollTo({ left: next * el.clientWidth, behavior: reduced() ? 'auto' : 'smooth' })
+    const leaf = ref.current?.children[next] as HTMLElement | undefined
+    leaf?.scrollIntoView?.({ inline: 'start', block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' })
   }
+  // The leaves sit a gap apart, so the page under the fold is the one whose offset is nearest, not scrollLeft over the width.
   const onScroll = () => {
     const el = ref.current
     if (!el || !el.clientWidth) return
-    const i = Math.round(el.scrollLeft / el.clientWidth)
+    let i = 0, best = Infinity
+    Array.from(el.children).forEach((c, k) => { const d = Math.abs((c as HTMLElement).offsetLeft - el.scrollLeft); if (d < best) { best = d; i = k } })
     if (i !== at) setAt(i)
   }
   const onKey = (e: KeyboardEvent) => {

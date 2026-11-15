@@ -83,6 +83,47 @@ describe('passport', () => {
     expect(earnedIds(p)).toEqual(['city:Paris', 'city:Lyon', 'city:Tokyo', 'city:Osaka', 'city:Rome', 'city:Atlantis', 'ms:first-night', 'ms:nights-10', 'ms:cities-5', 'ms:countries-3', 'ms:lap'])
   })
 
+  it('night milestones walk the visits, so a repeat destination never dates a milestone to an earlier trip', () => {
+    // Paris 2015 for 2 nights, London 2016 for 10, Paris again 2024 for 50: the tenth night is London's eighth, not a 2015 date.
+    const Y15 = Date.UTC(2015, 5, 1) / 1000, Y16 = Date.UTC(2016, 5, 1) / 1000, Y24 = Date.UTC(2024, 5, 1) / 1000
+    const d = {
+      ...data, activities: [],
+      visits: [
+        v(Y15, Y15 + 2 * D - 12 * H, 'paris', 48.85, 2.35),
+        v(Y15 + 2 * D, Y16 - D, 'home', 42.36, -71.06),
+        v(Y16, Y16 + 10 * D - 12 * H, 'london', 51.5, -0.12),
+        v(Y16 + 10 * D, Y24 - D, 'home', 42.36, -71.06),
+        v(Y24, Y24 + 50 * D - 12 * H, 'paris', 48.85, 2.35),
+      ],
+      places: { ...data.places, london: place(null, 'London', 'GB', 51.5, -0.12) },
+    } as unknown as Data
+    const r = passport(d)
+    const ms = (id: string) => r.pages.find((x) => x.id === 'milestones')!.stamps.find((s) => s.id === id)!
+    expect(r.pages.find((x) => x.id === 'country:FR')!.stamps[0].sub).toBe('52 nights')
+    expect(ms('ms:first-night').earnedAt).toBe(Y15)
+    expect(ms('ms:nights-10').earnedAt).toBe(Y16 + 7 * D)
+    expect(ms('ms:nights-100').earnedAt).toBeNull()
+  })
+
+  it('time zones ignore daylight saving: the same city in January and July is one zone', () => {
+    const JUL = Date.UTC(2025, 6, 1) / 1000
+    const ny = (start: number, tz: number) => v(start, start + 2 * D, 'ny', 40.71, -74.01, tz)
+    const base = { ...data, activities: [], places: { ...data.places, ny: place(null, 'New York', 'US', 40.71, -74.01) } }
+    const two = passport({ ...base, visits: [ny(JAN, -300), ny(JUL, -240)] } as unknown as Data)
+    const ms = (r: typeof two, id: string) => r.pages.find((x) => x.id === 'milestones')!.stamps.find((s) => s.id === id)!
+    expect(ms(two, 'ms:zones').earnedAt).toBeNull()
+    // nine more cities, each a further 15° east: the tenth distinct zone is reached on the last of them
+    const visits = [ny(JAN, -300), ny(JUL, -240)]
+    const places: Record<string, unknown> = { ...base.places }
+    for (let i = 1; i < 10; i++) {
+      const lng = -74.01 + 15 * i
+      places[`z${i}`] = place(null, `Zone ${i}`, 'XX', 10, lng)
+      visits.push(v(JAN + 10 * i * D, JAN + 10 * i * D + 2 * D, `z${i}`, 10, lng, 0))
+    }
+    const ten = passport({ ...base, visits, places } as unknown as Data)
+    expect(ms(ten, 'ms:zones').earnedAt).toBe(JAN + 90 * D)
+  })
+
   it('an empty record is a booklet of outlines', () => {
     const e = passport({ ...data, visits: [], activities: [] })
     expect(e.pages).toHaveLength(1)

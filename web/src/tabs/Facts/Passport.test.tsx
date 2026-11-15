@@ -77,6 +77,39 @@ describe('Passport', () => {
     expect((screen.getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('a long booklet lands on the right page: pages scroll into view and the index is read from their offsets', () => {
+    // Nine extra countries on top of the sample's two make eleven pages with the milestones.
+    const D = 86400, base = data.visits[0].start - 400 * D
+    const extra = Array.from({ length: 9 }, (_, i) => ({ id: `z${i}`, city: `Zone ${i}`, cc: `Z${i}`, lat: 10 + i, lng: -60 + 15 * i }))
+    const long = {
+      ...data,
+      places: { ...data.places, ...Object.fromEntries(extra.map((e) => [e.id, { lng: e.lng, lat: e.lat, role: null, city: e.city, country_code: e.cc, n_visits: 1, first_ts: base, last_ts: base, name: null, total_hours: 1 }])) },
+      visits: [...extra.map((e, i) => ({ id: 9000 + i, start: base + i * 10 * D, end: base + i * 10 * D + 2 * D, tz: 0, place_id: e.id, lat: e.lat, lng: e.lng, type: 'UNKNOWN', p: 1, lvl: 0 })), ...data.visits],
+    } as typeof data
+    const n = passport(long).pages.length
+    expect(n).toBeGreaterThanOrEqual(10)
+    render(<DataContext.Provider value={long}><Passport /></DataContext.Provider>)
+    const pages = document.querySelector('.passport-pages') as HTMLDivElement
+    const leaves = Array.from(pages.querySelectorAll<HTMLElement>('.passport-leaf'))
+    const W = 400, GAP = 24
+    Object.defineProperty(pages, 'clientWidth', { value: W, configurable: true })
+    const seen: number[] = []
+    leaves.forEach((leaf, i) => {
+      Object.defineProperty(leaf, 'offsetLeft', { value: i * (W + GAP), configurable: true })
+      leaf.scrollIntoView = vi.fn(() => seen.push(i))
+    })
+    for (let i = 1; i < n; i++) fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(seen).toEqual(Array.from({ length: n - 1 }, (_, i) => i + 1))
+    expect(leaves[n - 1].scrollIntoView).toHaveBeenLastCalledWith(expect.objectContaining({ inline: 'start' }))
+    // the browser settles on the last page: its offset, not a multiple of the width, is what the booklet must read
+    Object.defineProperty(pages, 'scrollLeft', { value: (n - 1) * (W + GAP), configurable: true })
+    fireEvent.scroll(pages)
+    expect(screen.getByText(`Page ${n} of ${n}`)).toBeTruthy()
+    Object.defineProperty(pages, 'scrollLeft', { value: 4 * (W + GAP) + 30, configurable: true })
+    fireEvent.scroll(pages)
+    expect(screen.getByText(`Page 5 of ${n}`)).toBeTruthy()
+  })
+
   it('the first open records every earned stamp without a thud; a new earn thuds once and is then recorded', async () => {
     vi.useFakeTimers()
     try {

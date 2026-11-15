@@ -1,6 +1,6 @@
 import type { Data } from '../data/types'
 import type { Door } from '../store/useStore'
-import { tour, type Stop } from './tour'
+import { sleptAway, tour, type Stop } from './tour'
 
 export interface Stamp { id: string; label: string; earnedAt: number | null; door: Door | null; sub?: string }
 export interface Page { kind: 'country' | 'milestone'; id: string; title: string; stamps: Stamp[] }
@@ -17,6 +17,8 @@ const nights = (n: number) => (n === 1 ? '1 night' : `${n} nights`)
 
 /** A milestone opens the map on the day it was earned, with a day either side. */
 const around = (earnedAt: number | null, label: string): Door | null => (earnedAt == null ? null : { kind: 'range', from: earnedAt - DAY, to: earnedAt + DAY, label })
+/** A time zone by meridian, 15° wide and centred on it, so daylight saving never counts a place twice. */
+export const zoneOf = (lng: number) => Math.floor((lng + 187.5) / 15)
 const milestone = (id: string, label: string, earnedAt: number | null): Stamp => ({ id: `ms:${id}`, label, earnedAt, door: around(earnedAt, label) })
 
 /**
@@ -37,18 +39,21 @@ export function passport(data: Data): Passport {
     stamps: list.map((s) => ({ id: `city:${s.city}`, label: s.city.toUpperCase(), earnedAt: s.first, sub: nights(s.nights), door: { kind: 'places', placeIds: s.placeIds, label: s.city } })),
   }))
 
-  // Nights, cities and countries all fall out of the same chronological walk.
-  const nightAt: (number | null)[] = NIGHTS.map(() => null)
+  // Cities and countries fall out of the stops; nights need the visits themselves, since a city's stop spans every trip there.
   const cityAt: (number | null)[] = CITIES.map(() => null)
   const countryAt: (number | null)[] = COUNTRIES.map(() => null)
   const seen = new Set<string>()
-  let cum = 0
   stops.forEach((s, i) => {
-    NIGHTS.forEach((n, k) => { if (nightAt[k] == null && cum < n && cum + s.nights >= n) nightAt[k] = s.first + (n - cum - 1) * DAY })
-    cum += s.nights
     CITIES.forEach((n, k) => { if (i + 1 === n) cityAt[k] = s.first })
     if (s.country && !seen.has(s.country)) { seen.add(s.country); COUNTRIES.forEach((n, k) => { if (seen.size === n) countryAt[k] = s.first }) }
   })
+
+  const nightAt: (number | null)[] = NIGHTS.map(() => null)
+  let cum = 0
+  for (const { v, nights: n } of sleptAway(data).away.sort((a, b) => a.v.start - b.v.start)) {
+    NIGHTS.forEach((N, k) => { if (nightAt[k] == null && cum < N && cum + n >= N) nightAt[k] = Math.min(v.start + (N - cum - 1) * DAY, v.end) })
+    cum += n
+  }
 
   let km = 0, lapAt: number | null = null
   for (const a of data.activities) { km += a.m / 1000; if (km >= EARTH_KM) { lapAt = a.end; break } }
@@ -56,8 +61,8 @@ export function passport(data: Data): Passport {
   const zones = new Set<number>()
   let zoneAt: number | null = null
   for (const v of data.visits) {
-    if (v.lvl !== 0 || zones.has(v.tz)) continue
-    zones.add(v.tz)
+    if (v.lvl !== 0 || zones.has(zoneOf(v.lng))) continue
+    zones.add(zoneOf(v.lng))
     if (zones.size === ZONES) { zoneAt = v.start; break }
   }
 
