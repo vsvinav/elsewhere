@@ -83,3 +83,7 @@
 .ob-tag .naming-name { animation: naming-pulse 1.4s ease-in-out infinite; }
 @keyframes naming-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .ob-tag .naming-name { animation: none; opacity: 0.6; } }
+
+/* On the front door the naming stamp keeps company with the Official stamp, clear of the buttons. */
+.ob .naming { left: auto; right: calc(var(--gutter) + 190px); bottom: 70px; }
+@media (max-width: 720px) { .ob .naming { right: auto; left: 16px; bottom: 16px; } }

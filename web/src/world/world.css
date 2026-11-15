@@ -595,3 +595,11 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .naming b small { font: 700 10px/1 var(--body); letter-spacing: 0.08em; margin-left: 1px; }
 @keyframes stamp-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .naming, .naming .ring { animation: none; } }
+
+/* Google-down strip: ink on mustard, pinned under the top edge so the dark map below has a caption. */
+.gdown { position: fixed; top: 0; left: 0; right: 0; z-index: 60; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 10px 20px 10px 20px; background: var(--mustard); color: var(--ink); border-bottom: 3px solid var(--ink); font: 500 14px/1.35 var(--body); }
+.gdown b { font: 800 15px/1 var(--display); text-transform: uppercase; letter-spacing: 0.06em; }
+.gdown code { font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; margin-left: 4px; }
+.gdown .then { color: var(--ink-2); }
+.gdown a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.gdown button { margin-left: auto; border: 0; background: none; font: 700 20px/1 var(--body); color: var(--ink); cursor: pointer; }

@@ -8,6 +8,7 @@ import { Onboarding } from '../profile/Onboarding'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
 import { enrichPlaces, type Progress } from '../ingest/enrich'
 import { NamingStamp } from './NamingStamp'
+import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
 import { StubNav } from './StubNav'
@@ -115,6 +116,7 @@ export function App() {
         </details>
       </div>
       <StubNav />
+      <GoogleDownNote />
       <NamingStamp progress={naming} />
       {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}><RangeBar /><Screen /></DataContext.Provider></RecordContext.Provider>}
     </div>
