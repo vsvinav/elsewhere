@@ -5,6 +5,8 @@ import type { Data } from '../data/types'
 import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
+import { KeyGate } from '../profile/KeyGate'
+import { useKeyGate } from '../profile/KeyCheck'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
 import { apply, onError as onPlacesError, setKey as setPlacesKey, useNaming, usePlaces } from '../ingest/places'
 import { NamingStamp } from './NamingStamp'
@@ -45,6 +47,7 @@ export function App() {
   const [editing, setEditing] = useState(false)
   const prof = useProfile()
   const { mapsKey } = useSettings()
+  const gated = useKeyGate()
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
@@ -99,6 +102,8 @@ export function App() {
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
   if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
+  // A returning visitor's saved key is checked once before the record prints on it; onboarding carries its own check.
+  if (prof && !editing && gated) return <div className="tray">{bar}<KeyGate /></div>
   if (!prof || editing) {
     return <>{bar}<Onboarding key={editing ? 'edit' : 'new'} data={data} demo={!mine} stage={stage} importError={importError} importFile={ctx.importFile} initial={editing ? prof : null} onClose={editing ? () => setEditing(false) : undefined} /></>
   }
