@@ -6,6 +6,7 @@ import { facts, type Fact, type Kind } from '../../analytics/facts'
 import { Bill, Field, Pass, PrintIn, Stamp } from '../../world'
 import { Fig } from '../../world/figures/Figures'
 import { bedText, SITE } from '../../share/text'
+import { HighlightSlot } from '../highlights/HighlightSlot'
 import './facts.css'
 
 const KIND: Record<Kind, string> = { explored: 'Explored', record: 'Record', scale: 'Scale', habit: 'Habit' }
@@ -55,6 +56,7 @@ export function Facts() {
 
   return (
     <>
+      <HighlightSlot />
       <main className="bills facts-head">
         <Bill className="hero" share={false}>
           <div className="two">
