@@ -9,7 +9,9 @@
 .yearwheel .side { display: flex; gap: inherit; overflow: hidden; min-width: 0; }
 .yearwheel .side.l { justify-content: flex-end; }
 .yearwheel .y { font: inherit; letter-spacing: inherit; color: var(--ghost); background: none; border: 0; padding: 0; cursor: pointer; line-height: inherit; }
-.yearwheel .y.cur { color: var(--ink); text-shadow: 2px 2px 0 var(--red); }
+.yearwheel .y.cur { position: relative; color: var(--ink); text-shadow: 2px 2px 0 var(--red); cursor: pointer; }
+.yearwheel.custom .y.cur { color: var(--ink-3); text-shadow: none; }
+.yearwheel .tag { position: absolute; right: -6px; top: -4px; transform: rotate(-6deg); padding: 3px 6px; background: var(--red); color: var(--stock); font: 800 10px/1 var(--body); letter-spacing: 0.2em; text-transform: uppercase; text-shadow: none; }
 .yearwheel .side .y { opacity: .55; }
 .yearwheel .flap-row { display: inline-flex; }
 .yearwheel .flap { display: inline-block; transform-origin: 50% 50%; animation: flap 240ms cubic-bezier(.2,.8,.2,1); }

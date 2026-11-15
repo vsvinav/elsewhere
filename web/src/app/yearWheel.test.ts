@@ -18,10 +18,13 @@ describe('yearWheel', () => {
   })
 
   it('names the one year a selection covers, else null', () => {
-    expect(wheelState(record, y2022)).toEqual({ year: 2022, from: y2022[0], to: y2022[1] })
-    expect(wheelState(record, null).year).toBeNull()
-    expect(wheelState(record, record).year).toBeNull()
-    expect(wheelState(record, [utc(2022, 1, 1), utc(2022, 6, 1)]).year).toBeNull()
+    expect(wheelState(record, y2022)).toEqual({ year: 2022, all: false, from: y2022[0], to: y2022[1] })
+    expect(wheelState(record, null)).toEqual({ year: null, all: true, from: record[0], to: record[1] })
+    expect(wheelState(record, record).all).toBe(true)
+    // A hand-picked window is neither a year nor the whole record.
+    const custom = wheelState(record, [utc(2022, 1, 1), utc(2022, 6, 1)])
+    expect(custom).toEqual({ year: null, all: false, from: utc(2022, 1, 1), to: utc(2022, 6, 1) })
+    expect(wheelState(record, [record[1] - 90 * 86400, record[1]]).all).toBe(false)
     // The first and last years count whether or not the chip cut them to the record.
     expect(wheelState(record, [utc(2019, 1, 1), utc(2020, 1, 1) - 1]).year).toBe(2019)
     expect(wheelState(record, yearSpan(record, 2025)).year).toBe(2025)

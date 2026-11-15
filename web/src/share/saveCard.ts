@@ -3,17 +3,17 @@ const SCALE = 2
 export type Format = 'free' | 'story' | 'post'
 const SIZE: Record<Exclude<Format, 'free'>, [number, number]> = { story: [1080, 1920], post: [1080, 1350] }
 
+/** What the print keeps: controls and affordances are for the screen, not the card. */
+export const printable = (n: Node) =>
+  !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save') || n.classList.contains('yearwheel')))
+
 /** Renders one bill to a PNG on its own stock and downloads it; story (9:16) and post (4:5) letterbox the bill on the sheet with a brand line. */
 export async function saveCard(pass: HTMLElement, name: string, format: Format = 'free') {
   const { toCanvas } = await import('html-to-image')
   const css = getComputedStyle(pass)
   const paper = css.backgroundColor && css.backgroundColor !== 'rgba(0, 0, 0, 0)' ? css.backgroundColor : getComputedStyle(document.documentElement).getPropertyValue('--stock').trim() || '#efe6d2'
   const ink = css.color
-  const card = await toCanvas(pass, {
-    pixelRatio: SCALE,
-    // controls and affordances are for the screen, not the print
-    filter: (n) => !(n instanceof HTMLElement && (/^(BUTTON|SELECT|INPUT|LABEL)$/.test(n.tagName) || n.classList.contains('more') || n.classList.contains('save'))),
-  })
+  const card = await toCanvas(pass, { pixelRatio: SCALE, filter: printable })
   const out = document.createElement('canvas')
   const g = out.getContext('2d')!
   if (format === 'free') {

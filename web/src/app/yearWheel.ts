@@ -14,15 +14,21 @@ export function yearSpan(range: Span, y: number): Span {
   return [Math.max(range[0], Date.UTC(y, 0, 1) / 1000), Math.min(range[1], Date.UTC(y + 1, 0, 1) / 1000 - 1)]
 }
 
-export interface WheelState { year: number | null; from: number; to: number }
+export interface WheelState {
+  /** The one year `selected` covers exactly, else null. */
+  year: number | null
+  /** Whether `selected` is the whole record; a window that is neither is custom. */
+  all: boolean
+  from: number
+  to: number
+}
 
-/** The one year `selected` covers exactly, or `null` for the whole record or a custom window. */
 export function wheelState(range: Span, selected: Span | null): WheelState {
   const sel: Span = selected ? [Math.max(range[0], selected[0]), Math.min(range[1], selected[1])] : range
   const y = yearOf(sel[0])
   const [a, b] = yearSpan(range, y)
   const year = sel[0] === a && sel[1] === b && yearOf(sel[1]) === y ? y : null
-  return { year, from: sel[0], to: sel[1] }
+  return { year, all: sel[0] === range[0] && sel[1] === range[1], from: sel[0], to: sel[1] }
 }
 
 const clampYear = (range: Span, y: number) => Math.min(yearOf(range[1]), Math.max(yearOf(range[0]), y))
