@@ -1,5 +1,7 @@
 // Keeps the recovery vault on the service current: whenever the profile or the settings subset changes and the
 // passphrase key is in memory, the vault is sealed and uploaded two seconds later. Offline or keyless, it waits.
+import { sha256 } from '@noble/hashes/sha2.js'
+import { utf8ToBytes } from '@noble/hashes/utils.js'
 import { loadKeys, toHex, unb64, type DeviceKeys } from '../crew/keys'
 import { settings, type Settings } from '../ingest/settings'
 import { profile, type Profile } from '../profile/profile'
@@ -15,24 +17,25 @@ const defaults: Required<SyncDeps> = { client: () => api(), now: Date.now, onlin
 export const vaultSettings = (s: Settings, prof: Profile) => ({ units: prof.units, relayUrl: s.relayUrl, accountUrl: s.accountUrl })
 export const vaultPlain = (keys: DeviceKeys, prof: Profile, s: Settings): VaultPlain => ({ v: 1, signPriv: toHex(keys.signPriv), kxPriv: toHex(keys.kxPriv), profile: prof, settings: vaultSettings(s, prof) })
 
-let lastPlain: string | null = null
+/** What the service holds is identified by the hash of its plaintext; the same hash on both sides means nothing to send. */
+export const vaultHashOf = (plain: VaultPlain) => toHex(sha256(utf8ToBytes(JSON.stringify(plain))))
 /** After a restore the vault on the service already says this; the next change is what triggers an upload. */
-export const markUploaded = (plain: VaultPlain | null) => { lastPlain = plain ? JSON.stringify(plain) : null }
+export const markUploaded = (plain: VaultPlain | null) => useAccount.getState().setVaultHash(plain ? vaultHashOf(plain) : null)
 
-/** Seals and uploads now if everything needed is at hand; marks the vault pending otherwise. True when it went up. */
+/** Seals and uploads now if the vault is behind and everything needed is at hand; marks it pending otherwise. True when current. */
 export async function uploadVault(deps: SyncDeps = {}): Promise<boolean> {
   const d = { ...defaults, ...deps }
   const a = useAccount.getState()
   const prof = profile.get()
   if (!a.session || !prof) return false
-  if (!a.key || !a.salt || !d.online()) { a.setPending(true); return false }
   try {
     const plain = vaultPlain(await d.keys(), prof, settings.get())
-    const json = JSON.stringify(plain)
-    if (json === lastPlain && a.vaultAt) { a.setPending(false); return true }
+    const hash = vaultHashOf(plain)
+    if (hash === a.vaultHash && a.vaultAt) { a.setPending(false); return true }
+    if (!a.key || !a.salt || !d.online()) { a.setPending(true); return false }
     await d.client().putVault(await sealVault(a.key, unb64(a.salt), plain))
-    lastPlain = json
     useAccount.getState().setPending(false)
+    await useAccount.getState().setVaultHash(hash)
     await useAccount.getState().setVaultAt(d.now())
     return true
   } catch { useAccount.getState().setPending(true); return false }
@@ -51,6 +54,6 @@ export function startVaultSync(deps: SyncDeps = {}): () => void {
   return () => { clearTimeout(timer); stops.forEach((f) => f()) }
 }
 
-export type VaultStatus = 'none' | 'fresh' | 'stale'
+export type VaultStatus = 'none' | 'empty' | 'fresh' | 'stale'
 export const vaultStatus = (a: Pick<AccountState, 'session' | 'pending' | 'vaultAt'>, prof: Profile | null): VaultStatus =>
-  !a.session ? 'none' : !a.pending && (a.vaultAt || !prof) ? 'fresh' : 'stale'
+  !a.session ? 'none' : !prof ? 'empty' : !a.pending && a.vaultAt ? 'fresh' : 'stale'

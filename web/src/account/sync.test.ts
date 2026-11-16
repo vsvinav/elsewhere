@@ -32,7 +32,7 @@ const tick = async (ms: number) => { await vi.advanceTimersByTimeAsync(ms); awai
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  db.store.clear(); resetAccountForTest(); markUploaded(null)
+  db.store.clear(); resetAccountForTest(); await markUploaded(null)
   profile.set(null)
   settings.set({ relayUrl: 'https://relay.elsewhere.app', accountUrl: 'https://account.elsewhere.app' })
   key ??= await deriveKey('correct horse battery staple', SALT)
@@ -118,7 +118,8 @@ describe('vault sync', () => {
     const f = fakeClient()
     await signedIn()
     await useAccount.getState().setVaultAt(1)
-    markUploaded({ v: 1, signPriv: toHex(KEYS.signPriv), kxPriv: toHex(KEYS.kxPriv), profile: ADA, settings: { units: 'km', relayUrl: 'https://relay.elsewhere.app', accountUrl: 'https://account.elsewhere.app' } })
+    await markUploaded({ v: 1, signPriv: toHex(KEYS.signPriv), kxPriv: toHex(KEYS.kxPriv), profile: ADA, settings: { units: 'km', relayUrl: 'https://relay.elsewhere.app', accountUrl: 'https://account.elsewhere.app' } })
+    expect(db.store.get('account:vaultHash')).toMatch(/^[0-9a-f]{64}$/)
     const stop = startVaultSync({ client: () => f.client, keys: async () => KEYS })
     profile.set(ADA)
     await tick(2100)
@@ -126,9 +127,27 @@ describe('vault sync', () => {
     expect(vaultStatus(useAccount.getState(), ADA)).toBe('fresh')
     stop()
   })
-  it('signed out there is nothing to report; signed in without a profile the vault is simply not due', () => {
+  it('a reload with no key in memory and an unchanged profile reads as up to date, by the stored hash', async () => {
+    const f = fakeClient()
+    await signedIn()
+    useAccount.getState().setKey(null)
+    profile.set(ADA)
+    await useAccount.getState().setVaultAt(1)
+    await markUploaded({ v: 1, signPriv: toHex(KEYS.signPriv), kxPriv: toHex(KEYS.kxPriv), profile: ADA, settings: { units: 'km', relayUrl: 'https://relay.elsewhere.app', accountUrl: 'https://account.elsewhere.app' } })
+    const stop = startVaultSync({ client: () => f.client, keys: async () => KEYS })
+    await tick(2100)
+    expect(f.puts).toHaveLength(0)
+    expect(useAccount.getState().pending).toBe(false)
+    expect(vaultStatus(useAccount.getState(), ADA)).toBe('fresh')
+    // A real change, still without the key, is what makes it out of date.
+    profile.set({ ...ADA, name: 'Ada L' })
+    await tick(2100)
+    expect(vaultStatus(useAccount.getState(), ADA)).toBe('stale')
+    stop()
+  })
+  it('signed out there is nothing to report; signed in without a profile there is nothing to keep yet', () => {
     expect(vaultStatus({ session: null, pending: false, vaultAt: null }, ADA)).toBe('none')
-    expect(vaultStatus({ session: { session: 's', id: 'a', email: 'e' }, pending: false, vaultAt: null }, null)).toBe('fresh')
+    expect(vaultStatus({ session: { session: 's', id: 'a', email: 'e' }, pending: false, vaultAt: null }, null)).toBe('empty')
     expect(vaultStatus({ session: { session: 's', id: 'a', email: 'e' }, pending: false, vaultAt: null }, ADA)).toBe('stale')
   })
 })

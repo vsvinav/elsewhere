@@ -16,7 +16,7 @@ export const MESSAGES: Record<string, string> = {
   'wrong code': "That code isn't right.",
   'expired': 'That code expired. Send a new one.',
 }
-export const NETWORK_MESSAGE = "Couldn't reach the account service. Check your connection and try again."
+export const NETWORK_MESSAGE = "Couldn't reach the account service. Check your connection."
 export const GENERIC_MESSAGE = 'Something went wrong. Try again.'
 export const messageOf = (e: unknown): string => (e instanceof AccountError ? MESSAGES[e.code] ?? (e.status === 0 ? NETWORK_MESSAGE : GENERIC_MESSAGE) : NETWORK_MESSAGE)
 

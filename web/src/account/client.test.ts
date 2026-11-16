@@ -53,7 +53,7 @@ describe('account client', () => {
     const down = accountClient('https://acct.test', { fetchFn: (async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch })
     const e2 = await down.start('a@b.co').catch((e) => e as AccountError)
     expect(e2).toMatchObject({ status: 0, code: 'network' })
-    expect(messageOf(e2)).toBe("Couldn't reach the account service. Check your connection and try again.")
+    expect(messageOf(e2)).toBe("Couldn't reach the account service. Check your connection.")
   })
   it('authenticated calls carry the bearer session; the vault round-trips and 404 reads as no vault', async () => {
     const f = fakeFetch(({ url, init }) => {
