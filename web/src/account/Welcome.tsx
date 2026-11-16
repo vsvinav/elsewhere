@@ -14,10 +14,10 @@ export function Welcome({ onSignUp, onLogIn, onContinue }: Props) {
     <header className="ob-head"><span className="ob-mark" aria-hidden>E</span></header>
     <div className="ob-start acct-welcome"><div>
       <h1 className="title"><span className="misreg">Else</span><span className="misreg red">where</span></h1>
-      <Sketch />
-      <p className="lede">{WELCOME_LINE}</p></div>
+      <p className="lede">{WELCOME_LINE}</p>
       <div className="acct-choices"><span className="caps">Your record, on every device</span>
         <div className="acct-buttons"><button className="btn" onClick={onSignUp}>{SIGN_UP}</button><button className="btn quiet" onClick={onLogIn}>{LOG_IN}</button></div>
-        <button className="acct-link" onClick={skip}>{welcomed ? NOT_NOW : CONTINUE_WITHOUT}</button></div></div></div>
+        <button className="acct-link" onClick={skip}>{welcomed ? NOT_NOW : CONTINUE_WITHOUT}</button></div></div>
+      <Sketch /></div></div>
     <Stamp top="World" big="v3" bottom="tour" style={{ position: 'absolute', right: 'var(--gutter)', bottom: 56 }} /></section></main>)
 }
