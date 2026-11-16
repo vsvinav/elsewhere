@@ -174,13 +174,12 @@ describe('auth', () => {
     expect(gone.status).toBe(400)
     expect(await gone.json()).toEqual({ error: 'expired' })
   })
-  it('dev mode only speaks on a local or workers.dev hostname: a production domain mails the code even with DEV_MAIL=1', async () => {
+  it('dev mode only speaks on a local hostname: a deployed host mails the code even with DEV_MAIL=1', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }))
     const startAt = (host: string) => SELF.fetch(`https://${host}/auth/start`, { method: 'POST', body: JSON.stringify({ email: 'pat@example.com' }), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '1.2.3.5' } })
-    expect(await (await startAt('elsewhere-account.example.workers.dev')).json()).toEqual({ ok: true, dev: { code: expect.stringMatching(/^\d{6}$/) } })
     expect(await (await startAt('127.0.0.1')).json()).toEqual({ ok: true, dev: { code: expect.stringMatching(/^\d{6}$/) } })
     expect(fetchSpy).not.toHaveBeenCalled()
-    for (const host of ['account.elsewhere.app', 'evil.workers.dev.attacker.net', 'localhost.attacker.net']) {
+    for (const host of ['elsewhere-account.x.workers.dev', 'account.elsewhere.app', 'localhost.attacker.net']) {
       expect(await (await startAt(host)).json(), host).toEqual({ ok: true })
     }
     expect(fetchSpy).toHaveBeenCalledTimes(3)

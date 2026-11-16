@@ -78,11 +78,11 @@ async function sendMail(env: Env, to: string, code: string, token: string): Prom
   } catch (e) { console.error('mail failed', e) }
 }
 
-/** Dev mode hands the code back in the response, but only on a local or workers.dev host: a custom domain always mails it. */
+/** Dev mode hands the code back in the response, but only on a local host: anything deployed always mails it. */
 function devMail(env: Env, req: Request): boolean {
   if (env.DEV_MAIL !== '1') return false
   const host = new URL(req.url).hostname
-  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.workers.dev')
+  return host === 'localhost' || host === '127.0.0.1'
 }
 
 async function authStart(req: Request, env: Env, now: number): Promise<Response> {

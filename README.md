@@ -111,7 +111,7 @@ npx wrangler secret put RESEND_KEY && npx wrangler secret put MAIL_FROM && npx w
 npx wrangler deploy   # prints https://….workers.dev
 ```
 
-Paste that URL into **Settings → Account → Account service URL**. For local work run `wrangler dev --var DEV_MAIL:1` and the code comes back in the response instead of a mail; that only happens on localhost or a workers.dev host, never on a custom domain.
+Paste that URL into **Settings → Account → Account service URL**. For local work run `wrangler dev --var DEV_MAIL:1` and the code comes back in the response instead of a mail; that only happens on localhost, never on a deployed host.
 
 <p align="center">
 <img src="docs/screenshots/flights.png" width="400" alt="Flights: globe with red routes and labelled airports">
