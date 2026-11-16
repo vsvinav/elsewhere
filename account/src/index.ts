@@ -1,5 +1,7 @@
 // The account service: email magic codes, 90-day sessions and one client-encrypted recovery vault per account.
 // It holds no plaintext beyond the email address; the vault is bytes it cannot read.
+import type { Limiter } from './limiter'
+export { Limiter } from './limiter'
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 const fail = (error: string, status: number) => json({ error }, status)
@@ -22,14 +24,16 @@ const ipOf = (req: Request) => req.headers.get('cf-connecting-ip') ?? 'unknown'
 
 const CODE_TTL_S = 600
 const SESSION_TTL_S = 90 * 24 * 3600
-const MAX_TRIES = 5
+const HOUR_S = 3600
 const STARTS_PER_EMAIL = 5
 const STARTS_PER_IP = 20
+const FINISH_WINDOW_S = 600
+const FINISHES_PER_IP = 20
+const FINISHES_PER_EMAIL = 10
 const VAULT_MAX_BYTES = 64 * 1024
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const B64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 
-interface Token { email: string; code: string; tries: number; exp: number }
 interface Account { email: string; created: number }
 interface Session { acct: string; exp: number }
 interface Vault { v: 1; salt: string; iv: string; ct: string }
@@ -45,12 +49,6 @@ function randomCode(): string {
   }
   return out
 }
-function sameCode(a: string, b: string): boolean {
-  const enc = new TextEncoder()
-  const x = enc.encode(a), y = enc.encode(b)
-  if (x.byteLength !== y.byteLength) return false
-  return crypto.subtle.timingSafeEqual(x, y)
-}
 const normalizeEmail = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null
   const e = raw.trim().toLowerCase()
@@ -64,13 +62,9 @@ async function parseBody(req: Request): Promise<Record<string, unknown> | null> 
   } catch { return null }
 }
 
-/** Counts per hour bucket; the bucket key rolls over on the hour, and KV forgets it soon after. */
-async function bump(env: Env, key: string, now: number): Promise<number> {
-  const k = `rl:${key}:${Math.floor(now / 3600_000)}`
-  const n = Number((await env.ACCOUNTS.get(k)) ?? '0') + 1
-  await env.ACCOUNTS.put(k, String(n), { expirationTtl: 3600 })
-  return n
-}
+const limiter = (env: Env): DurableObjectStub<Limiter> => env.LIMITER.get(env.LIMITER.idFromName('main'))
+/** First letter, stars, domain: enough to recognise your own address, not enough to learn someone else's. */
+const maskEmail = (e: string) => { const at = e.indexOf('@'); return `${e.slice(0, 1)}***${e.slice(at)}` }
 
 async function sendMail(env: Env, to: string, code: string, token: string): Promise<void> {
   const pretty = `${code.slice(0, 3)} ${code.slice(3)}`
@@ -90,44 +84,52 @@ async function authStart(req: Request, env: Env, now: number): Promise<Response>
   const body = await parseBody(req)
   const email = normalizeEmail(body?.email)
   // Counters move before any other check, so the endpoint cannot be used to tell addresses apart.
-  const ipHits = await bump(env, `ip:${ipOf(req)}`, now)
-  const emailHits = email ? await bump(env, `email:${email}`, now) : 0
-  if (ipHits > STARTS_PER_IP || emailHits > STARTS_PER_EMAIL) return fail('slow down', 429)
+  const lim = limiter(env)
+  const ip = await lim.bump(`start:ip:${ipOf(req)}`, HOUR_S, STARTS_PER_IP, now)
+  const perEmail = email ? await lim.bump(`start:email:${email}`, HOUR_S, STARTS_PER_EMAIL, now) : { allowed: true }
+  if (!ip.allowed || !perEmail.allowed) return fail('slow down', 429)
   if (!email) return fail('bad email', 400)
   const code = randomCode(), token = randomHex(32)
-  const tok: Token = { email, code, tries: 0, exp: now + CODE_TTL_S * 1000 }
-  await env.ACCOUNTS.put(`tok:${token}`, JSON.stringify(tok), { expirationTtl: CODE_TTL_S })
-  await env.ACCOUNTS.put(`start:${email}`, token, { expirationTtl: CODE_TTL_S })
+  await lim.putToken(token, { email, code, exp: now + CODE_TTL_S * 1000 })
   if (env.DEV_MAIL === '1') return json({ ok: true, dev: { code, token } })
   await sendMail(env, email, code, token)
   return json({ ok: true })
 }
 
+const TOKEN_RE = /^[0-9a-f]{64}$/
+
+/** Finishes count against the caller before the body is even looked at, so guessing is capped per address as well as per code. */
+async function finishAllowed(lim: DurableObjectStub<Limiter>, req: Request, email: string | null, now: number): Promise<boolean> {
+  const ip = await lim.bump(`finish:ip:${ipOf(req)}`, FINISH_WINDOW_S, FINISHES_PER_IP, now)
+  const perEmail = email ? await lim.bump(`finish:email:${email}`, FINISH_WINDOW_S, FINISHES_PER_EMAIL, now) : { allowed: true }
+  return ip.allowed && perEmail.allowed
+}
+
+async function authPeek(req: Request, env: Env, now: number): Promise<Response> {
+  const lim = limiter(env)
+  if (!(await finishAllowed(lim, req, null, now))) return fail('slow down', 429)
+  const token = new URL(req.url).searchParams.get('token') ?? ''
+  const email = TOKEN_RE.test(token) ? await lim.peek(token, now) : null
+  return email ? json({ email: maskEmail(email) }) : fail('expired', 400)
+}
+
 async function authFinish(req: Request, env: Env, now: number): Promise<Response> {
+  const lim = limiter(env)
   const body = await parseBody(req)
+  const email = body && typeof body.token !== 'string' ? normalizeEmail(body.email) : null
+  if (!(await finishAllowed(lim, req, email, now))) return fail('slow down', 429)
   if (!body) return fail('bad request', 400)
-  let token: string | null = null
-  let code: string | null = null
-  if (typeof body.token === 'string') token = body.token
-  else {
-    const email = normalizeEmail(body.email)
+  let result
+  if (typeof body.token === 'string') {
+    if (!TOKEN_RE.test(body.token)) return fail('expired', 400)
+    result = await lim.tryCode({ token: body.token }, null, now)
+  } else {
     if (!email || typeof body.code !== 'string') return fail('bad request', 400)
-    token = await env.ACCOUNTS.get(`start:${email}`)
-    code = body.code.replace(/\s+/g, '')
+    result = await lim.tryCode({ email }, body.code.replace(/\s+/g, ''), now)
   }
-  if (!token || !/^[0-9a-f]{64}$/.test(token)) return fail('expired', 400)
-  const tokKey = `tok:${token}`
-  const tok = await env.ACCOUNTS.get<Token>(tokKey, 'json')
-  if (!tok || tok.exp <= now) return fail('expired', 400)
-  if (code !== null && !sameCode(code, tok.code)) {
-    tok.tries++
-    if (tok.tries >= MAX_TRIES) { await env.ACCOUNTS.delete(tokKey); return fail('expired', 400) }
-    await env.ACCOUNTS.put(tokKey, JSON.stringify(tok), { expirationTtl: Math.max(60, Math.ceil((tok.exp - now) / 1000)) })
-    return fail('wrong code', 401)
-  }
-  await env.ACCOUNTS.delete(tokKey)
-  // A newer start for the same address owns `start:`; only our own pointer is cleared.
-  if ((await env.ACCOUNTS.get(`start:${tok.email}`)) === token) await env.ACCOUNTS.delete(`start:${tok.email}`)
+  if (result.ok === 'expired') return fail('expired', 400)
+  if (result.ok === 'wrong') return fail('wrong code', 401)
+  const tok = { email: result.email }
 
   let id = await env.ACCOUNTS.get(`email:${tok.email}`)
   let acct = id ? await env.ACCOUNTS.get<Account>(`acct:${id}`, 'json') : null
@@ -175,6 +177,7 @@ async function handle(req: Request, env: Env): Promise<Response> {
   if (path === '/health' && req.method === 'GET') return json({ ok: true })
   if (path === '/auth/start' && req.method === 'POST') return authStart(req, env, now)
   if (path === '/auth/finish' && req.method === 'POST') return authFinish(req, env, now)
+  if (path === '/auth/peek' && req.method === 'GET') return authPeek(req, env, now)
 
   const route = `${req.method} ${path}`
   if (!['GET /me', 'DELETE /me', 'DELETE /session', 'PUT /vault', 'GET /vault'].includes(route)) return fail('not found', 404)

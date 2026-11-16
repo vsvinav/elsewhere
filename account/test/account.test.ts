@@ -107,7 +107,8 @@ describe('auth', () => {
     expect((await call('POST', '/auth/finish', { email: 'dee@example.com', code: dev.code })).status).toBe(400)
     const first = await start('eve@example.com')
     const second = await start('eve@example.com')
-    expect(await env.ACCOUNTS.get('start:eve@example.com')).toBe(second.token)
+    // The email now answers to the second code; the first still works through its link token.
+    expect((await call('POST', '/auth/finish', { email: 'eve@example.com', code: first.code })).status).toBe(first.code === second.code ? 200 : 401)
     expect((await call('POST', '/auth/finish', { token: first.token })).status).toBe(200)
     expect((await call('POST', '/auth/finish', { email: 'eve@example.com', code: second.code })).status).toBe(200)
   })
@@ -123,6 +124,47 @@ describe('auth', () => {
     expect(ip.status).toBe(429)
     vi.setSystemTime(T0 + HOUR)
     await start('fay@example.com', '10.0.0.7')
+  })
+  it('five wrong guesses fired at once still kill the token: the tries are counted atomically', async () => {
+    const dev = await start('max@example.com')
+    const wrong = dev.code === '000000' ? '111111' : '000000'
+    const rs = await Promise.all(Array.from({ length: 5 }, (_, i) => call('POST', '/auth/finish', { email: 'max@example.com', code: wrong }, { 'cf-connecting-ip': `10.1.0.${i}` })))
+    expect(rs.map((r) => r.status).sort()).toEqual([400, 401, 401, 401, 401])
+    const right = await call('POST', '/auth/finish', { email: 'max@example.com', code: dev.code })
+    expect(right.status).toBe(400)
+    expect(await right.json()).toEqual({ error: 'expired' })
+    expect((await call('POST', '/auth/finish', { token: dev.token })).status).toBe(400)
+  })
+  it('rate limits finishes: the eleventh per email and the twenty-first per IP in ten minutes', async () => {
+    const dev = await start('ned@example.com')
+    const wrong = dev.code === '000000' ? '111111' : '000000'
+    // Ten finishes for one email from different addresses; the eleventh is refused before the code is even looked at.
+    for (let i = 0; i < 10; i++) expect((await call('POST', '/auth/finish', { email: 'ned@example.com', code: wrong }, { 'cf-connecting-ip': `10.2.0.${i}` })).status).toBeLessThan(429)
+    const r = await call('POST', '/auth/finish', { email: 'ned@example.com', code: dev.code }, { 'cf-connecting-ip': '10.2.0.99' })
+    expect(r.status).toBe(429)
+    expect(await r.json()).toEqual({ error: 'slow down' })
+    for (let i = 0; i < 20; i++) expect((await call('POST', '/auth/finish', { token: 'f'.repeat(64) }, { 'cf-connecting-ip': '10.2.1.1' })).status).toBe(400)
+    expect((await call('POST', '/auth/finish', { token: 'f'.repeat(64) }, { 'cf-connecting-ip': '10.2.1.1' })).status).toBe(429)
+    expect((await call('POST', '/auth/finish', { token: 'f'.repeat(64) }, { 'cf-connecting-ip': '10.2.1.2' })).status).toBe(400)
+    vi.setSystemTime(T0 + 601_000)
+    expect((await call('POST', '/auth/finish', { token: 'f'.repeat(64) }, { 'cf-connecting-ip': '10.2.1.1' })).status).toBe(400)
+  })
+  it('thirty starts at once from one IP let exactly twenty through', async () => {
+    const rs = await Promise.all(Array.from({ length: 30 }, (_, i) => call('POST', '/auth/start', { email: `p${i}@example.com` }, { 'cf-connecting-ip': '10.3.0.1' })))
+    expect(rs.filter((r) => r.status === 200)).toHaveLength(20)
+    expect(rs.filter((r) => r.status === 429)).toHaveLength(10)
+  })
+  it('peek names the masked address behind a live token and nothing for a dead one', async () => {
+    const dev = await start('olive.p@example.com')
+    const r = await call('GET', `/auth/peek?token=${dev.token}`)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ email: 'o***@example.com' })
+    expect((await call('GET', '/auth/peek?token=nope')).status).toBe(400)
+    expect((await call('GET', `/auth/peek?token=${'e'.repeat(64)}`)).status).toBe(400)
+    expect((await call('POST', '/auth/finish', { token: dev.token })).status).toBe(200)
+    const gone = await call('GET', `/auth/peek?token=${dev.token}`)
+    expect(gone.status).toBe(400)
+    expect(await gone.json()).toEqual({ error: 'expired' })
   })
   it('does not leak the code when DEV_MAIL is unset, and still answers ok when mail fails', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('nope', { status: 500 }))

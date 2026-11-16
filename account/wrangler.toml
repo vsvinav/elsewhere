@@ -11,3 +11,11 @@ DEV_MAIL = "0"
 [[kv_namespaces]]
 binding = "ACCOUNTS"
 id = "replace-me"
+
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "Limiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limiter"]
