@@ -24,6 +24,7 @@ import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
 import { resetAccountForTest, useAccount } from '../account/store'
 import { ACCOUNT } from './Settings'
+import { deriveKey, encryptVault, openVault, type VaultBody } from '../account/vault'
 
 const rec: Record_ = { mine: true, stage: null, importError: null, enrichError: null, importFile() {}, reset: vi.fn(), editProfile() {} }
 const mount = (fetchFn?: typeof fetch) => {
@@ -100,10 +101,71 @@ describe('Settings', () => {
     act(() => useAccount.setState({ pending: true }))
     expect(host.textContent).toContain(ACCOUNT.stale)
     act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.update)!.click())
-    expect(host.querySelector('input[type=password]')).not.toBeNull()
+    expect(host.querySelector('.st-vault input[type=password]')).not.toBeNull()
     expect(host.textContent).toContain(ACCOUNT.updateHint)
     unmount()
   })
+
+  it('signed in with no profile yet: the vault has nothing to keep and offers no Update', () => {
+    profile.set(null)
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, pending: true })
+    const { host, unmount } = mount()
+    expect(host.textContent).toContain(ACCOUNT.empty)
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === ACCOUNT.update)).toBe(false)
+    unmount()
+  })
+
+  const vaultService = (stored: VaultBody | null) => {
+    const puts: VaultBody[] = []
+    const fn = (async (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url)).pathname
+      if (path === '/vault' && init?.method === 'GET') return stored ? Response.json(stored) : Response.json({ error: 'not found' }, { status: 404 })
+      if (path === '/vault' && init?.method === 'PUT') { puts.push(JSON.parse(String(init.body)) as VaultBody); return new Response(null, { status: 204 }) }
+      return Response.json({ error: 'not found' }, { status: 404 })
+    }) as unknown as typeof fetch
+    return { fn, puts }
+  }
+  const askUpdate = async (host: HTMLElement, flush: () => Promise<unknown>, pass: string) => {
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.update)!.click())
+    const el = host.querySelector<HTMLInputElement>('.st-vault input[type=password]')!
+    act(() => setValue(el, pass))
+    act(() => { host.querySelector('.st-vault form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+    for (let i = 0; i < 1500 && host.querySelector('.st-vault .acct-busy'); i++) await flush()
+  }
+
+  it('Update with no vault on the service seals a fresh one under the passphrase', async () => {
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, pending: true })
+    const svc = vaultService(null)
+    const { host, flush, unmount } = mount(svc.fn)
+    await askUpdate(host, flush, 'short')
+    expect(host.querySelector('[role=alert]')?.textContent).toBe('At least 8 characters.')
+    expect(svc.puts).toHaveLength(0)
+    await askUpdate(host, flush, 'correct horse battery')
+    expect(svc.puts).toHaveLength(1)
+    const a = useAccount.getState()
+    expect(a.salt).toBe(svc.puts[0].salt)
+    expect(a.vaultAt).not.toBeNull()
+    expect(host.textContent).toContain(ACCOUNT.fresh)
+    unmount()
+  }, 30_000)
+
+  it('Update with a vault on the service proves the passphrase against it before re-sealing', async () => {
+    const salt = new Uint8Array(16).fill(9)
+    const key = await deriveKey('open sesame', salt)
+    const stored = await encryptVault(key, salt, JSON.stringify({ v: 1, signPriv: 'aa', kxPriv: 'bb', profile: { name: 'Old', units: 'km', homes: [], works: [] } }))
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, salt: stored.salt, pending: true })
+    const svc = vaultService(stored)
+    const { host, flush, unmount } = mount(svc.fn)
+    await askUpdate(host, flush, 'wrong passphrase')
+    expect(host.querySelector('[role=alert]')?.textContent).toBe("That's not it")
+    expect(svc.puts).toHaveLength(0)
+    expect(useAccount.getState().key).toBeNull()
+    await askUpdate(host, flush, 'open sesame')
+    expect(svc.puts).toHaveLength(1)
+    expect((await openVault(key, svc.puts[0])).profile.name).toBe('V')
+    expect(host.textContent).toContain(ACCOUNT.fresh)
+    unmount()
+  }, 30_000)
 
   it('Log out clears the session locally even when the service is unreachable', async () => {
     useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, salt: 'c2FsdA==', vaultAt: 1 })

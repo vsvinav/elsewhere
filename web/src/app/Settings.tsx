@@ -3,11 +3,11 @@ import { useRecord } from './App'
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, TEST_PROMPT, askLlm, modelOf, type LlmProvider } from '../ask/llm'
 import { DEFAULT_ACCOUNT, DEFAULT_RELAY, settings, useSettings, type MapProvider } from '../ingest/settings'
 import { AuthFlow } from '../account/AuthFlow'
-import { deleteAccount, logOut, messageOf } from '../account/client'
+import { api, deleteAccount, logOut, messageOf } from '../account/client'
 import { useAccount } from '../account/store'
-import { uploadVault, vaultStatus } from '../account/sync'
+import { uploadVault, vaultStatus, type VaultStatus } from '../account/sync'
 import { b64, unb64 } from '../crew/keys'
-import { deriveKey, newSalt, okPassphrase, PASSPHRASE_MIN } from '../account/vault'
+import { deriveKey, newSalt, okPassphrase, openVault, PASSPHRASE_MIN } from '../account/vault'
 import { profile, useProfile } from '../profile/profile'
 import { KeyCheck } from '../profile/KeyCheck'
 import { useStore } from '../store/useStore'
@@ -24,6 +24,9 @@ export const ACCOUNT = {
   caption: 'The account service holds your email and a vault only your passphrase opens. The record itself stays in this browser.',
   fresh: 'Recovery vault: up to date',
   stale: 'Recovery vault: out of date',
+  empty: 'Recovery vault: nothing to keep yet',
+  wrong: "That's not it",
+  tooShort: `At least ${PASSPHRASE_MIN} characters.`,
   update: 'Update',
   updateHint: 'Enter your recovery passphrase to seal the latest copy.',
   logOut: 'Log out',
@@ -49,7 +52,7 @@ export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
       <MapsSection />
       <AskSection fetchFn={fetchFn} />
       <CrewSection />
-      <AccountSection onSignIn={() => setAuth(true)} />
+      <AccountSection onSignIn={() => setAuth(true)} fetchFn={fetchFn} />
       <UnitsSection />
       <DataSection />
     </main>
@@ -164,7 +167,7 @@ function CrewSection() {
   )
 }
 
-function AccountSection({ onSignIn }: { onSignIn(): void }) {
+function AccountSection({ onSignIn, fetchFn }: { onSignIn(): void; fetchFn: typeof fetch }) {
   const acct = useAccount()
   const prof = useProfile()
   const { accountUrl } = useSettings()
@@ -172,11 +175,11 @@ function AccountSection({ onSignIn }: { onSignIn(): void }) {
   const [status, setStatus] = useState('')
   const save = () => settings.set({ accountUrl: url.trim().replace(/\/+$/, '') || DEFAULT_ACCOUNT })
   const state = vaultStatus(acct, prof)
-  const out = async () => { setStatus(''); await logOut() }
+  const out = async () => { setStatus(''); await logOut(api(fetchFn)) }
   const del = async () => {
     if (!window.confirm(ACCOUNT.delConfirm)) return
     setStatus('')
-    try { await deleteAccount() } catch (e) { setStatus(messageOf(e)) }
+    try { await deleteAccount(api(fetchFn)) } catch (e) { setStatus(messageOf(e)) }
   }
   return (
     <section className="setting st-account">
@@ -184,7 +187,7 @@ function AccountSection({ onSignIn }: { onSignIn(): void }) {
       {acct.session ? (
         <>
           <Field label="Signed in as">{acct.session.email}</Field>
-          <VaultLine state={state} />
+          <VaultLine state={state} fetchFn={fetchFn} />
           <div className="st-actions">
             <button className="btn" onClick={out}>{ACCOUNT.logOut}</button>
             <button className="btn danger" onClick={del}>{ACCOUNT.del}</button>
@@ -208,28 +211,37 @@ function AccountSection({ onSignIn }: { onSignIn(): void }) {
   )
 }
 
-/** "Up to date" or "out of date · Update"; Update asks for the passphrase, since the key does not outlive the page. */
-function VaultLine({ state }: { state: 'fresh' | 'stale' | 'none' }) {
+/**
+ * "Up to date" or "out of date · Update". Update asks for the passphrase, since the key does not outlive the page, and
+ * proves it against the vault already on the service before anything is re-sealed; only a missing vault takes a new one.
+ */
+function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fetch }) {
   const [asking, setAsking] = useState(false)
   const [pass, setPass] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!okPassphrase(pass)) { setErr(`Use at least ${PASSPHRASE_MIN} characters.`); return }
+    if (!okPassphrase(pass)) { setErr(ACCOUNT.tooShort); return }
     setBusy(true); setErr('')
     try {
+      const client = api(fetchFn)
       const a = useAccount.getState()
-      const salt = a.salt ? unb64(a.salt) : newSalt()
-      a.setKey(await deriveKey(pass, salt))
-      if (!a.salt) await a.setSalt(b64(salt))
-      if (await uploadVault()) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection and try again.")
-    } finally { setBusy(false) }
+      const body = await client.getVault()
+      let salt: Uint8Array, key: Uint8Array
+      if (body) {
+        salt = unb64(body.salt); key = await deriveKey(pass, salt)
+        try { await openVault(key, body) } catch { setErr(ACCOUNT.wrong); return }
+      } else { salt = newSalt(); key = await deriveKey(pass, salt) }
+      await a.setSalt(b64(salt)); a.setKey(key)
+      if (await uploadVault({ client: () => client })) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection.")
+    } catch (e) { setErr(messageOf(e)) } finally { setBusy(false) }
   }
   if (state === 'none') return null
+  const line = state === 'fresh' ? ACCOUNT.fresh : state === 'empty' ? ACCOUNT.empty : ACCOUNT.stale
   return (
     <div className="st-vault">
-      <span role="status" className={`st-status${state === 'fresh' ? ' ok' : ''}`}>{state === 'fresh' ? ACCOUNT.fresh : ACCOUNT.stale}</span>
+      <span role="status" className={`st-status${state === 'stale' ? '' : ' ok'}`}>{line}</span>
       {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} onClick={() => setAsking(true)}>{ACCOUNT.update}</button>}
       {asking && (
         <form onSubmit={submit}>
