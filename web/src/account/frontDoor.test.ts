@@ -6,7 +6,7 @@ vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k)
 import { frontDoor } from './frontDoor'
 import { resetAccountForTest, useAccount } from './store'
 
-const fresh = { loaded: true, session: null, welcomed: false }
+const fresh = { loaded: true, session: null, welcomed: false, showWelcome: false }
 const ses = { session: 's', id: 'acct_1', email: 'a@b.co' }
 
 describe('frontDoor', () => {
@@ -31,5 +31,10 @@ describe('frontDoor', () => {
     expect(frontDoor({ ...fresh, session: ses }, false, false)).toBe('through')
     expect(frontDoor(fresh, false, true)).toBe('through')
     expect(frontDoor({ ...fresh, session: ses }, true, true)).toBe('auth')
+  })
+  it('opens the welcome screen again on request, whatever the device remembers', () => {
+    expect(frontDoor({ ...fresh, welcomed: true, showWelcome: true }, false, true)).toBe('welcome')
+    expect(frontDoor({ ...fresh, session: ses, showWelcome: true }, false, true)).toBe('welcome')
+    expect(frontDoor({ ...fresh, showWelcome: true }, true, true)).toBe('auth')
   })
 })

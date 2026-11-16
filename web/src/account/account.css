@@ -1,5 +1,6 @@
 /* Accounts: welcome, email, code and passphrase screens share the front door's bill, stamps and caps. */
 .acct-welcome .lede { color: var(--ink); }
+.acct-welcome .sk + .lede { margin-top: 28px; }
 .acct-choices { display: grid; gap: 18px; align-content: start; margin-top: 10vh; max-width: 420px; }
 .acct-choices .caps { color: var(--ink-3); }
 .acct-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -26,8 +27,25 @@
 @keyframes acct-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .acct-busy::before { animation: none; } }
 
+/* The welcome sketch: graph paper, a dashed red route, ink pins, mustard stamps and a counting numeral. */
+.sk { position: relative; width: max(320px, min(720px, 92vw, (100svh - 540px) * 4 / 3)); max-width: 100%; aspect-ratio: 4 / 3; margin-top: 36px; color: var(--ink); }
+.sk svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sk-route { fill: none; stroke: var(--red); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 8 6; vector-effect: non-scaling-stroke; }
+.sk-pin { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); translate: -50% -50%; }
+.sk-pin b { position: absolute; right: calc(100% + 10px); bottom: calc(100% + 6px); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; color: var(--ink); animation: sk-name 120ms var(--ease) both; }
+.sk-stamp { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--mustard); translate: -50% -50%; animation: sk-land 260ms var(--ease) both; }
+.sk-stamp.red { background: var(--red); animation: none; }
+@keyframes sk-name { from { opacity: 0; } }
+@keyframes sk-land { 0% { scale: 0; } 70% { scale: 1.18; } 100% { scale: 1; } }
+.sk-count { position: absolute; right: 0; bottom: 0; display: grid; justify-items: end; gap: 6px; text-align: right; }
+.sk-km { font: 900 72px/0.85 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; text-shadow: 1.5px 1.5px 0 var(--red); }
+.sk-count .caps { font-size: 11px; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .sk-stamp, .sk-pin b { animation: none; } }
+
 @media (max-width: 720px) {
   .acct-choices { margin-top: 2vh; }
+  .sk { margin-top: 24px; }
+  .sk-km { font-size: 48px; }
   .acct-code { gap: 6px; }
 }
 

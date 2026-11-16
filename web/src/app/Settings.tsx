@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { useRecord } from './App'
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, TEST_PROMPT, askLlm, modelOf, type LlmProvider } from '../ask/llm'
 import { DEFAULT_ACCOUNT, DEFAULT_RELAY, settings, useSettings, type MapProvider } from '../ingest/settings'
-import { AuthFlow } from '../account/AuthFlow'
 import { api, deleteAccount, logOut, messageOf } from '../account/client'
 import { useAccount } from '../account/store'
 import { uploadVault, vaultStatus, type VaultStatus } from '../account/sync'
@@ -44,8 +43,6 @@ export const CLEAR_CONFIRM = "Clear this browser's record? Your import and profi
 /** Everything a visitor configures, on one page over the tour. Keys never leave the browser. */
 export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
   const close = useStore((s) => s.closeSettings)
-  const [auth, setAuth] = useState(false)
-  if (auth) return <AuthFlow mode="login" onDone={() => setAuth(false)} onClose={() => setAuth(false)} />
   return (
     <main className="strip settings">
       <button className="btn quiet back" onClick={close}>← Back</button>
@@ -53,7 +50,7 @@ export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
       <MapsSection />
       <AskSection fetchFn={fetchFn} />
       <CrewSection />
-      <AccountSection onSignIn={() => setAuth(true)} fetchFn={fetchFn} />
+      <AccountSection onSignIn={() => useAccount.getState().setShowWelcome(true)} fetchFn={fetchFn} />
       <UnitsSection />
       <DataSection />
     </main>

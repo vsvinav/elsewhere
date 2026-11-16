@@ -62,7 +62,8 @@ export function App() {
   const [needImport, setNeedImport] = useState(false)
   useEffect(() => { void useAccount.getState().load() }, [])
   useEffect(() => startVaultSync(), [])
-  const authDone = (r: AuthResult) => { setAuth(null); void useAccount.getState().setWelcomed(true); if (r.restored) setNeedImport(true) }
+  const authDone = (r: AuthResult) => { setAuth(null); const a = useAccount.getState(); void a.setWelcomed(true); a.setShowWelcome(false); if (r.restored) setNeedImport(true) }
+  const showWelcome = (v: boolean) => useAccount.getState().setShowWelcome(v)
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
@@ -125,7 +126,7 @@ export function App() {
   const door = frontDoor(acct, !!auth, !!prof)
   if (door === 'loading') return <div className="tray">{bar}<Printing /></div>
   if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
-  if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => {}} />
+  if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => showWelcome(false)} />
   if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
   // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.
@@ -141,6 +142,7 @@ export function App() {
       <div className="tourline">
         <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
         <button className="chip" onClick={() => useStore.getState().openSettings()} aria-current={settingsOpen ? 'page' : undefined}>Settings</button>
+        {!acct.session && <button className="chip" onClick={() => showWelcome(true)}>Log in</button>}
         <details className="account">
           <summary aria-label="Account">▾</summary>
           <div className="menu">

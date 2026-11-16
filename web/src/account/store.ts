@@ -16,6 +16,8 @@ export interface AccountState {
   /** sha256 hex of the plaintext last uploaded or restored; a reload compares against it instead of asking for the passphrase. */
   vaultHash: string | null
   welcomed: boolean
+  /** The welcome screen asked for again (header chip, Settings); this page load only. */
+  showWelcome: boolean
   /** Passphrase-derived vault key, this page load only. */
   key: Uint8Array | null
   /** Something changed since the last upload and has not gone up yet. */
@@ -26,6 +28,7 @@ export interface AccountState {
   setVaultAt(t: number | null): Promise<void>
   setVaultHash(h: string | null): Promise<void>
   setWelcomed(v: boolean): Promise<void>
+  setShowWelcome(v: boolean): void
   setKey(k: Uint8Array | null): void
   setPending(v: boolean): void
   /** Forget the session, salt and key on this device; the record and the identity stay. */
@@ -36,7 +39,7 @@ const put = (k: string, v: unknown) => (v === null || v === undefined ? kv.del(k
 const isSession = (s: unknown): s is SessionRec => !!s && typeof (s as SessionRec).session === 'string' && typeof (s as SessionRec).id === 'string' && typeof (s as SessionRec).email === 'string'
 
 export const useAccount = create<AccountState>((set) => ({
-  loaded: false, session: null, salt: null, vaultAt: null, vaultHash: null, welcomed: false, key: null, pending: false,
+  loaded: false, session: null, salt: null, vaultAt: null, vaultHash: null, welcomed: false, showWelcome: false, key: null, pending: false,
   load: async () => {
     const [session, salt, vaultAt, vaultHash, welcomed] = await Promise.all([kv.get<unknown>(ACCOUNT_KV.session), kv.get<unknown>(ACCOUNT_KV.salt), kv.get<unknown>(ACCOUNT_KV.vaultAt), kv.get<unknown>(ACCOUNT_KV.vaultHash), kv.get<unknown>(ACCOUNT_KV.welcomed)])
     set({ loaded: true, session: isSession(session) ? session : null, salt: typeof salt === 'string' ? salt : null, vaultAt: typeof vaultAt === 'number' ? vaultAt : null, vaultHash: typeof vaultHash === 'string' ? vaultHash : null, welcomed: welcomed === true })
@@ -46,6 +49,7 @@ export const useAccount = create<AccountState>((set) => ({
   setVaultAt: async (vaultAt) => { set({ vaultAt }); await put(ACCOUNT_KV.vaultAt, vaultAt) },
   setVaultHash: async (vaultHash) => { set({ vaultHash }); await put(ACCOUNT_KV.vaultHash, vaultHash) },
   setWelcomed: async (welcomed) => { set({ welcomed }); await put(ACCOUNT_KV.welcomed, welcomed) },
+  setShowWelcome: (showWelcome) => set({ showWelcome }),
   setKey: (key) => set({ key }),
   setPending: (pending) => set({ pending }),
   signOut: async () => {
@@ -55,4 +59,4 @@ export const useAccount = create<AccountState>((set) => ({
 }))
 
 /** Tests put the store back to a fresh device. */
-export const resetAccountForTest = () => useAccount.setState({ loaded: false, session: null, salt: null, vaultAt: null, vaultHash: null, welcomed: false, key: null, pending: false })
+export const resetAccountForTest = () => useAccount.setState({ loaded: false, session: null, salt: null, vaultAt: null, vaultHash: null, welcomed: false, showWelcome: false, key: null, pending: false })

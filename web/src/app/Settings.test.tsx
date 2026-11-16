@@ -81,13 +81,13 @@ describe('Settings', () => {
     unmount()
   })
 
-  it('signed out: offers to log in or sign up and opens the auth flow', () => {
+  it('signed out: offers to log in or sign up, which asks the app for the welcome screen', () => {
     const { host, unmount } = mount()
     const btn = [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.signIn)!
     expect(host.textContent).toContain(ACCOUNT.signedOut)
+    expect(useAccount.getState().showWelcome).toBe(false)
     act(() => btn.click())
-    expect(host.querySelector('h2.ob-title')?.textContent).toBe('Your email')
-    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click())
+    expect(useAccount.getState().showWelcome).toBe(true)
     expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
     unmount()
   })
