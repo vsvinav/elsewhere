@@ -6,7 +6,7 @@ const fail = (error: string, status: number) => json({ error }, status)
 const noContent = () => new Response(null, { status: 204 })
 
 /** Browsers on any origin may talk to the service; the bearer session, not the origin, is what it trusts. */
-export const CORS: Record<string, string> = {
+const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
@@ -20,12 +20,12 @@ function withCors(res: Response): Response {
 }
 const ipOf = (req: Request) => req.headers.get('cf-connecting-ip') ?? 'unknown'
 
-export const CODE_TTL_S = 600
-export const SESSION_TTL_S = 90 * 24 * 3600
-export const MAX_TRIES = 5
-export const STARTS_PER_EMAIL = 5
-export const STARTS_PER_IP = 20
-export const VAULT_MAX_BYTES = 64 * 1024
+const CODE_TTL_S = 600
+const SESSION_TTL_S = 90 * 24 * 3600
+const MAX_TRIES = 5
+const STARTS_PER_EMAIL = 5
+const STARTS_PER_IP = 20
+const VAULT_MAX_BYTES = 64 * 1024
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const B64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 
@@ -51,7 +51,7 @@ function sameCode(a: string, b: string): boolean {
   if (x.byteLength !== y.byteLength) return false
   return crypto.subtle.timingSafeEqual(x, y)
 }
-export const normalizeEmail = (raw: unknown): string | null => {
+const normalizeEmail = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null
   const e = raw.trim().toLowerCase()
   return e.length <= 254 && EMAIL_RE.test(e) ? e : null
