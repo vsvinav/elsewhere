@@ -105,6 +105,8 @@ export const loadKeys = () => (loading ??= kv.get<{ signSeed: string; kxSeed: st
 export async function replaceKeys(signSeed: Uint8Array, kxSeed: Uint8Array): Promise<DeviceKeys> {
   const k = keysFromSeeds(signSeed, kxSeed)
   await kv.set(KEYS_KV, { signSeed: toHex(k.signPriv), kxSeed: toHex(k.kxPriv) })
+  // The share code on offer named the old identity; the next Crew visit mints one for this identity.
+  await kv.del('crew:code')
   loading = Promise.resolve(k)
   return k
 }
