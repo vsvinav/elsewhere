@@ -12,8 +12,8 @@ const db = vi.hoisted(() => {
 })
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
-import { BAD_KEYS, Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, SONAR_COPY, VIEWER_NOTE } from './Crew'
-import { useCrew, type Friend } from './friends'
+import { BAD_KEYS, Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, SONAR_COPY, TEST_FIRE_COPY, VIEWER_NOTE } from './Crew'
+import { sonarHooks, useCrew, type Friend, type Ping } from './friends'
 import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, kxSigOf, pairIdOf, pairKeyOf, setKeysForTest, toHex } from './keys'
 import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
@@ -185,6 +185,29 @@ describe('Crew', () => {
     unmount()
   })
 
+  it('Test Sonar shows only with Sonar on; pressing it rings here and sends one test ping with a hit', async () => {
+    await useCrew.getState().add(marta)
+    const sent: unknown[] = []
+    useCrew.getState().setSender((p, m) => { sent.push([p, m]) })
+    const heard = vi.spyOn(sonarHooks, 'heard').mockImplementation(() => {})
+    const { fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
+    const { host, flush, unmount } = mount(fetchFn)
+    await flush()
+    const card = host.querySelector('.friend')!
+    expect(byText(card, 'button', 'Test Sonar')).toBeNull()
+    click(card.querySelector('input[name=sonar]'))
+    await flush()
+    expect(card.textContent).toContain(TEST_FIRE_COPY)
+    click(byText(card, 'button', 'Test Sonar'))
+    await flush()
+    expect(sent).toHaveLength(1)
+    const [pairId, m] = sent[0] as [string, Ping]
+    expect(pairId).toBe(pid)
+    expect(m).toMatchObject({ type: 'ping', grade: 'sonar', test: true, hit: { id: expect.stringMatching(/^[0-9a-f]{8}$/), test: true } })
+    expect(useCrew.getState().hit).toMatchObject({ pairId: pid, id: m.hit!.id, test: true })
+    expect(heard).toHaveBeenCalledTimes(1)
+    unmount()
+  })
   it('a wrong code is reported in words', async () => {
     const { fetchFn } = fakeRelay({ 'POST /pair/PT-ZZZ-ZZZZ/claim': () => new Response('no such code', { status: 404 }), 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
     const { host, flush, unmount } = mount(fetchFn)

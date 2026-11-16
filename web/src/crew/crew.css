@@ -60,3 +60,5 @@
 .sonar-note .row { display: flex; gap: 8px; }
 .sonar-note .btn { margin: 0; cursor: pointer; }
 .sonar-note .btn.quiet { color: var(--stock); border-color: var(--stock-3); }
+.crew .friend .test-fire { display: grid; gap: 4px; justify-items: start; margin-top: 10px; }
+.crew .friend .test-fire .fine { margin: 0; }

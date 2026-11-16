@@ -113,6 +113,38 @@ describe('receive', () => {
   })
 })
 
+describe('test fire', () => {
+  it('a test ping with a hit rings as an echo without a position, is marked test, and still cannot ring twice', () => {
+    const heard = vi.fn(); sonarHooks.heard = heard
+    useCrew.setState({ friends: [marta] })
+    useCrew.getState().receive(fromMarta({ type: 'ping', t: Math.floor(NOW / 1000), grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit: { id: 'ab12cd34', t: Math.floor(NOW / 1000), test: true }, test: true }), NOW)
+    expect(useCrew.getState().hit).toEqual({ pairId: pid, id: 'ab12cd34', at: NOW, test: true })
+    expect(useCrew.getState().fixes[pid]).toBeUndefined()
+    expect(heard).toHaveBeenCalledTimes(1)
+    useCrew.getState().receive(fromMarta({ type: 'ping', t: Math.floor(NOW / 1000) + 1, grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit: { id: 'ab12cd34', t: Math.floor(NOW / 1000), test: true }, test: true }), NOW + 1000)
+    expect(heard).toHaveBeenCalledTimes(1)
+    // Anything but `true` reads as a real ping, which needs a position.
+    useCrew.getState().receive(fromMarta({ type: 'ping', t: Math.floor(NOW / 1000) + 2, grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit: { id: 'ef56ab78', t: 1 }, test: 'yes' }), NOW + 2000)
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+  it('testFire rings here, sends one test ping with the hit to that friend, and marks the hit seen', () => {
+    const heard = vi.fn(); sonarHooks.heard = heard
+    const sent: [string, Ping][] = []
+    useCrew.setState({ friends: [{ ...marta, grants: { ...marta.grants, sonar: true } }] })
+    useCrew.getState().setSender((p, m) => sent.push([p, m as Ping]))
+    const hit = useCrew.getState().testFire(pid, NOW)
+    expect(hit).toMatchObject({ id: expect.stringMatching(/^[0-9a-f]{8}$/), t: Math.floor(NOW / 1000), test: true })
+    expect(useCrew.getState().hit).toEqual({ pairId: pid, id: hit!.id, at: NOW, test: true })
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(sent).toEqual([[pid, { type: 'ping', t: Math.floor(NOW / 1000), grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit, test: true }]])
+    useCrew.getState().clearHit()
+    useCrew.getState().receive(fromMarta({ ...sent[0][1], t: Math.floor(NOW / 1000) + 1 }), NOW + 1000)
+    expect(useCrew.getState().hit).toBeNull()
+    expect(heard).toHaveBeenCalledTimes(1)
+    useCrew.getState().setSender(null)
+  })
+})
+
 describe('visibleFixes', () => {
   const fix = (ageMs: number) => ({ pairId: pid, t: Math.floor((NOW - ageMs) / 1000), lat: 0, lng: 0, city: null, grade: 'city' as const, at: NOW })
   it('fresh under 15 min, stale after, dropped after 24 h, all by the sender clock', () => {

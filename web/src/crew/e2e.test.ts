@@ -88,7 +88,7 @@ async function pairUp(a: Device, b: Device) {
 const LISBON = { lat: 38.7223, lng: -9.1393 }
 const ping = (at: { lat: number; lng: number }, t: number, hit: Ping['hit'] = null, extra: Partial<Ping> = {}): Ping =>
   ({ type: 'ping', t, grade: 'sonar', lat: at.lat, lng: at.lng, city: 'Lisbon', habitat: false, absenceDays: 200, hit, ...extra })
-const sideOf = (p: Ping): Side => ({ fix: { ts: p.t * 1000, lat: p.lat, lng: p.lng }, habitat: p.habitat, absenceDays: p.absenceDays })
+const sideOf = (p: Ping): Side => ({ fix: { ts: p.t * 1000, lat: p.lat!, lng: p.lng! }, habitat: p.habitat, absenceDays: p.absenceDays })
 
 describe.skipIf(!relay)('web client ↔ relay worker', () => {
   it('pairs two devices through codes and both derive the same pair id and key', async () => {

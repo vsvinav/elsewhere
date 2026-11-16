@@ -16,6 +16,7 @@ export const VIEWER_NOTE = 'Your phone publishes, this browser views.'
 export const NO_FRIENDS = 'Nobody yet. Trade codes with a friend and their stamp turns up on your map.'
 export const SONAR_COPY = "Ping us both when we're within a mile and neither of us is usually there."
 export const CONFIRM_REMOVE = (name: string) => `Remove ${name}? Their key goes here and yours goes there.`
+export const TEST_FIRE_COPY = 'Fires on both phones now, ignoring distance. Nothing is recorded.'
 export const PAIR_NOTE = 'A code pairs two devices; it never carries your location or stats. Scanning a QR needs the phone.'
 
 const RELAY_WORDS: Record<number, string> = { 404: 'No such code. Check it and try again.', 410: 'That code was already used. Ask for a new one.', 409: "That's your own code.", 429: 'Too many tries for now. Wait a little.', 401: 'The relay did not accept this browser.' }
@@ -136,6 +137,7 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
 }
 
 function FriendCard({ friend: f }: { friend: Friend }) {
+  const { relayUrl } = useSettings()
   const now = Date.now()
   const muted = (f.mutedUntil ?? 0) > now
   const set = (key: keyof Grants, on: boolean) => useCrew.getState().setGrants(f.pairId, key === 'sonar' && on ? { sonar: true, liveCity: true } : { [key]: on })
@@ -162,6 +164,12 @@ function FriendCard({ friend: f }: { friend: Friend }) {
           {f.grants.sonar && <button className="chip" onClick={() => useCrew.getState().mute(f.pairId, muted ? undefined : nextMidnight(now))} aria-pressed={muted}>{muted ? 'Muted for today · unmute' : 'Mute Sonar for today'}</button>}
           <button className="btn quiet remove" onClick={remove}>Remove</button>
         </div>
+        {f.grants.sonar && relayUrl && (
+          <div className="test-fire">
+            <button className="btn quiet" onClick={() => useCrew.getState().testFire(f.pairId)}>Test Sonar</button>
+            <small className="fine">{TEST_FIRE_COPY}</small>
+          </div>
+        )}
       </div>
     </article>
   )
