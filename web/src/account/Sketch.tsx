@@ -43,7 +43,6 @@ export function Sketch() {
       </svg>
       {POINTS.map((p, i) => i <= frame.stamps && <i key={p.label} className={`sk-stamp${i ? '' : ' red'}`} style={at(p)} />)}
       {POINTS.map((p) => <span key={p.label} className="sk-pin" style={at(p)}><b>{p.label}</b></span>)}
-      <span className="ob-mark">E</span>
       <div className="sk-count"><span className="sk-km">{n0(frame.km)}</span><span className="caps">Kilometres</span></div>
     </div>
   )

@@ -69,6 +69,7 @@ describe('Welcome sketch', () => {
     expect([...host.querySelectorAll('.sk-pin')].map((t) => t.textContent)).toEqual(POINTS.map((p) => p.label))
     expect(counter(host)).toBe('0')
     expect(host.querySelectorAll('.sk-stamp').length).toBe(1)
+    expect(host.querySelectorAll('.ob-mark').length).toBe(1)
   })
   it('draws the route over 6.4 s, counting up to 14,920 km and landing five stamps, then stops asking for frames', () => {
     vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
