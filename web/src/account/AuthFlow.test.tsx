@@ -31,9 +31,9 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
   const calls: string[] = []
   let startFails: AccountError | null = null
   const client: AccountClient = {
-    start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456', token: 't' } } },
+    start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456' } } },
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
-    peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'a***@example.com' } },
+    peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'ada@example.com' } },
     me: async () => account,
     logout: async () => { calls.push('logout') },
     putVault: async () => {},
@@ -79,8 +79,10 @@ describe('AuthFlow', () => {
     expect(text(host, '.ob-title')).toBe(COPY.setTitle)
     expect(host.textContent).toContain("Only you know this. We can't reset it.")
     const p = host.querySelector<HTMLInputElement>('#acct-pass')!, q = host.querySelector<HTMLInputElement>('#acct-pass2')!
-    type(p, 'short'); type(q, 'short'); submit(host); await settle()
-    expect(text(host, '[role=alert]')).toBe(COPY.tooShort)
+    type(p, 'elevenchars'); type(q, 'elevenchars'); submit(host); await settle()
+    expect(text(host, '[role=alert]')).toBe('At least 12 characters.')
+    type(p, 'password1234'); type(q, 'password1234'); submit(host); await settle()
+    expect(text(host, '[role=alert]')).toBe("That one's too easy to guess.")
     expect(onDone).not.toHaveBeenCalled()
     type(p, 'correct horse'); type(q, 'correct horsf'); submit(host); await settle()
     expect(text(host, '[role=alert]')).toBe(COPY.mismatch)
@@ -117,14 +119,15 @@ describe('AuthFlow', () => {
     expect(text(host, '.ob-title')).toBe(COPY.email)
     expect(text(host, '[role=alert]')).toBe("Couldn't reach the account service. Check your connection.")
   })
-  it('a mail-link token first asks "Log in as a***@example.com?"; Continue signs in without a code', async () => {
+  it('a mail-link token first asks "Log in as ada@example.com?"; Continue signs in without a code', async () => {
     const svc = fakeService(false)
     // Leftovers from an earlier vault on this device go with the new session.
     await useAccount.getState().setSalt('b2xk'); await useAccount.getState().setVaultAt(5); await useAccount.getState().setVaultHash('h'); useAccount.getState().setKey(new Uint8Array(32))
     const { host } = mount({ client: svc.client, token: 't' })
     await settle()
     expect(svc.calls).toEqual(['peek t'])
-    expect(text(host, '.ob-title')).toBe('Log in as a***@example.com?')
+    expect(text(host, '.ob-title')).toBe('Log in as ada@example.com?')
+    expect(host.textContent).not.toContain(COPY.linkLocal)
     act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === COPY.linkYes)!.click())
     await settle()
     expect(svc.calls).toEqual(['peek t', 'finish {"token":"t"}'])
@@ -138,12 +141,23 @@ describe('AuthFlow', () => {
     await useAccount.getState().setSession({ session: 'old', id: 'acct_0', email: 'bo@example.com' })
     const { host } = mount({ client: svc.client, token: 't', current: 'bo@example.com' })
     await settle()
-    expect(text(host, '.ob-title')).toBe('Switch to a***@example.com?')
+    expect(text(host, '.ob-title')).toBe('Switch to ada@example.com?')
     expect(host.textContent).toContain('You are signed in as bo@example.com on this device.')
     act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === COPY.linkYes)!.click())
     await settle()
     expect(svc.calls).toEqual(['peek t', 'logout', 'finish {"token":"t"}'])
     expect(useAccount.getState().session).toEqual({ session: 'sess', id: 'acct_1', email: 'ada@example.com' })
+  })
+  it('a link on a device that already has a profile or an identity warns that both go into that account', async () => {
+    profile.set(ADA)
+    const one = mount({ client: fakeService(false).client, token: 't' })
+    await settle()
+    expect(one.host.textContent).toContain("Continuing puts this device's record and friends into that account.")
+    document.body.innerHTML = ''; profile.set(null)
+    db.store.set('crew:keys', { signSeed: SIGN, kxSeed: KX })
+    const two = mount({ client: fakeService(false).client, token: 't' })
+    await settle()
+    expect(two.host.textContent).toContain(COPY.linkLocal)
   })
   it('"Not me" discards the token and goes to the email step; an expired link lands there with the message', async () => {
     const svc = fakeService(false)

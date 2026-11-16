@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import vectors from './vectors.json'
 import { b64, fromHex, toHex, unb64 } from '../crew/keys'
-import { PASSPHRASE_MIN, PBKDF2_ITERS, decryptVault, deriveKey, encryptVault, okPassphrase, sealVault, openVault, type VaultPlain } from './vault'
+import { PASSPHRASE_MIN, PBKDF2_ITERS, decryptVault, deriveKey, encryptVault, okPassphrase, passphraseProblem, sealVault, openVault, type VaultPlain } from './vault'
 
 describe('vault format', () => {
   it('derives the vector key from the passphrase and salt', async () => {
@@ -47,11 +47,25 @@ describe('vault format', () => {
     expect(opened.profile.works[0].place_id).toBe('x')
     expect(opened.profile.works[0]).not.toHaveProperty('placeId')
   })
-  it('a passphrase needs eight characters after trimming', () => {
-    expect(PASSPHRASE_MIN).toBe(8)
-    expect(okPassphrase('  short  ')).toBe(false)
-    expect(okPassphrase('1234567')).toBe(false)
-    expect(okPassphrase('12345678')).toBe(true)
-    expect(okPassphrase('  eight ch  ')).toBe(true)
+  it('a passphrase needs twelve characters after trimming', () => {
+    expect(PASSPHRASE_MIN).toBe(12)
+    expect(passphraseProblem('  short  ')).toBe('short')
+    expect(passphraseProblem('eleven chars')).toBe(null)
+    expect(passphraseProblem('elevenchars')).toBe('short')
+    expect(okPassphrase('  twelve chars  ')).toBe(true)
+    expect(okPassphrase('elevenchars')).toBe(false)
+  })
+  it('a passphrase that is one repeated character, all digits or a well-known phrase is too easy', () => {
+    expect(passphraseProblem('aaaaaaaaaaaa')).toBe('easy')
+    expect(passphraseProblem('AAAA aaaa AAAA')).toBe('easy')
+    expect(passphraseProblem('123456789012')).toBe('easy')
+    expect(passphraseProblem('1234 5678 9012 3456')).toBe('easy')
+    expect(passphraseProblem('password1234')).toBe('easy')
+    expect(passphraseProblem('Correct Horse Battery Staple')).toBe('easy')
+    expect(passphraseProblem('qwertyuiop12')).toBe('easy')
+    expect(passphraseProblem('ThisIsMyPassword')).toBe('easy')
+    expect(passphraseProblem('1234567890ab')).toBe(null)
+    expect(passphraseProblem('correct horse battery')).toBe(null)
+    expect(okPassphrase('password1234')).toBe(false)
   })
 })

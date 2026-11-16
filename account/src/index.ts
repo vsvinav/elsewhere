@@ -63,8 +63,6 @@ async function parseBody(req: Request): Promise<Record<string, unknown> | null> 
 }
 
 const limiter = (env: Env): DurableObjectStub<Limiter> => env.LIMITER.get(env.LIMITER.idFromName('main'))
-/** First letter, stars, domain: enough to recognise your own address, not enough to learn someone else's. */
-const maskEmail = (e: string) => { const at = e.indexOf('@'); return `${e.slice(0, 1)}***${e.slice(at)}` }
 
 async function sendMail(env: Env, to: string, code: string, token: string): Promise<void> {
   const pretty = `${code.slice(0, 3)} ${code.slice(3)}`
@@ -80,6 +78,13 @@ async function sendMail(env: Env, to: string, code: string, token: string): Prom
   } catch (e) { console.error('mail failed', e) }
 }
 
+/** Dev mode hands the code back in the response, but only on a local host: anything deployed always mails it. */
+function devMail(env: Env, req: Request): boolean {
+  if (env.DEV_MAIL !== '1') return false
+  const host = new URL(req.url).hostname
+  return host === 'localhost' || host === '127.0.0.1'
+}
+
 async function authStart(req: Request, env: Env, now: number): Promise<Response> {
   const body = await parseBody(req)
   const email = normalizeEmail(body?.email)
@@ -91,7 +96,7 @@ async function authStart(req: Request, env: Env, now: number): Promise<Response>
   if (!email) return fail('bad email', 400)
   const code = randomCode(), token = randomHex(32)
   await lim.putToken(token, { email, code, exp: now + CODE_TTL_S * 1000 })
-  if (env.DEV_MAIL === '1') return json({ ok: true, dev: { code, token } })
+  if (devMail(env, req)) return json({ ok: true, dev: { code } })
   await sendMail(env, email, code, token)
   return json({ ok: true })
 }
@@ -110,7 +115,8 @@ async function authPeek(req: Request, env: Env, now: number): Promise<Response> 
   if (!(await finishAllowed(lim, req, null, now))) return fail('slow down', 429)
   const token = new URL(req.url).searchParams.get('token') ?? ''
   const email = TOKEN_RE.test(token) ? await lim.peek(token, now) : null
-  return email ? json({ email: maskEmail(email) }) : fail('expired', 400)
+  // Whoever holds the token has read the mail, so the full address is theirs to see; it is what the prompt confirms.
+  return email ? json({ email }) : fail('expired', 400)
 }
 
 async function authFinish(req: Request, env: Env, now: number): Promise<Response> {

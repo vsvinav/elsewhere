@@ -94,6 +94,8 @@ export function verifyRequest(signPub: Uint8Array, method: string, path: string,
 }
 
 let loading: Promise<DeviceKeys> | undefined
+/** Whether this browser already has an identity, without minting one. */
+export const hasKeys = async () => (await kv.get(KEYS_KV)) !== undefined
 /** This browser's keys, made on first use and kept in IndexedDB. */
 export const loadKeys = () => (loading ??= kv.get<{ signSeed: string; kxSeed: string }>(KEYS_KV).then(async (s) => {
   if (s) return keysFromSeeds(fromHex(s.signSeed), fromHex(s.kxSeed))

@@ -5,7 +5,7 @@ import { b64, unb64 } from '../crew/keys'
 import type { Profile, Work } from '../profile/profile'
 
 export const PBKDF2_ITERS = 310000
-export const PASSPHRASE_MIN = 8
+export const PASSPHRASE_MIN = 12
 export const SALT_BYTES = 16
 export const IV_BYTES = 12
 
@@ -13,7 +13,24 @@ export interface VaultBody { v: 1; salt: string; iv: string; ct: string }
 export interface VaultSettings { units: 'km' | 'mi'; relayUrl: string; accountUrl?: string }
 export interface VaultPlain { v: 1; signPriv: string; kxPriv: string; profile: Profile; settings: VaultSettings }
 
-export const okPassphrase = (p: string) => p.trim().length >= PASSPHRASE_MIN
+/** Phrases people reach for first; compared lower-case with the spaces taken out. Android keeps the same list. */
+const EASY_PASSPHRASES = [
+  'password1234', 'password12345', 'passwordpassword', 'mypassword123', 'secretpassword', 'supersecretpassword', 'thisismypassword', 'passphrase123',
+  '123456789012', '1234567890123', 'qwertyuiop12', 'qwertyuiopasdfgh', 'qwertyuiopasdfghjkl', 'asdfghjkl123', 'zxcvbnmasdfghjkl', '1q2w3e4r5t6y', '1qaz2wsx3edc', 'abcdefghijkl', 'abcdefghijklmnop',
+  'iloveyou1234', 'ilovemyfamily', 'letmeinletmein', 'administrator', 'adminpassword', 'welcome12345', 'changemechangeme', 'trustno1trustno1', 'rememberme123', 'hello12345678',
+  'football12345', 'sunshine1234', 'princess1234', 'correcthorsebatterystaple', 'openthevault', 'elsewhere1234', 'elsewherepassword', 'recoverypassphrase',
+]
+/**
+ * Why a passphrase is refused, or null. Length counts the trimmed phrase; the other checks ignore case and spaces,
+ * so "Correct Horse Battery Staple" and "aaaa aaaa aaaa" are as easy as their one-word forms.
+ */
+export function passphraseProblem(p: string): 'short' | 'easy' | null {
+  if (p.trim().length < PASSPHRASE_MIN) return 'short'
+  const n = p.toLowerCase().replace(/\s+/g, '')
+  if (/^(.)\1*$/u.test(n) || /^\d+$/.test(n) || EASY_PASSPHRASES.includes(n)) return 'easy'
+  return null
+}
+export const okPassphrase = (p: string) => passphraseProblem(p) === null
 const bytes = (b: Uint8Array) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer
 
 /** PBKDF2-HMAC-SHA256 over the trimmed passphrase; slow by design, so callers show a spinner. */
