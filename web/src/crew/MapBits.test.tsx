@@ -10,7 +10,7 @@ vi.hoisted(() => {
 })
 vi.mock('../ingest/db', () => ({ kv: { get: async () => undefined, set: async () => {}, del: async () => {} } }))
 
-import { FriendTag, SONAR_BODY, SonarNote } from './MapBits'
+import { FriendTag, SONAR_BODY, SonarNote, TEST_BODY } from './MapBits'
 import { useCrew, type Friend } from './friends'
 import { profile } from '../profile/profile'
 
@@ -54,6 +54,13 @@ describe('SonarNote', () => {
     await act(async () => { host.querySelector<HTMLButtonElement>('.sonar-note .mute')!.click() })
     expect(useCrew.getState().friends[0].mutedUntil).toBeGreaterThan(NOW)
     expect(host.querySelector('.sonar-note')).toBeNull()
+    unmount()
+  })
+  it('a test hit says so', () => {
+    const { host, unmount } = mount(createElement(SonarNote))
+    act(() => useCrew.setState({ hit: { pairId: 'P', id: 'ab12cd34', at: NOW, test: true } }))
+    expect(host.querySelector('.sonar-note h3')?.textContent).toBe('Sonar · Test ping from Marta')
+    expect(host.querySelector('.sonar-note p')?.textContent).toBe(TEST_BODY)
     unmount()
   })
 })

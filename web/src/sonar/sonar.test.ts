@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ABSENCE_MIN_DAYS, DEBOUNCE_MS, FRESH_MS, HABITAT_DAYS, HABITAT_MIN_DAYS, RADIUS_M, absenceDays, debounced, decide, eligible, isHabitat, metres, newcomerAbsence, recordHit, stintStart, within, type DayAt, type Debounce, type Fix, type Side } from './sonar'
+import { ABSENCE_MIN_DAYS, DEBOUNCE_MS, FRESH_MS, HABITAT_DAYS, HABITAT_MIN_DAYS, RADIUS_M, absenceDays, debounced, decide, eligible, isHabitat, metres, newcomerAbsence, recordHit, settle, stintStart, within, type DayAt, type Debounce, type Fix, type Side } from './sonar'
 
 const NOW = Date.UTC(2025, 10, 15, 16, 0, 0)
 const LIS = { lat: 38.7223, lng: -9.1393 }
@@ -97,4 +97,15 @@ describe('debounce and decide', () => {
   it('debounced → Quiet even when eligible', () => expect(decide(side(), side(), PAIR, NOW, recordHit(none, PAIR, NOW - HOUR), null)).toEqual({ kind: 'quiet' }))
   it('incoming hit → Echo even when not eligible', () => expect(decide(side({ habitat: true }), side(), PAIR, NOW, none, `${PAIR}:1`)).toEqual({ kind: 'echo', hitId: `${PAIR}:1` }))
   it('nothing → Quiet', () => expect(decide(side({ habitat: true }), side(), PAIR, NOW, none, null)).toEqual({ kind: 'quiet' }))
+  it('test ping with a hit → Echo marked test, ignoring eligibility and the debounce; without a hit → Quiet', () => {
+    const d = recordHit(none, PAIR, NOW - HOUR)
+    expect(decide(side({ habitat: true }), side({ fix: fix(NOW - 2 * HOUR, LIS.lat, east(5000)) }), PAIR, NOW, d, 'abcd1234', true)).toEqual({ kind: 'echo', hitId: 'abcd1234', test: true })
+    expect(decide(side(), side(), PAIR, NOW, none, null, true)).toEqual({ kind: 'quiet' })
+  })
+  it('settle remembers a real fire or echo for the pair and leaves a test or quiet alone', () => {
+    expect(settle(none, PAIR, NOW, { kind: 'fire', hitId: 'x' }).lastHitByPair).toEqual({ [PAIR]: NOW })
+    expect(settle(none, PAIR, NOW, { kind: 'echo', hitId: 'x' }).lastHitByPair).toEqual({ [PAIR]: NOW })
+    expect(settle(none, PAIR, NOW, { kind: 'echo', hitId: 'x', test: true })).toBe(none)
+    expect(settle(none, PAIR, NOW, { kind: 'quiet' })).toBe(none)
+  })
 })

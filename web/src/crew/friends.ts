@@ -3,7 +3,8 @@ import { create } from 'zustand'
 import { kv } from '../ingest/db'
 import { FRESH_MS } from '../sonar/sonar'
 import { sonarHeard } from '../sonar/ping'
-import { fromHex, open, seal, type Envelope } from './keys'
+import { fromHex, open, seal, toHex, type Envelope } from './keys'
+import { randomBytes } from '@noble/hashes/utils.js'
 
 export interface Grants { liveCity: boolean; livePrecise: boolean; sonar: boolean }
 export interface Friend {
@@ -12,11 +13,12 @@ export interface Friend {
   grants: Grants; mutedUntil?: number
 }
 export type Grade = 'city' | 'precise' | 'sonar'
-export interface Ping { type: 'ping'; t: number; grade: Grade; lat: number; lng: number; city: string | null; habitat: boolean; absenceDays: number; hit: { id: string; t: number } | null }
+/** `test` marks a Test Sonar ping: it rings on both sides whatever the distance, carries no position and is never recorded. */
+export interface Ping { type: 'ping'; t: number; grade: Grade; lat: number | null; lng: number | null; city: string | null; habitat: boolean; absenceDays: number; hit: { id: string; t: number; test?: true } | null; test?: true }
 export type Message = Ping | { type: 'stop' } | { type: 'revoke' }
 /** A friend's last known position; `t` is the sender's clock and drives staleness, `at` is when this browser received it. */
 export interface Fix { pairId: string; t: number; lat: number; lng: number; city: string | null; grade: Grade; at: number }
-export interface Hit { pairId: string; id: string; at: number }
+export interface Hit { pairId: string; id: string; at: number; test?: true }
 
 export const FRIENDS_KV = 'crew:friends'
 export const STALE_MS = 15 * 60_000
@@ -46,6 +48,8 @@ interface CrewState {
   receive(e: Envelope, now?: number): void
   setTag(pairId: string | null): void
   clearHit(): void
+  /** Test Sonar: ring here and send the same hit to one friend, so both ends can be checked from one room. */
+  testFire(pairId: string, now?: number): Ping['hit']
 }
 
 let sender: Sender | null = null
@@ -85,20 +89,35 @@ export const useCrew = create<CrewState>((set, get) => ({
     if (!m || typeof m !== 'object') return
     if (m.type === 'stop') { const { [f.pairId]: _, ...fixes } = get().fixes; set({ fixes }); return }
     if (m.type === 'revoke') { forget(f.pairId); void save(get().friends); return }
-    if (m.type !== 'ping' || typeof m.lat !== 'number' || typeof m.lng !== 'number' || typeof m.t !== 'number') return
+    if (m.type !== 'ping' || typeof m.t !== 'number') return
+    const test = m.test === true
+    if (!test && (typeof m.lat !== 'number' || typeof m.lng !== 'number')) return
     const s = get()
     // Replay guard: sender time must move forward for the pair and sit near our clock.
     const last = s.fixes[f.pairId]
     if ((last && m.t <= last.t) || Math.abs(now / 1000 - m.t) > FRESH_MS / 1000) return
-    const fix: Fix = { pairId: f.pairId, t: m.t, lat: m.lat, lng: m.lng, city: m.city ?? null, grade: m.grade, at: now }
     const muted = (f.mutedUntil ?? 0) > now
     const hit = m.hit && typeof m.hit.id === 'string' && !seenHit(m.hit.id) ? m.hit : null
     const fresh = !!hit && !muted
-    set({ fixes: { ...s.fixes, [f.pairId]: fix }, hit: fresh && hit ? { pairId: f.pairId, id: hit.id, at: now } : s.hit })
+    const next = fresh && hit ? { pairId: f.pairId, id: hit.id, at: now, ...(test ? { test: true as const } : {}) } : s.hit
+    // A test ping carries no position: it only rings. A real one moves the stamp.
+    if (test) set({ hit: next })
+    else set({ fixes: { ...s.fixes, [f.pairId]: { pairId: f.pairId, t: m.t, lat: m.lat as number, lng: m.lng as number, city: m.city ?? null, grade: m.grade, at: now } }, hit: next })
     if (fresh) sonarHooks.heard()
   },
   setTag: (pairId) => set({ tag: pairId }),
   clearHit: () => set({ hit: null }),
+  testFire: (pairId, now = Date.now()) => {
+    const f = get().friends.find((x) => x.pairId === pairId)
+    if (!f || !sender) return null
+    const t = Math.floor(now / 1000)
+    const hit = { id: toHex(randomBytes(4)), t, test: true as const }
+    seenHit(hit.id)
+    set({ hit: { pairId, id: hit.id, at: now, test: true } })
+    sonarHooks.heard()
+    sender(pairId, { type: 'ping', t, grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit, test: true })
+    return hit
+  },
 }))
 
 /** Drops a friend and every trace of them from memory; the caller persists. */

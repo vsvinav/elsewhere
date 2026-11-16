@@ -18,7 +18,7 @@ export interface Fix { ts: number; lat: number; lng: number }
 export interface DayAt { localDay: string; lat: number; lng: number }
 export interface Side { fix: Fix; habitat: boolean; absenceDays: number | null }
 export interface Debounce { lastHitByPair: Record<string, number> }
-export type Decision = { kind: 'quiet' } | { kind: 'fire'; hitId: string } | { kind: 'echo'; hitId: string }
+export type Decision = { kind: 'quiet' } | { kind: 'fire'; hitId: string } | { kind: 'echo'; hitId: string; test?: true }
 
 const R = 6371e3, D2R = Math.PI / 180
 export function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -86,10 +86,18 @@ export const eligible = (me: Side, friend: Side, now: number) =>
 export const debounced = (d: Debounce, pairId: string, now: number) => (d.lastHitByPair[pairId] ?? -Infinity) > now - DEBOUNCE_MS
 export const recordHit = (d: Debounce, pairId: string, now: number): Debounce => ({ lastHitByPair: { ...d.lastHitByPair, [pairId]: now } })
 
-/** The one entry point. `incomingHit` is the friend's `hit.id`, if any: the friend fired first, mirror it. */
-export function decide(me: Side, friend: Side, pairId: string, now: number, d: Debounce, incomingHit: string | null): Decision {
+/**
+ * The one entry point. `incomingHit` is the friend's `hit.id`, if any: the friend fired first, mirror it.
+ * A `test` ping is a friend pressing Test Sonar: echo its hit whatever the distance or debounce, and never fire on it.
+ */
+export function decide(me: Side, friend: Side, pairId: string, now: number, d: Debounce, incomingHit: string | null, test = false): Decision {
+  if (test) return incomingHit != null ? { kind: 'echo', hitId: incomingHit, test: true } : { kind: 'quiet' }
   if (debounced(d, pairId, now)) return { kind: 'quiet' }
   if (incomingHit != null) return { kind: 'echo', hitId: incomingHit }
   if (eligible(me, friend, now)) return { kind: 'fire', hitId: `${pairId}:${now}` }
   return { kind: 'quiet' }
 }
+
+/** What a decision leaves behind: a real fire or echo starts the 24 h debounce; a test or quiet leaves no trace. */
+export const settle = (d: Debounce, pairId: string, now: number, x: Decision): Debounce =>
+  x.kind === 'quiet' || (x.kind === 'echo' && x.test) ? d : recordHit(d, pairId, now)
