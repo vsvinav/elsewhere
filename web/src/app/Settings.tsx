@@ -9,6 +9,7 @@ import { b64, unb64 } from '../crew/keys'
 import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from '../account/vault'
 import { profile, useProfile } from '../profile/profile'
 import { KeyCheck } from '../profile/KeyCheck'
+import { ImportButton } from '../profile/Viewer'
 import { useStore } from '../store/useStore'
 import { UsageRow } from '../usage/Meter'
 import { Field } from '../world'
@@ -38,6 +39,7 @@ export const PROVIDER_LABEL: Record<LlmProvider, string> = { openai: 'OpenAI', a
 export const LLM_CAPTION = 'Your key is stored in this browser only and is sent straight to the provider you choose.'
 export const NO_KEY_STATUS = 'Add a key first'
 export const CLEAR_LABEL = "Clear this browser's record"
+export const IMPORT_LABEL = 'Add a Timeline export'
 export const CLEAR_CONFIRM = "Clear this browser's record? Your import and profile go; this page's keys stay."
 
 /** Everything a visitor configures, on one page over the tour. Keys never leave the browser. */
@@ -284,7 +286,11 @@ function DataSection() {
     <section className="setting">
       <h2>{SECTION.data}</h2>
       <Field label="Kept">In this browser only</Field>
-      <button className="btn" onClick={clear}>{CLEAR_LABEL}</button>
+      <div className="st-actions">
+        <button className="btn" onClick={clear}>{CLEAR_LABEL}</button>
+        <ImportButton stage={rec.stage} importFile={rec.importFile} label={IMPORT_LABEL} />
+      </div>
+      {rec.importError && <div className="ob-error" role="alert">{rec.importError.message}</div>}
     </section>
   )
 }

@@ -262,4 +262,18 @@ describe('Settings', () => {
     expect(rec.reset).toHaveBeenCalledTimes(1)
     confirm.mockRestore(); unmount()
   })
+
+  it('Data takes a Timeline export through the same import', () => {
+    const importFile = vi.fn()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    act(() => root.render(createElement(RecordContext.Provider, { value: { ...rec, importFile } }, createElement(Settings))))
+    const add = [...host.querySelectorAll<HTMLElement>('.setting .btn')].find((b) => b.textContent === 'Add a Timeline export')!
+    const input = add.querySelector<HTMLInputElement>('input[type=file]')!
+    const file = new File(['{}'], 'Timeline.json', { type: 'application/json' })
+    Object.defineProperty(input, 'files', { value: [file] })
+    act(() => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(importFile).toHaveBeenCalledWith(file)
+    act(() => root.unmount())
+  })
 })

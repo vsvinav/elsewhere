@@ -10,6 +10,7 @@ import { sleepPlaces, weekdayPlaces, moveMonths, type Suggestion } from './sugge
 import { address } from '../ingest/nominatim'
 import { clusterName, useNaming } from '../ingest/places'
 import { MonthPick } from '../app/DatePick'
+import { ImportActions } from './Viewer'
 const monthOf = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 7)
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** "2024-06" → "Jun 2024", matching the month chips. */
@@ -108,19 +109,21 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 <p className="lede">Your Google Maps Timeline, printed as a poster. Every city you slept in, every flight, every drive. It never leaves this browser.</p>
               </div>
               <div>
+              {importFirst ? <ImportActions stage={stage} importError={importError} importFile={importFile} /> : (
               <label className={`dropzone ob-drop${stage ? ' busy' : ''}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) importFile(f) }}>
                 <input type="file" accept=".json,application/json" hidden disabled={!!stage} onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = '' }} />
                 <div className="dz-title">{stage ? `${STAGE_LABEL[stage] ?? stage}…` : TOUCH ? 'Tap to choose your Timeline.json' : 'Drop your Timeline.json here'}</div>
                 <div className="dz-sub">{stage ? 'Big exports take a few seconds.' : <>Android: Settings → Location → Timeline → Export. iPhone: Google Maps → your photo → Your timeline → ⋯ → Export.</>}</div>
                 {importError && <div className="ob-error" role="alert">{importError.message}</div>}
               </label>
+              )}
               <div className="ob-key">
                 <Field label="Google Maps key · optional: names and photos for your stops. Maps print on OpenStreetMap without one">
                   <input className="val" type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => settings.setKey(key.trim())} placeholder="AIza…" aria-label="Google Maps API key" spellCheck={false} autoComplete="off" />
                 </Field>
                 <KeyCheck />
               </div>
-              {demo && data && !gated && (
+              {demo && data && !gated && !importFirst && (
                 <div className="ob-try">
                   <span className="caps">No export yet?</span>
                   <button className="btn ob-demo" onClick={() => setStep('name')}>Try it with a demo record →</button>

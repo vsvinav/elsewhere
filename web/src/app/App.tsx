@@ -5,6 +5,7 @@ import type { Data } from '../data/types'
 import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
+import { Viewer } from '../profile/Viewer'
 import { KeyGate } from '../profile/KeyGate'
 import { useKeyGate } from '../profile/KeyCheck'
 import { profile as profileStore, useProfile, type Profile } from '../profile/profile'
@@ -127,7 +128,8 @@ export function App() {
   if (door === 'loading') return <div className="tray">{bar}<Printing /></div>
   if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
   if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => showWelcome(false)} />
-  if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
+  // The web cannot record: with nothing bundled and nothing imported, point at the phone or take an export.
+  if (!record && noDemo) return <>{bar}<Viewer stage={stage} importError={importError} importFile={ctx.importFile} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
   // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.
   if (prof && needImport && !mine && !editing) return <>{bar}<Onboarding key="import" data={data} demo stage={stage} importError={importError} importFile={ctx.importFile} initial={prof} importFirst onClose={() => setNeedImport(false)} /></>

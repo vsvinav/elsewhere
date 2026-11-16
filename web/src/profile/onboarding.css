@@ -24,7 +24,7 @@
 .ob-q { max-width: 920px; margin-top: 8vh; animation: ob-in 0.5s var(--ease) both; }
 @keyframes ob-in { from { opacity: 0; transform: translateY(14px); } }
 .ob-title { margin: 0; font: 900 clamp(56px, 8.5vw, 120px)/0.84 var(--display); text-transform: uppercase; letter-spacing: -0.015em; text-wrap: balance; }
-.ob-q .lede { font: 500 clamp(17px, 1.4vw, 20px)/1.4 var(--body); color: var(--ink-2); max-width: 56ch; margin: 36px 0 0; }
+.ob-bill .ob-q .lede { font: 500 clamp(17px, 1.4vw, 20px)/1.4 var(--body); color: var(--ink-2); max-width: 56ch; margin: 36px 0 0; }
 .ob-input { display: block; width: 100%; max-width: 640px; margin-top: 32px; padding: 6px 0 10px; border: 0; border-bottom: 4px solid var(--ink); background: transparent; color: var(--ink); font: 900 clamp(44px, 6vw, 84px)/1 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
 .ob-input::placeholder { color: var(--ghost); }
 .ob-input:focus { outline: none; border-bottom-color: var(--red); }
@@ -47,7 +47,7 @@
 .ob-homes .btn { margin: 0; }
 
 .ob-units { display: flex; gap: 12px; margin-top: 34px; }
-.ob-actions { display: flex; gap: 12px; align-items: center; margin-top: 40px; }
+.ob-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 40px; }
 .ob-actions .btn { margin: 0; }
 .ob-actions .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .ob-actions .btn:disabled:hover { background: var(--ink); border-color: var(--ink); }
