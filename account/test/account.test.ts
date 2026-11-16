@@ -1,11 +1,11 @@
-import { SELF, env, runInDurableObject } from 'cloudflare:test'
+import { SELF, env, reset, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import worker from '../src/index'
 
 const T0 = Date.UTC(2025, 10, 15, 16, 0, 0)
 const HOUR = 3600_000
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T0) })
-afterEach(() => vi.useRealTimers())
+afterEach(async () => { vi.useRealTimers(); await reset() })
 
 type Json = Record<string, unknown>
 interface Dev { code: string }
