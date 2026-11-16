@@ -39,3 +39,15 @@ describe('Onboarding front door', () => {
     expect(host.querySelector('.ob-demo')).toBeNull()
   })
 })
+
+describe('Onboarding import-first, after a restored profile', () => {
+  it('offers the Android app and an export in place of the dropzone and the demo', () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    const initial = { name: 'V', units: 'km' as const, homes: [], works: [] }
+    act(() => createRoot(host).render(createElement(Onboarding, { data: sampleData(), demo: true, stage: null, importError: null, importFile() {}, initial, importFirst: true })))
+    expect([...host.querySelectorAll('.ob-actions .btn')].map((b) => b.textContent)).toEqual(['Get the Android app', 'Add a Google Timeline export'])
+    expect(host.querySelector('.ob-drop')).toBeNull()
+    expect(host.querySelector('.ob-demo')).toBeNull()
+    expect(host.querySelector('[aria-label="Google Maps API key"]')).not.toBeNull()
+  })
+})
