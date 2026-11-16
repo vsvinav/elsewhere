@@ -9,6 +9,8 @@ export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flight
 
 /** Hash for the Settings page; not a tab, it sits over whichever tab was open. */
 export const SETTINGS_HASH = 'settings'
+/** Hash for the Crew page: friends, pairing and what each one may see. */
+export const CREW_HASH = 'crew'
 
 /** Where a readable figure leads: a date window, one pin, a trip, or a set of pins. */
 export type Door =
@@ -29,6 +31,9 @@ export interface Store {
   settingsOpen: boolean
   openSettings(): void
   closeSettings(): void
+  crewOpen: boolean
+  openCrew(): void
+  closeCrew(): void
   /** Follow the address bar after the visitor navigates (back button, typed hash). */
   syncFromHash(): void
   playhead: number | null
@@ -92,20 +97,24 @@ export function useThrottledPlayhead(ms: number): number | null {
 
 const onMap = (t: Tab) => t === 'map' || t === 'play'
 /** State for landing on a tab: the replay starts following; walking off the map by the nav leaves a door's origin and framing behind. */
-const entering = (tab: Tab): Partial<Store> => ({ tab, settingsOpen: false, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) })
+const entering = (tab: Tab): Partial<Store> => ({ tab, settingsOpen: false, crewOpen: false, playing: tab === 'play', ...(tab === 'play' ? { follow: true } : {}), ...(onMap(tab) ? {} : { origin: null, focus: null }) })
 
 export const useStore = create<Store>((set, get) => ({
   tab: (TABS as string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : 'home',
   // Walking off the map by the nav leaves the door's origin and framing behind.
   setTab: (tab) => { location.hash = tab; set(entering(tab)) },
   settingsOpen: location.hash.slice(1) === SETTINGS_HASH,
-  openSettings: () => { location.hash = SETTINGS_HASH; set({ settingsOpen: true, playing: false }) },
+  openSettings: () => { location.hash = SETTINGS_HASH; set({ settingsOpen: true, crewOpen: false, playing: false }) },
   closeSettings: () => set((s) => { location.hash = s.tab; return { settingsOpen: false } }),
+  crewOpen: location.hash.slice(1) === CREW_HASH,
+  openCrew: () => { location.hash = CREW_HASH; set({ crewOpen: true, settingsOpen: false, playing: false }) },
+  closeCrew: () => set((s) => { location.hash = s.tab; return { crewOpen: false } }),
   syncFromHash: () => {
     const h = location.hash.slice(1)
     const s = get()
     if (h === SETTINGS_HASH) { if (!s.settingsOpen) s.openSettings(); return }
-    if (s.settingsOpen) set({ settingsOpen: false })
+    if (h === CREW_HASH) { if (!s.crewOpen) s.openCrew(); return }
+    if (s.settingsOpen || s.crewOpen) set({ settingsOpen: false, crewOpen: false })
     const t = (h || 'home') as Tab
     if (t === s.tab) return
     if (s.origin && t === s.origin.backTab) {

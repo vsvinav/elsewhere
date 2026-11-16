@@ -9,6 +9,7 @@ describe('printable', () => {
     expect(printable(el('div', 'yearwheel dragging'))).toBe(false)
     expect(printable(el('button'))).toBe(false)
     expect(printable(el('div', 'save'))).toBe(false)
+    expect(printable(el('div', 'crew-tools'))).toBe(false)
     expect(printable(document.createTextNode('2024'))).toBe(true)
   })
 })

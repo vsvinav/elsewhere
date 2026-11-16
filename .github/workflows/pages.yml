@@ -38,7 +38,13 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # The crew e2e test starts the relay Worker in-process; v2 ships one, main does not.
+      - if: hashFiles('relay/package-lock.json') != ''
+        run: npm ci
+        working-directory: relay
       - run: npm test
+        env:
+          CI: true
       # Keys are optional: without them the site still imports a record and draws OpenStreetMap tiles.
       - run: npm run build
         env:

@@ -15,18 +15,22 @@ import { MAP_STYLES } from './style'
 import { googleCam, libreCam, type Cam } from './cam'
 import { markGoogleDown, useProvider } from './provider'
 import { LibreMap, useLibre } from './osm/Libre'
+import { useCrew } from '../crew/friends'
+import { RING_MS, friendLayers } from '../crew/layer'
 
 // A Map ID switches Google to the vector renderer (smooth fractional zoom, far less tile memory); its style then lives in Cloud Console.
 
 interface Overlay { setProps(p: { layers: Layer[] }): void }
 
 const onHover = (info: { object?: unknown; x: number; y: number }) => {
-  const o = info.object as { id: string } | undefined
-  useStore.getState().setHoverPlace(o ? { id: o.id, x: info.x, y: info.y } : null)
+  const o = info.object as { id?: string } | undefined
+  useStore.getState().setHoverPlace(o?.id ? { id: o.id, x: info.x, y: info.y } : null)
 }
 const onClick = (info: { object?: unknown }) => {
   if (useStore.getState().tab !== 'map') return
-  const o = info.object as { id?: string; items?: unknown[]; lng: number; lat: number } | undefined
+  const o = info.object as { id?: string; items?: unknown[]; friend?: true; pairId?: string; lng: number; lat: number } | undefined
+  if (o?.friend) { useCrew.getState().setTag(o.pairId ?? null); return }
+  if (useCrew.getState().tag) useCrew.getState().setTag(null)
   const cam = liveCam.get()
   if (o?.items && cam) { cam.move({ lng: o.lng, lat: o.lat }, Math.min(18, cam.zoom() + 2.5)); return }
   useStore.getState().setPin(o?.id ?? null)
@@ -43,13 +47,19 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      overlay.setProps({ layers: s.tab === 'map' ? pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize, heat: s.heat }) : mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) })
+      if (s.tab !== 'map') { overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) }); return }
+      const c = useCrew.getState()
+      const wall = Date.now()
+      overlay.setProps({ layers: [...pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize, heat: s.heat }), ...friendLayers(c.fixes, c.friends, wall, c.hit)] })
+      // Sonar rings are the one thing here that animates on its own clock.
+      if (c.hit && wall - c.hit.at < RING_MS) schedule()
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(render) }
     render()
     const unsub = useStore.subscribe(schedule)
+    const unsubCrew = useCrew.subscribe(schedule)
     const off = cam.on('move', schedule)
-    return () => { unsub(); off(); cancelAnimationFrame(raf) }
+    return () => { unsub(); unsubCrew(); off(); cancelAnimationFrame(raf) }
   }, [cam, overlay, data])
   useFollow(cam)
   useEffect(() => { liveCam.set(cam); return () => liveCam.set(null) }, [cam])

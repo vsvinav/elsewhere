@@ -203,3 +203,23 @@ describe('settings over the tabs', () => {
     expect(useStore.getState().settingsOpen).toBe(true)
   })
 })
+
+describe('crew over the tabs', () => {
+  beforeEach(() => useStore.setState({ crewOpen: false }))
+  it('opens at #crew over the tab, closes back to it, and closes Settings if that was open', () => {
+    useStore.getState().setTab('map')
+    useStore.getState().openSettings()
+    useStore.getState().openCrew()
+    expect(location.hash).toBe('#crew')
+    expect(useStore.getState()).toMatchObject({ tab: 'map', crewOpen: true, settingsOpen: false })
+    useStore.getState().closeCrew()
+    expect(location.hash).toBe('#map')
+    expect(useStore.getState().crewOpen).toBe(false)
+  })
+  it('a typed #crew opens it and moving to a tab closes it', () => {
+    back('crew')
+    expect(useStore.getState().crewOpen).toBe(true)
+    back('stats')
+    expect(useStore.getState()).toMatchObject({ tab: 'stats', crewOpen: false })
+  })
+})

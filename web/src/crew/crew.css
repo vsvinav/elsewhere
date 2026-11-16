@@ -1,0 +1,62 @@
+/* Crew: one sheet over the tour; a pair bill, then a passport row of friends. */
+.crew { display: grid; gap: 28px; }
+.crew .crew-tools .back { margin: 0; padding: 10px 14px; font-size: 13px; }
+.crew .crew-head { color: var(--ink-3); }
+.crew .crew-head b { color: var(--red); }
+.crew h1 { margin: -16px 0 0; font: 900 clamp(64px, 11vw, 160px)/0.82 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
+.crew .lede { margin: 0; max-width: 62ch; color: var(--ink-2); font-size: 15px; }
+.crew .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.crew .row .btn { margin: 0; cursor: pointer; }
+
+.crew .pair-bill { border-top: var(--rule); padding: 22px 0 0; display: grid; gap: 12px; }
+.crew .pair-bill .code { font: 900 clamp(48px, 7vw, 104px)/0.9 var(--display); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.crew .pair-bill .expiry { margin: 0; }
+.crew .pair-bill label.caps { display: block; margin-top: 22px; }
+.crew .pair-bill input { width: 16ch; padding: 8px 0 4px; border: 0; border-bottom: 2px solid var(--ink); background: transparent; color: var(--ink); font: 900 28px/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.crew .pair-bill input::placeholder { color: var(--ink-3); }
+.crew .pair-bill input:focus { outline: 0; border-bottom-color: var(--red); }
+.crew .pair-bill .crew-status { margin: 0; color: var(--red); font-weight: 600; }
+.crew .pair-bill .crew-status:empty { display: none; }
+
+.crew .crew-confirm { border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--mustard); background: var(--stock); padding: 22px 24px; display: grid; gap: 12px; justify-items: start; max-width: 520px; }
+.crew .crew-confirm .caps { font-size: 20px; letter-spacing: 0.08em; }
+.crew .crew-confirm .caps b { color: var(--red); }
+.crew .crew-confirm .field .val { font: 900 40px/1 var(--display); letter-spacing: 0.12em; }
+.crew .crew-confirm .fine { margin: 0; }
+
+.crew .friends { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; border-top: var(--rule); padding-top: 22px; }
+.crew .friends > .fine { margin: 0; grid-column: 1 / -1; }
+.crew .friend { margin: 0; }
+.crew .friend .body { display: grid; gap: 14px; }
+.crew .friend .stamp-letter { width: 72px; height: 72px; display: grid; place-items: center; background: var(--mustard); color: var(--ink); border: 2px solid var(--ink); border-radius: 50%; font: 900 40px/1 var(--display); }
+.crew .friend .nm { font: 900 clamp(28px, 3vw, 40px)/0.9 var(--display); text-transform: uppercase; }
+.crew .friend .fields { gap: 10px 28px; }
+.crew .friend .field .val { font-size: 15px; letter-spacing: 0.08em; }
+.crew .grants { display: grid; gap: 10px; }
+.crew .grant { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: start; cursor: pointer; }
+.crew .grant input { position: absolute; opacity: 0; width: 0; height: 0; }
+.crew .grant .toggle { display: block; width: 44px; height: 24px; margin-top: 2px; border: 2px solid var(--ink); border-radius: 12px; position: relative; background: transparent; transition: background 0.2s; }
+.crew .grant .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform 0.2s; }
+.crew .grant.on .toggle { background: var(--mustard); }
+.crew .grant.on .toggle::after { transform: translateX(20px); }
+.crew .grant:has(input:focus-visible) .toggle { outline: 3px solid var(--red); outline-offset: 2px; }
+.crew .grant span b { display: block; font: 800 15px/1.2 var(--body); }
+.crew .grant span small { display: block; margin-top: 2px; font: 500 12.5px/1.4 var(--body); color: var(--ink-3); max-width: 40ch; }
+.crew .chip { padding: 6px 10px; border: 2px solid var(--ink); background: transparent; color: var(--ink); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; }
+.crew .chip[aria-pressed='true'] { background: var(--ink); color: var(--stock); }
+.crew .remove { margin-left: auto; }
+.crew .remove:hover { background: var(--red); border-color: var(--red); color: var(--stock); }
+
+/* On the map: the tag for a tapped friend, and the Sonar note. */
+.friend-tag { position: absolute; left: var(--gutter); top: calc(100px + env(safe-area-inset-top, 0px)); z-index: 5; display: inline-flex; align-items: center; gap: 12px; padding: 8px 10px 8px 8px; background: var(--stock); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--mustard); animation: origin-in 160ms var(--ease, ease) both; }
+.friend-tag .stamp-letter { width: 36px; height: 36px; display: grid; place-items: center; background: var(--mustard); border: 2px solid var(--ink); border-radius: 50%; font: 900 20px/1 var(--display); }
+.friend-tag .line { display: block; font: 800 14px/1.1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.friend-tag .both { display: block; margin-top: 3px; font: 600 12px/1.2 var(--body); color: var(--red); }
+.friend-tag button { border: 0; background: none; color: var(--ink-3); font: 700 18px/1 var(--body); cursor: pointer; padding: 0 4px; }
+.friend-tag button:hover { color: var(--red); }
+.sonar-note { position: absolute; right: var(--gutter); top: calc(100px + env(safe-area-inset-top, 0px)); z-index: 5; width: min(360px, calc(100vw - 2 * var(--gutter))); padding: 16px 18px; background: var(--ink); color: var(--stock); border-left: 6px solid var(--mustard); box-shadow: 6px 6px 0 var(--mustard); animation: origin-in 200ms var(--ease, ease) both; }
+.sonar-note h3 { margin: 0; font: 900 22px/1 var(--display); text-transform: uppercase; letter-spacing: 0.04em; color: var(--mustard); }
+.sonar-note p { margin: 8px 0 12px; font: 500 14px/1.4 var(--body); color: var(--stock-3); }
+.sonar-note .row { display: flex; gap: 8px; }
+.sonar-note .btn { margin: 0; cursor: pointer; }
+.sonar-note .btn.quiet { color: var(--stock); border-color: var(--stock-3); }
