@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { STAGE_LABEL } from '../ingest'
 import './onboarding.css'
 
@@ -20,9 +21,10 @@ export function ImportActions({ stage, importError, importFile, label = 'Add a G
 
 /** A quiet button over a hidden file input; while the import runs it reads the stage instead. */
 export function ImportButton({ stage, importFile, label }: { stage: string | null; importFile(f: File): void; label: string }) {
+  const id = useId()
   return (
-    <label className="btn quiet" aria-busy={!!stage || undefined}>
-      <input type="file" accept=".json,application/json" hidden disabled={!!stage} onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = '' }} />
+    <label className="btn quiet" htmlFor={id} aria-busy={!!stage || undefined}>
+      <input id={id} type="file" accept=".json,application/json" hidden disabled={!!stage} onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = '' }} />
       {stage ? `${STAGE_LABEL[stage] ?? stage}…` : label}
     </label>
   )
