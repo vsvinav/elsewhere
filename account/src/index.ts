@@ -80,6 +80,13 @@ async function sendMail(env: Env, to: string, code: string, token: string): Prom
   } catch (e) { console.error('mail failed', e) }
 }
 
+/** Dev mode hands the code back in the response, but only on a local or workers.dev host: a custom domain always mails it. */
+function devMail(env: Env, req: Request): boolean {
+  if (env.DEV_MAIL !== '1') return false
+  const host = new URL(req.url).hostname
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.workers.dev')
+}
+
 async function authStart(req: Request, env: Env, now: number): Promise<Response> {
   const body = await parseBody(req)
   const email = normalizeEmail(body?.email)
@@ -91,7 +98,7 @@ async function authStart(req: Request, env: Env, now: number): Promise<Response>
   if (!email) return fail('bad email', 400)
   const code = randomCode(), token = randomHex(32)
   await lim.putToken(token, { email, code, exp: now + CODE_TTL_S * 1000 })
-  if (env.DEV_MAIL === '1') return json({ ok: true, dev: { code, token } })
+  if (devMail(env, req)) return json({ ok: true, dev: { code } })
   await sendMail(env, email, code, token)
   return json({ ok: true })
 }

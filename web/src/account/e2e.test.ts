@@ -1,5 +1,5 @@
 // End to end: the real web account client and vault crypto against the real account Worker, started in-process with
-// wrangler's unstable_dev and DEV_MAIL=1 so the code and link token come back in the response instead of a mail.
+// wrangler's unstable_dev and DEV_MAIL=1 so the code comes back in the response instead of a mail.
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { accountClient, AccountError } from './client'
@@ -43,7 +43,7 @@ function device() {
 describe.skipIf(!svc)('account service end to end', () => {
   const email = `e2e-${Date.now()}@example.org`
 
-  it('signs up by code, seals a vault, then a second device signs in by link and opens the same vault', async () => {
+  it('signs up by code, seals a vault, then a second device signs in and opens the same vault', async () => {
     const a = device()
     const started = await a.client.start(email)
     expect(started.dev?.code).toMatch(/^\d{6}$/)
@@ -63,10 +63,10 @@ describe.skipIf(!svc)('account service end to end', () => {
 
     const b = device()
     const again = await b.client.start(email)
-    expect(await b.client.peek(again.dev!.token)).toEqual({ email: `e***@example.org` })
-    const byLink = await b.client.finish({ token: again.dev!.token })
-    expect(byLink.account.id).toBe(fin.account.id)
-    b.session = byLink.session
+    expect(again.dev).toEqual({ code: expect.stringMatching(/^\d{6}$/) })
+    const secondDevice = await b.client.finish({ email, code: again.dev!.code })
+    expect(secondDevice.account.id).toBe(fin.account.id)
+    b.session = secondDevice.session
     const body = (await b.client.getVault())!
     expect(body.v).toBe(1)
     const opened = await openVault(await deriveKey('correct horse battery', Buffer.from(body.salt, 'base64')), body)
@@ -80,18 +80,18 @@ describe.skipIf(!svc)('account service end to end', () => {
     await b.client.deleteMe()
     const c = device()
     const fresh = await c.client.start(email)
-    c.session = (await c.client.finish({ token: fresh.dev!.token })).session
+    c.session = (await c.client.finish({ email, code: fresh.dev!.code })).session
     expect(await c.client.getVault()).toBeNull()
   })
 
-  it('a wrong code is refused and a used token cannot be replayed', async () => {
+  it('a wrong code is refused and a used code cannot be replayed', async () => {
     const d = device()
     const other = `e2e-b-${Date.now()}@example.org`
     const started = await d.client.start(other)
     const wrong = started.dev!.code === '000000' ? '111111' : '000000'
     await expect(d.client.finish({ email: other, code: wrong })).rejects.toMatchObject({ status: 401, code: 'wrong code' })
-    await d.client.finish({ token: started.dev!.token })
-    const replay = d.client.finish({ token: started.dev!.token })
+    await d.client.finish({ email: other, code: started.dev!.code })
+    const replay = d.client.finish({ email: other, code: started.dev!.code })
     await expect(replay).rejects.toBeInstanceOf(AccountError)
   })
 

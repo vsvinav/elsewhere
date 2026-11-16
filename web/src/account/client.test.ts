@@ -22,9 +22,9 @@ beforeEach(() => { db.store.clear(); resetAccountForTest() })
 
 describe('account client', () => {
   it('start and finish post JSON and return the bodies', async () => {
-    const f = fakeFetch(({ url }) => Response.json(url.endsWith('/auth/start') ? { ok: true, dev: { code: '123456', token: 'ab'.repeat(32) } } : { session: 's1', account: { id: 'acct_1', email: 'a@b.co', created: 1, hasVault: false } }))
+    const f = fakeFetch(({ url }) => Response.json(url.endsWith('/auth/start') ? { ok: true, dev: { code: '123456' } } : { session: 's1', account: { id: 'acct_1', email: 'a@b.co', created: 1, hasVault: false } }))
     const c = accountClient('https://acct.test/', { fetchFn: f.fn })
-    expect(await c.start('a@b.co')).toEqual({ ok: true, dev: { code: '123456', token: 'ab'.repeat(32) } })
+    expect(await c.start('a@b.co')).toEqual({ ok: true, dev: { code: '123456' } })
     expect(f.calls[0].url).toBe('https://acct.test/auth/start')
     expect(f.calls[0].init.method).toBe('POST')
     expect(JSON.parse(String(f.calls[0].init.body))).toEqual({ email: 'a@b.co' })

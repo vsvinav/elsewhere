@@ -1,4 +1,4 @@
-import { SELF, env } from 'cloudflare:test'
+import { SELF, env, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import worker from '../src/index'
 
@@ -8,11 +8,12 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T0) 
 afterEach(() => vi.useRealTimers())
 
 type Json = Record<string, unknown>
-interface Dev { code: string; token: string }
+interface Dev { code: string }
 interface Finish { session: string; account: { id: string; email: string; created: number; hasVault: boolean } }
 
+// Dev mode only answers on a local hostname, so the suite talks to the service as a dev would.
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
-  SELF.fetch(`https://account${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.1', ...headers } })
+  SELF.fetch(`http://localhost${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.1', ...headers } })
 const authed = (session: string, method: string, path: string, body?: unknown) => call(method, path, body, { authorization: `Bearer ${session}` })
 
 async function start(email: string, ip = '203.0.113.1'): Promise<Dev> {
@@ -22,6 +23,8 @@ async function start(email: string, ip = '203.0.113.1'): Promise<Dev> {
   expect(b.ok).toBe(true)
   return b.dev
 }
+/** The link token is never in a response; the test reads it where the mail would have, from the limiter's store. */
+const tokenFor = (email: string) => runInDurableObject(env.LIMITER.get(env.LIMITER.idFromName('main')), async (_, state) => (await state.storage.get<{ token: string }>(`start:${email}`))!.token)
 async function signIn(email: string): Promise<Finish> {
   const dev = await start(email)
   const r = await call('POST', '/auth/finish', { email, code: dev.code })
@@ -53,8 +56,7 @@ describe('health and CORS', () => {
 describe('auth', () => {
   it('start → finish by code creates an account and a session; the same email logs in again to the same id', async () => {
     const dev = await start('  Ada@Example.COM ')
-    expect(dev.code).toMatch(/^\d{6}$/)
-    expect(dev.token).toMatch(/^[0-9a-f]{64}$/)
+    expect(dev).toEqual({ code: expect.stringMatching(/^\d{6}$/) })
     const r = await call('POST', '/auth/finish', { email: 'ada@example.com', code: dev.code })
     expect(r.status).toBe(200)
     const b = (await r.json()) as Finish
@@ -69,11 +71,13 @@ describe('auth', () => {
     expect(again.session).not.toBe(b.session)
   })
   it('finishes by token from the mail link', async () => {
-    const dev = await start('bo@example.com')
-    const r = await call('POST', '/auth/finish', { token: dev.token })
+    await start('bo@example.com')
+    const token = await tokenFor('bo@example.com')
+    expect(token).toMatch(/^[0-9a-f]{64}$/)
+    const r = await call('POST', '/auth/finish', { token })
     expect(r.status).toBe(200)
     expect(((await r.json()) as Finish).account.email).toBe('bo@example.com')
-    const gone = await call('POST', '/auth/finish', { token: dev.token })
+    const gone = await call('POST', '/auth/finish', { token })
     expect(gone.status).toBe(400)
     expect(await gone.json()).toEqual({ error: 'expired' })
   })
@@ -100,16 +104,18 @@ describe('auth', () => {
   })
   it('a token older than ten minutes has expired; a new start replaces the old code', async () => {
     const dev = await start('dee@example.com')
+    const token = await tokenFor('dee@example.com')
     vi.setSystemTime(T0 + 601_000)
-    const r = await call('POST', '/auth/finish', { token: dev.token })
+    const r = await call('POST', '/auth/finish', { token })
     expect(r.status).toBe(400)
     expect(await r.json()).toEqual({ error: 'expired' })
     expect((await call('POST', '/auth/finish', { email: 'dee@example.com', code: dev.code })).status).toBe(400)
     const first = await start('eve@example.com')
+    const firstToken = await tokenFor('eve@example.com')
     const second = await start('eve@example.com')
     // The email now answers to the second code; the first still works through its link token.
     expect((await call('POST', '/auth/finish', { email: 'eve@example.com', code: first.code })).status).toBe(first.code === second.code ? 200 : 401)
-    expect((await call('POST', '/auth/finish', { token: first.token })).status).toBe(200)
+    expect((await call('POST', '/auth/finish', { token: firstToken })).status).toBe(200)
     expect((await call('POST', '/auth/finish', { email: 'eve@example.com', code: second.code })).status).toBe(200)
   })
   it('rate limits the sixth start per email and the twenty-first per IP in an hour', async () => {
@@ -127,13 +133,14 @@ describe('auth', () => {
   })
   it('five wrong guesses fired at once still kill the token: the tries are counted atomically', async () => {
     const dev = await start('max@example.com')
+    const token = await tokenFor('max@example.com')
     const wrong = dev.code === '000000' ? '111111' : '000000'
     const rs = await Promise.all(Array.from({ length: 5 }, (_, i) => call('POST', '/auth/finish', { email: 'max@example.com', code: wrong }, { 'cf-connecting-ip': `10.1.0.${i}` })))
     expect(rs.map((r) => r.status).sort()).toEqual([400, 401, 401, 401, 401])
     const right = await call('POST', '/auth/finish', { email: 'max@example.com', code: dev.code })
     expect(right.status).toBe(400)
     expect(await right.json()).toEqual({ error: 'expired' })
-    expect((await call('POST', '/auth/finish', { token: dev.token })).status).toBe(400)
+    expect((await call('POST', '/auth/finish', { token })).status).toBe(400)
   })
   it('rate limits finishes: the eleventh per email and the twenty-first per IP in ten minutes', async () => {
     const dev = await start('ned@example.com')
@@ -155,20 +162,33 @@ describe('auth', () => {
     expect(rs.filter((r) => r.status === 429)).toHaveLength(10)
   })
   it('peek names the masked address behind a live token and nothing for a dead one', async () => {
-    const dev = await start('olive.p@example.com')
-    const r = await call('GET', `/auth/peek?token=${dev.token}`)
+    await start('olive.p@example.com')
+    const token = await tokenFor('olive.p@example.com')
+    const r = await call('GET', `/auth/peek?token=${token}`)
     expect(r.status).toBe(200)
     expect(await r.json()).toEqual({ email: 'o***@example.com' })
     expect((await call('GET', '/auth/peek?token=nope')).status).toBe(400)
     expect((await call('GET', `/auth/peek?token=${'e'.repeat(64)}`)).status).toBe(400)
-    expect((await call('POST', '/auth/finish', { token: dev.token })).status).toBe(200)
-    const gone = await call('GET', `/auth/peek?token=${dev.token}`)
+    expect((await call('POST', '/auth/finish', { token })).status).toBe(200)
+    const gone = await call('GET', `/auth/peek?token=${token}`)
     expect(gone.status).toBe(400)
     expect(await gone.json()).toEqual({ error: 'expired' })
   })
+  it('dev mode only speaks on a local or workers.dev hostname: a production domain mails the code even with DEV_MAIL=1', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }))
+    const startAt = (host: string) => SELF.fetch(`https://${host}/auth/start`, { method: 'POST', body: JSON.stringify({ email: 'pat@example.com' }), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '1.2.3.5' } })
+    expect(await (await startAt('elsewhere-account.example.workers.dev')).json()).toEqual({ ok: true, dev: { code: expect.stringMatching(/^\d{6}$/) } })
+    expect(await (await startAt('127.0.0.1')).json()).toEqual({ ok: true, dev: { code: expect.stringMatching(/^\d{6}$/) } })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    for (const host of ['account.elsewhere.app', 'evil.workers.dev.attacker.net', 'localhost.attacker.net']) {
+      expect(await (await startAt(host)).json(), host).toEqual({ ok: true })
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+    fetchSpy.mockRestore()
+  })
   it('does not leak the code when DEV_MAIL is unset, and still answers ok when mail fails', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('nope', { status: 500 }))
-    const req = new Request('https://account/auth/start', { method: 'POST', body: JSON.stringify({ email: 'gil@example.com' }), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '1.2.3.4' } })
+    const req = new Request('http://localhost/auth/start', { method: 'POST', body: JSON.stringify({ email: 'gil@example.com' }), headers: { 'content-type': 'application/json', 'cf-connecting-ip': '1.2.3.4' } })
     const r = await worker.fetch(req, { ...env, DEV_MAIL: undefined, RESEND_KEY: 'k', MAIL_FROM: 'Elsewhere <hello@elsewhere.app>', LINK_BASE: 'https://x.test/v3/' })
     expect(r.status).toBe(200)
     expect(await r.json()).toEqual({ ok: true })

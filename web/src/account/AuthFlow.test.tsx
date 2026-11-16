@@ -31,7 +31,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
   const calls: string[] = []
   let startFails: AccountError | null = null
   const client: AccountClient = {
-    start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456', token: 't' } } },
+    start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456' } } },
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
     peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'a***@example.com' } },
     me: async () => account,
