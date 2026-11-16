@@ -23,6 +23,8 @@ export const messageOf = (e: unknown): string => (e instanceof AccountError ? ME
 export interface AccountClient {
   start(email: string): Promise<{ dev?: { code: string; token: string } }>
   finish(body: FinishBody): Promise<Finish>
+  /** The masked address behind a mail-link token, so the person holding the link can confirm it is theirs. */
+  peek(token: string): Promise<{ email: string }>
   me(): Promise<AccountInfo>
   logout(): Promise<void>
   putVault(body: VaultBody): Promise<void>
@@ -53,6 +55,7 @@ export function accountClient(base: string, opts: ClientOpts = {}): AccountClien
   return {
     start: async (email) => (await call('POST', '/auth/start', { email })).json(),
     finish: async (body) => (await call('POST', '/auth/finish', body)).json(),
+    peek: async (token) => (await call('GET', `/auth/peek?token=${encodeURIComponent(token)}`)).json(),
     me: async () => (await call('GET', '/me', undefined, true)).json(),
     logout: async () => { await call('DELETE', '/session', undefined, true) },
     putVault: async (body) => { await call('PUT', '/vault', body, true) },

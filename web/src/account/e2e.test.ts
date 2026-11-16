@@ -63,6 +63,7 @@ describe.skipIf(!svc)('account service end to end', () => {
 
     const b = device()
     const again = await b.client.start(email)
+    expect(await b.client.peek(again.dev!.token)).toEqual({ email: `e***@example.org` })
     const byLink = await b.client.finish({ token: again.dev!.token })
     expect(byLink.account.id).toBe(fin.account.id)
     b.session = byLink.session

@@ -34,6 +34,12 @@ describe('account client', () => {
     await c.finish({ token: 'tok' })
     expect(JSON.parse(String(f.calls[2].init.body))).toEqual({ token: 'tok' })
   })
+  it('peek asks for the masked address behind a token', async () => {
+    const f = fakeFetch(() => Response.json({ email: 'a***@b.co' }))
+    expect(await accountClient('https://acct.test', { fetchFn: f.fn }).peek('ab'.repeat(32))).toEqual({ email: 'a***@b.co' })
+    expect(f.calls[0].url).toBe(`https://acct.test/auth/peek?token=${'ab'.repeat(32)}`)
+    expect(f.calls[0].init.method).toBe('GET')
+  })
   it('surfaces the service error code and status, and maps them to the screen copy', async () => {
     const f = fakeFetch(() => Response.json({ error: 'slow down' }, { status: 429 }))
     const c = accountClient('https://acct.test', { fetchFn: f.fn })

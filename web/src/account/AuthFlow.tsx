@@ -36,6 +36,11 @@ export const COPY = {
   deriving: 'Sealing…',
   opening: 'Opening your vault…',
   finishing: 'Signing you in…',
+  checking: 'Checking the link…',
+  linkTitle: (email: string) => `Log in as ${email}?`,
+  linkSub: 'This link came from a mail. If you did not ask for it, it may be for someone else\'s account.',
+  linkYes: 'Continue',
+  linkNo: 'Not me',
   back: 'Back',
   cancel: 'Cancel',
 } as const
@@ -52,7 +57,7 @@ export function takeAuthToken(loc: { hash: string; pathname: string; search: str
 type Step = 'email' | 'code' | 'set' | 'unlock' | 'token'
 interface Props {
   mode: 'signup' | 'login'
-  /** From `#auth=<token>` in the mail link: finishes without a code. */
+  /** From `#auth=<token>` in the mail link: confirmed against its masked address, then finished without a code. */
   token?: string | null
   onDone(r: AuthResult): void
   onClose?(): void
@@ -69,6 +74,7 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
   const [note, setNote] = useState('')
+  const [linkEmail, setLinkEmail] = useState('')
   const title = mode === 'signup' ? COPY.signUp : COPY.logIn
 
   const start = async (e?: FormEvent) => {
@@ -91,11 +97,15 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
     setError(''); setBusy(COPY.finishing)
     try { const r = await c.finish(body); await landed(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
   }
+  // A link logs in whoever opens it, so the address behind it is shown first and nothing happens until Continue.
   useEffect(() => {
     if (step !== 'token' || !token) return
-    void finish({ token }).then((ok) => { if (!ok) setStep('email') })
+    setBusy(COPY.checking)
+    c.peek(token).then((r) => setLinkEmail(r.email), (err) => { setError(messageOf(err)); setStep('email') }).finally(() => setBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  const linkYes = () => { if (token) void finish({ token }).then((ok) => { if (!ok) setStep('email') }) }
+  const linkNo = () => { setLinkEmail(''); setStep('email') }
 
   const setPassphrase = async (p: string) => {
     setError(''); setBusy(COPY.deriving)
@@ -135,7 +145,18 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
             {onClose && <button className="btn quiet ob-cancel" onClick={onClose}>{COPY.cancel}</button>}
           </header>
 
-          {(step === 'email' || step === 'token') && (
+          {step === 'token' && linkEmail && (
+            <Screen title={COPY.linkTitle(linkEmail)} sub={COPY.linkSub}>
+              {error && <p className="acct-err" role="alert">{error}</p>}
+              <div className="ob-actions">
+                <button className="btn" onClick={linkYes} disabled={!!busy}>{COPY.linkYes}</button>
+                <button className="btn quiet ob-back" onClick={linkNo} disabled={!!busy}>{COPY.linkNo}</button>
+                {busy && <span className="acct-busy">{busy}</span>}
+              </div>
+            </Screen>
+          )}
+
+          {(step === 'email' || (step === 'token' && !linkEmail)) && (
             <Screen title={COPY.email} sub={COPY.emailSub}>
               <form className="acct-form" onSubmit={start}>
                 <input id="acct-email" className="ob-input" type="email" autoFocus autoComplete="email" inputMode="email" aria-label={COPY.email} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" disabled={step === 'token'} />

@@ -33,6 +33,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
   const client: AccountClient = {
     start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456', token: 't' } } },
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
+    peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'a***@example.com' } },
     me: async () => account,
     logout: async () => {},
     putVault: async () => {},
@@ -116,12 +117,26 @@ describe('AuthFlow', () => {
     expect(text(host, '.ob-title')).toBe(COPY.email)
     expect(text(host, '[role=alert]')).toBe("Couldn't reach the account service. Check your connection and try again.")
   })
-  it('a mail-link token signs in without a code; an expired one falls back to the email step with the message', async () => {
+  it('a mail-link token first asks "Log in as a***@example.com?"; Continue signs in without a code', async () => {
     const svc = fakeService(false)
     const { host } = mount({ client: svc.client, token: 't' })
     await settle()
-    expect(svc.calls).toEqual(['finish {"token":"t"}'])
+    expect(svc.calls).toEqual(['peek t'])
+    expect(text(host, '.ob-title')).toBe('Log in as a***@example.com?')
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === COPY.linkYes)!.click())
+    await settle()
+    expect(svc.calls).toEqual(['peek t', 'finish {"token":"t"}'])
     expect(text(host, '.ob-title')).toBe(COPY.setTitle)
+  })
+  it('"Not me" discards the token and goes to the email step; an expired link lands there with the message', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, token: 't' })
+    await settle()
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === COPY.linkNo)!.click())
+    await settle()
+    expect(text(host, '.ob-title')).toBe(COPY.email)
+    expect(svc.calls).toEqual(['peek t'])
+    expect(useAccount.getState().session).toBeNull()
     document.body.innerHTML = ''
     const bad = mount({ client: fakeService(false).client, token: 'stale' })
     await settle()
