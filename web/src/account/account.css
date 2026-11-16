@@ -1,0 +1,41 @@
+/* Accounts: welcome, email, code and passphrase screens share the front door's bill, stamps and caps. */
+.acct-welcome .lede { color: var(--ink); }
+.acct-choices { display: grid; gap: 18px; align-content: start; margin-top: 10vh; max-width: 420px; }
+.acct-choices .caps { color: var(--ink-3); }
+.acct-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+.acct-buttons .btn { margin: 0; min-width: 150px; text-align: center; }
+.acct-link { justify-self: start; padding: 0; border: 0; background: none; color: var(--ink-2); font: 600 14px/1.4 var(--body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.acct-link:hover { color: var(--red); }
+.acct-link:disabled { color: var(--ghost); cursor: default; text-decoration: none; }
+
+.acct-form { display: grid; gap: 14px; max-width: 640px; margin-top: 32px; }
+.acct-form .ob-input { margin-top: 0; font-size: clamp(32px, 4.5vw, 56px); text-transform: none; letter-spacing: 0; }
+.acct-form .ob-input[type='password'] { letter-spacing: 0.12em; }
+.acct-lab { font: 700 11px/1 var(--body); font-stretch: 85%; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
+.acct-err { margin: 0; font: 600 14px/1.4 var(--body); color: var(--red-2); }
+.acct-note { margin: 0; font: 500 14px/1.45 var(--body); color: var(--ink-2); max-width: 56ch; }
+.acct-quote { margin: 0; font: 800 clamp(20px, 2vw, 26px)/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--red); }
+
+.acct-code { display: flex; gap: 10px; }
+.acct-code input { width: clamp(40px, 7vw, 64px); height: clamp(56px, 9vw, 84px); padding: 0; border: 0; border-bottom: 4px solid var(--ink); background: transparent; color: var(--ink); text-align: center; font: 900 clamp(32px, 5vw, 56px)/1 var(--display); font-variant-numeric: tabular-nums; }
+.acct-code input:focus { outline: none; border-bottom-color: var(--red); }
+.acct-code input:nth-child(3) { margin-right: 14px; }
+
+.acct-busy { display: inline-flex; align-items: center; gap: 10px; font: 600 14px/1 var(--body); color: var(--ink-2); }
+.acct-busy::before { content: ''; width: 12px; height: 12px; border: 2px solid var(--ink-2); border-right-color: transparent; border-radius: 50%; animation: acct-turn 0.9s linear infinite; }
+@keyframes acct-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .acct-busy::before { animation: none; } }
+
+@media (max-width: 720px) {
+  .acct-choices { margin-top: 2vh; }
+  .acct-code { gap: 6px; }
+}
+
+/* Settings → Account */
+.st-account { display: grid; gap: 12px; }
+.st-account .st-actions { margin-top: 4px; }
+.st-account .btn.danger { background: transparent; color: var(--red-2); border-color: var(--red-2); }
+.st-account .btn.danger:hover { background: var(--red-2); color: var(--stock); }
+.st-vault { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.st-vault form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.st-vault input { font: 500 15px/1.4 var(--body); padding: 8px 10px; border: 2px solid var(--ink); background: transparent; color: var(--ink); min-width: 220px; }
