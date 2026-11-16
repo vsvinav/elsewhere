@@ -92,6 +92,20 @@ class Rec:
                          "distanceMeters": km * 1000, "probability": 0.9,
                          "topCandidate": {"type": mode, "probability": 0.9}},
         })
+        # Google records the raw track as a sibling timelinePath; Replay and the Map draw from it.
+        # Flights get a straight line, ground legs a gentle bow so trails read as roads, not rulers.
+        _, lat0, lng0, _ = PLACES[src]
+        _, lat1, lng1, _ = PLACES[dst]
+        n = 24
+        bow = 0.0 if mode == "FLYING" else 0.08
+        pts = []
+        for i in range(n + 1):
+            f = i / n
+            off = bow * (lat1 - lat0 + lng1 - lng0) * f * (1 - f)
+            pts.append({"point": f"{lat0 + (lat1 - lat0) * f + off:.5f}°, {lng0 + (lng1 - lng0) * f - off:.5f}°",
+                        "time": iso(a + (b - a) * f, tz)})
+        self.segs.append({"startTime": iso(a, tz), "endTime": iso(b, tz), "startTimeTimezoneUtcOffsetMinutes": tz,
+                          "timelinePath": pts})
 
     def hop(self, src: str, dst: str, a: datetime, minutes: int, mode: str, km: float, tz: int = TZ_LISBON) -> datetime:
         """A leg from `a` lasting `minutes`; returns the arrival time."""

@@ -267,7 +267,7 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
   const font = { fontFamily: '"Archivo Variable", Archivo, sans-serif', fontWeight: 700, characterSet: 'auto', fontSettings: { sdf: true, buffer: 3 }, getSize: 11, getPixelOffset: [12, 0] as [number, number], getTextAnchor: 'start' as const, getAlignmentBaseline: 'center' as const }
   layers.push(
     new ScatterplotLayer<Dot>({
-      id: 'places', data: shownDots, pickable: true,
+      id: 'play-places', data: shownDots, pickable: true,
       getPosition: (d) => [d.lng, d.lat],
       getRadius: (d) => 20 + Math.sqrt(d.n_visits) * 12, radiusMinPixels: 2, radiusMaxPixels: 16,
       getFillColor: (d) => [INK[0], INK[1], INK[2], 220 * alpha(d)],

@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Map as Libre } from 'maplibre-gl'
+import { Map as Libre, setWorkerUrl } from 'maplibre-gl'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+// Bundled MapLibre resolves its worker next to index-*.js, where it never is; hand it the emitted file.
+setWorkerUrl(workerUrl)
 
 /** Free vector basemap in quiet greys (OpenFreeMap's Positron, OpenStreetMap data); no key, no bill. */
 const STYLE = 'https://tiles.openfreemap.org/styles/positron'

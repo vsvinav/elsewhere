@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data } from '../data/types'
@@ -71,8 +71,11 @@ export function App() {
   const crewOpen = useStore((s) => s.crewOpen)
   const onMap = (tab === 'map' || tab === 'play') && !settingsOpen && !crewOpen
   useRooms()
+  // Remembered per record so a record with no track at all is asked once, not on every render.
+  const pathsFor = useRef<string | null>(null)
   useEffect(() => {
-    if (!onMap || !record || record.paths.length) return
+    if (!onMap || !record || record.paths.length || pathsFor.current === record.meta.source_sha256) return
+    pathsFor.current = record.meta.source_sha256
     let live = true
     setReady({ label: 'Drawing paths', pct: 0 })
     loadPaths(record).then((paths) => { if (live) { setReady({ label: 'Drawing paths', pct: 100 }); setRecord({ ...record, paths }) } }).catch(setError)
