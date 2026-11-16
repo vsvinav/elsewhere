@@ -15,7 +15,11 @@ vi.mock('../ingest/db', () => {
   const m = new Map<string, unknown>()
   return { kv: { get: async (k: string) => m.get(k), set: async (k: string, v: unknown) => { m.set(k, v) }, setAll: async (e: Record<string, unknown>) => { for (const [k, v] of Object.entries(e)) m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
 })
-vi.mock('../data/load', async (orig) => ({ ...(await orig<typeof import('../data/load')>()), loadData: async () => sampleData(), loadPaths: async () => [] }))
+const bundle = vi.hoisted(() => ({ missing: false }))
+vi.mock('../data/load', async (orig) => {
+  const real = await orig<typeof import('../data/load')>()
+  return { ...real, loadData: async () => { if (bundle.missing) throw new real.DataLoadError('/data/record.json', '404'); return sampleData() }, loadPaths: async () => [] }
+})
 vi.mock('../ingest', () => ({ clearRecord: async () => {}, ingestFile: async () => { throw new Error('no') }, loadRecord: async () => undefined, rederive: async (d: unknown) => d }))
 vi.mock('../account/sync', async (orig) => ({ ...(await orig<typeof import('../account/sync')>()), startVaultSync: () => () => {} }))
 vi.mock('../world/FlightMap', () => ({ FlightMap: () => createElement('div') }))
@@ -53,6 +57,7 @@ beforeEach(async () => {
   // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
   settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
+  bundle.missing = false
 })
 afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()) })
 
@@ -81,5 +86,16 @@ describe('the way back to Welcome', () => {
     const host = await mount()
     await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Log in or sign up')!.click())
     expect(host.textContent).toContain(WELCOME_LINE)
+  })
+})
+
+describe('no record and no demo', () => {
+  it('shows the viewer door in place of the import page', async () => {
+    bundle.missing = true
+    profile.set(null)
+    const host = await mount()
+    expect(host.textContent).toContain('Your phone keeps the record.')
+    expect([...host.querySelectorAll('.ob-actions .btn')].map((b) => b.textContent)).toEqual(['Get the Android app', 'Add a Google Timeline export'])
+    expect(host.querySelector('.ob-drop')).toBeNull()
   })
 })
