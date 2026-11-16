@@ -16,7 +16,7 @@ async function startRelay(): Promise<Relay | null> {
   try {
     const wrangler = await import(/* @vite-ignore */ `${relayDir}node_modules/wrangler/wrangler-dist/cli.js`)
     const w = await wrangler.unstable_dev(`${relayDir}src/index.ts`, {
-      config: `${relayDir}wrangler.toml`, port: 0, logLevel: 'error', experimental: { disableExperimentalWarning: true },
+      config: `${relayDir}wrangler.toml`, port: 0, logLevel: 'error', persist: false, experimental: { disableExperimentalWarning: true },
     })
     const url = `http://${w.address}:${w.port}`
     for (let i = 0; i < 50; i++) {

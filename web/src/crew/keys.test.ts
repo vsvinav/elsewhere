@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { utf8ToBytes } from '@noble/hashes/utils.js'
-import { b64, base32nopad, deviceIdOf, fingerprint, fromHex, keysFromSeeds, open, pairIdOf, pairKeyOf, seal, signRequest, signedMessage, toHex, verifyRequest, type Envelope } from './keys'
+import { b64, base32nopad, crockford32, deviceIdOf, fingerprint, kxSigOf, verifyKxSig, fromHex, keysFromSeeds, open, pairIdOf, pairKeyOf, seal, signRequest, signedMessage, toHex, verifyRequest, type Envelope } from './keys'
 import vectors from './vectors.json'
 
 const A = keysFromSeeds(fromHex(vectors.a.signSeed), fromHex(vectors.a.kxSeed))
@@ -16,9 +16,20 @@ describe('identity', () => {
     expect(id).toMatch(/^[A-Z2-7]{16}$/)
     expect(id).toBe(base32nopad(fromHex(vectors.a.signPubSha256)).slice(0, 16))
   })
-  it('fingerprint is 8 chars and differs per key', () => {
-    expect(fingerprint(A.signPub)).toHaveLength(8)
-    expect(fingerprint(A.signPub)).not.toBe(fingerprint(B.signPub))
+  it('fingerprint covers both keys in Crockford letters and matches the vectors', () => {
+    expect(fingerprint(A.signPub, A.kxPub)).toBe(vectors.a.fingerprint)
+    expect(fingerprint(B.signPub, B.kxPub)).toBe(vectors.b.fingerprint)
+    expect(fingerprint(A.signPub, A.kxPub)).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/)
+    expect(fingerprint(A.signPub, A.kxPub)).not.toBe(fingerprint(A.signPub, B.kxPub))
+    expect(crockford32(new Uint8Array([0xff, 0xff]))).toBe('ZZZG')
+  })
+  it('kxSig binds the kx key to the signing key and matches the vectors', () => {
+    expect(kxSigOf(A)).toBe(vectors.a.kxSig)
+    expect(kxSigOf(B)).toBe(vectors.b.kxSig)
+    expect(verifyKxSig(A.signPub, A.kxPub, vectors.a.kxSig)).toBe(true)
+    expect(verifyKxSig(A.signPub, B.kxPub, vectors.a.kxSig)).toBe(false)
+    expect(verifyKxSig(B.signPub, A.kxPub, vectors.a.kxSig)).toBe(false)
+    expect(verifyKxSig(A.signPub, A.kxPub, 'not base64!')).toBe(false)
   })
   it('pairId and pairKey are the same from both sides', () => {
     expect(pairIdOf(A.signPub, B.signPub)).toBe(pairIdOf(B.signPub, A.signPub))

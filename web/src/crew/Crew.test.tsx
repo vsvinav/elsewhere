@@ -12,9 +12,9 @@ const db = vi.hoisted(() => {
 })
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
-import { Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, SONAR_COPY, VIEWER_NOTE } from './Crew'
+import { BAD_KEYS, Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, SONAR_COPY, VIEWER_NOTE } from './Crew'
 import { useCrew, type Friend } from './friends'
-import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, pairIdOf, pairKeyOf, setKeysForTest, toHex } from './keys'
+import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, kxSigOf, pairIdOf, pairKeyOf, setKeysForTest, toHex } from './keys'
 import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
 import { useStore } from '../store/useStore'
@@ -22,9 +22,10 @@ import vectors from './vectors.json'
 
 const A = keysFromSeeds(fromHex(vectors.a.signSeed), fromHex(vectors.a.kxSeed))
 const B = keysFromSeeds(fromHex(vectors.b.signSeed), fromHex(vectors.b.kxSeed))
-const bRecord = { signPub: toHex(B.signPub), kxPub: toHex(B.kxPub), name: 'Marta', deviceId: deviceIdOf(B.signPub) }
+const bRecord = { signPub: toHex(B.signPub), kxPub: toHex(B.kxPub), kxSig: kxSigOf(B), name: 'Marta', deviceId: deviceIdOf(B.signPub) }
 const pid = pairIdOf(A.signPub, B.signPub)
-const marta: Friend = { ...bRecord, pairId: pid, pairKey: toHex(pairKeyOf(A.kxPriv, B.kxPub, pid)), addedAt: Date.UTC(2025, 10, 15), grants: { liveCity: false, livePrecise: false, sonar: false } }
+const { kxSig: _kxSig, ...bKeys } = bRecord
+const marta: Friend = { ...bKeys, pairId: pid, pairKey: toHex(pairKeyOf(A.kxPriv, B.kxPub, pid)), addedAt: Date.UTC(2025, 10, 15), grants: { liveCity: false, livePrecise: false, sonar: false } }
 
 const fakeRelay = (answers: Record<string, () => Response>) => {
   const calls: { method: string; path: string }[] = []
@@ -99,7 +100,7 @@ describe('Crew', () => {
     const sheet = host.querySelector('.crew-confirm')!
     expect(sheet.textContent).toContain('Pair with')
     expect(sheet.querySelector('b')?.textContent).toBe('Marta')
-    expect(sheet.textContent).toContain(fingerprint(B.signPub))
+    expect(sheet.textContent).toContain(fingerprint(B.signPub, B.kxPub))
     expect(useCrew.getState().friends).toEqual([])
     click(byText(sheet, 'button', 'Yes, pair'))
     await flush()
@@ -123,6 +124,18 @@ describe('Crew', () => {
     unmount()
   })
 
+  it('a record with a swapped kx key is refused in words', async () => {
+    const { fetchFn } = fakeRelay({ 'POST /pair/PT-KSV-7Q4K/claim': () => Response.json({ ...bRecord, kxPub: toHex(A.kxPub) }), 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
+    const { host, flush, unmount } = mount(fetchFn)
+    await flush()
+    act(() => setValue(host.querySelector<HTMLInputElement>('#crew-code')!, 'PT-KSV-7Q4K'))
+    click(byText(host, 'button', 'Pair'))
+    await flush()
+    expect(host.querySelector('.crew-status')?.textContent).toBe(BAD_KEYS)
+    expect(host.querySelector('.crew-confirm')).toBeNull()
+    unmount()
+  })
+
   it('a wrong code is reported in words', async () => {
     const { fetchFn } = fakeRelay({ 'POST /pair/PT-ZZZ-ZZZZ/claim': () => new Response('no such code', { status: 404 }), 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
     const { host, flush, unmount } = mount(fetchFn)
@@ -142,7 +155,7 @@ describe('Crew', () => {
     const { host, flush, unmount } = mount(fetchFn)
     await flush()
     const card = host.querySelector('.friend')!
-    expect(card.textContent).toContain(fingerprint(B.signPub))
+    expect(card.textContent).toContain(fingerprint(B.signPub, B.kxPub))
     expect(card.textContent).toContain(SONAR_COPY)
     const sonar = card.querySelector<HTMLInputElement>('input[name=sonar]')!
     click(sonar)

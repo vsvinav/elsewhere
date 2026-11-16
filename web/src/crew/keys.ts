@@ -34,8 +34,26 @@ export function base32nopad(bytes: Uint8Array): string {
 }
 
 export const deviceIdOf = (signPub: Uint8Array) => base32nopad(sha256(signPub)).slice(0, 16)
-/** Short human check shown on the confirm step: the first 8 chars of the same digest, grouped for reading. */
-export const fingerprint = (signPub: Uint8Array) => base32nopad(sha256(signPub)).slice(16, 24)
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+/** Crockford base32 (no I L O U), unpadded. */
+export function crockford32(bytes: Uint8Array): string {
+  let out = '', bits = 0, acc = 0
+  for (const byte of bytes) {
+    acc = (acc << 8) | byte; bits += 8
+    while (bits >= 5) { out += CROCKFORD[(acc >>> (bits - 5)) & 31]; bits -= 5 }
+  }
+  if (bits > 0) out += CROCKFORD[(acc << (5 - bits)) & 31]
+  return out
+}
+/** Short human check on the confirm step; it covers both keys so a swapped kx key would show. */
+export const fingerprint = (signPub: Uint8Array, kxPub: Uint8Array) => crockford32(sha256(concatBytes(signPub, kxPub))).slice(0, 8)
+
+/** Binds a device's kx key to its signing key so a relay cannot swap one in. */
+const KX_INFO = utf8ToBytes('elsewhere/kx/v1')
+export const kxSigOf = (keys: DeviceKeys) => b64(ed25519.sign(concatBytes(KX_INFO, keys.kxPub), keys.signPriv))
+export function verifyKxSig(signPub: Uint8Array, kxPub: Uint8Array, kxSig: string): boolean {
+  try { return ed25519.verify(unb64(kxSig), concatBytes(KX_INFO, kxPub), signPub) } catch { return false }
+}
 
 export function keysFromSeeds(signSeed: Uint8Array, kxSeed: Uint8Array): DeviceKeys {
   return { signPriv: signSeed, signPub: ed25519.getPublicKey(signSeed), kxPriv: kxSeed, kxPub: x25519.getPublicKey(kxSeed) }

@@ -1,8 +1,8 @@
 // Signed HTTP calls and WebSocket rooms against the Crew relay.
 import { signRequest, type DeviceKeys, type Envelope } from './keys'
 
-/** What a device introduces itself as when pairing; hex keys, display name. */
-export interface PairRecord { signPub: string; kxPub: string; name: string; deviceId: string }
+/** What a device introduces itself as when pairing: hex keys, a signature binding kx to sign, display name. */
+export interface PairRecord { signPub: string; kxPub: string; kxSig: string; name: string; deviceId: string }
 export type MyRecord = Omit<PairRecord, 'deviceId'>
 
 export class RelayError extends Error {

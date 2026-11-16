@@ -32,9 +32,18 @@ export const CLOCK_SKEW_S = 300
 export const signedMessage = async (method: string, path: string, ts: string, body: string) =>
   `${method}\n${path}\n${ts}\n${hex(await sha256(new TextEncoder().encode(body)))}`
 
-export async function verifySignature(signPubHex: string, message: string, sigB64: string): Promise<boolean> {
+export async function verifySignature(signPubHex: string, message: string | Uint8Array, sigB64: string): Promise<boolean> {
   try {
     const key = await crypto.subtle.importKey('raw', unhex(signPubHex) as BufferSource, { name: 'Ed25519' }, false, ['verify'])
-    return await crypto.subtle.verify({ name: 'Ed25519' }, key, unb64(sigB64) as BufferSource, new TextEncoder().encode(message))
+    const bytes = typeof message === 'string' ? new TextEncoder().encode(message) : message
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, unb64(sigB64) as BufferSource, bytes as BufferSource)
   } catch { return false }
 }
+
+/** The bytes a device signs to vouch for its kx key: a domain tag then the key. */
+export function kxMessage(kxPub: Uint8Array): Uint8Array {
+  const tag = new TextEncoder().encode('elsewhere/kx/v1')
+  const out = new Uint8Array(tag.length + kxPub.length); out.set(tag); out.set(kxPub, tag.length)
+  return out
+}
+export const verifyKxSig = (signPubHex: string, kxPubHex: string, kxSigB64: string) => verifySignature(signPubHex, kxMessage(unhex(kxPubHex)), kxSigB64)

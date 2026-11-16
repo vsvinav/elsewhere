@@ -1,9 +1,9 @@
 import { SELF } from 'cloudflare:test'
 import { expect } from 'vitest'
-import { base32nopad, hex, pairIdOf, sha256, unhex } from '../src/ident'
+import { base32nopad, hex, kxMessage, pairIdOf, sha256, unhex } from '../src/ident'
 
 /** A test device: Ed25519 via WebCrypto from a fixed seed, plus an X25519 key the relay only stores. */
-export interface Device { id: string; signPub: string; kxPub: string; sign(method: string, path: string, body: string, ts?: number): Promise<Record<string, string>> }
+export interface Device { id: string; signPub: string; kxPub: string; kxSig: string; sign(method: string, path: string, body: string, ts?: number): Promise<Record<string, string>> }
 
 const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b))
 const b64url = (b: Uint8Array) => b64(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -12,8 +12,9 @@ export async function device(signSeedHex: string, signPubHex: string, kxPubHex: 
   const jwk = { kty: 'OKP', crv: 'Ed25519', d: b64url(unhex(signSeedHex)), x: b64url(unhex(signPubHex)) }
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'Ed25519' }, false, ['sign'])
   const id = base32nopad(await sha256(unhex(signPubHex))).slice(0, 16)
+  const kxSig = b64(new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, key, kxMessage(unhex(kxPubHex)) as BufferSource)))
   return {
-    id, signPub: signPubHex, kxPub: kxPubHex,
+    id, signPub: signPubHex, kxPub: kxPubHex, kxSig,
     async sign(method, path, body, ts = Math.floor(Date.now() / 1000)) {
       const bodyHash = hex(await sha256(new TextEncoder().encode(body)))
       const msg = new TextEncoder().encode(`${method}\n${path}\n${ts}\n${bodyHash}`)
@@ -31,7 +32,7 @@ export const VECTOR_PAIR = 'YNSO47A5246FH5MO'
 export const VECTOR_TS = 1763222520
 export const VECTOR_SIG = 'aPiJjmu8O9PeEcaElvXDwThOPpM0rMyIC7aQqHMZNGMS44jb9ANMdmbIah8QJOng+VqClf5s8sZY8O44s4wvDg=='
 
-export const record = (d: Device, name: string) => JSON.stringify({ signPub: d.signPub, kxPub: d.kxPub, name })
+export const record = (d: Device, name: string, over: Partial<Pick<Device, 'kxPub' | 'kxSig'>> = {}) => JSON.stringify({ signPub: d.signPub, kxPub: d.kxPub, kxSig: d.kxSig, name, ...over })
 export const pairOf = async (a: Device, b: Device) => pairIdOf(unhex(a.signPub), unhex(b.signPub))
 
 export async function signed(d: Device, method: string, path: string, body = '', init: { ts?: number; ip?: string; headers?: Record<string, string> } = {}) {

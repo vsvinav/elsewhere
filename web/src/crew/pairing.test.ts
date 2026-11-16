@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { claim, friendOf, offer, poll, proposalOf } from './pairing'
+import { KeyError, claim, friendOf, offer, poll, proposalOf } from './pairing'
 import { relayClient, RelayError } from './relay'
-import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, pairIdOf, pairKeyOf, toHex } from './keys'
+import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, kxSigOf, pairIdOf, pairKeyOf, toHex } from './keys'
 import vectors from './vectors.json'
 
 const A = keysFromSeeds(fromHex(vectors.a.signSeed), fromHex(vectors.a.kxSeed))
 const B = keysFromSeeds(fromHex(vectors.b.signSeed), fromHex(vectors.b.kxSeed))
-const bRecord = { signPub: toHex(B.signPub), kxPub: toHex(B.kxPub), name: 'Marta', deviceId: deviceIdOf(B.signPub) }
+const bRecord = { signPub: toHex(B.signPub), kxPub: toHex(B.kxPub), kxSig: kxSigOf(B), name: 'Marta', deviceId: deviceIdOf(B.signPub) }
 
 /** A relay that answers from a script and remembers what it was asked. */
 const fakeRelay = (answers: Record<string, () => Response>) => {
@@ -24,7 +24,7 @@ const fakeRelay = (answers: Record<string, () => Response>) => {
 describe('relay client', () => {
   it('signs every request with the device headers and surfaces relay errors', async () => {
     const { calls, client } = fakeRelay({ 'POST /pair/PT-KSV-7Q4K': () => new Response('created', { status: 201 }), 'GET /room/X/last': () => new Response('nope', { status: 403 }) })
-    await client.createCode('PT-KSV-7Q4K', { signPub: toHex(A.signPub), kxPub: toHex(A.kxPub), name: 'Ana' })
+    await client.createCode('PT-KSV-7Q4K', { signPub: toHex(A.signPub), kxPub: toHex(A.kxPub), kxSig: kxSigOf(A), name: 'Ana' })
     expect(calls[0].headers.get('X-Elsewhere-Id')).toBe(deviceIdOf(A.signPub))
     expect(calls[0].headers.get('X-Elsewhere-Sig')).toMatch(/^[A-Za-z0-9+/]+=*$/)
     expect(Math.abs(Number(calls[0].headers.get('X-Elsewhere-Ts')) - Date.now() / 1000)).toBeLessThan(5)
@@ -41,11 +41,11 @@ describe('pairing flow', () => {
       'GET /pair/PT-KSV-7Q4K': () => (claimed ? Response.json(bRecord) : new Response(null, { status: 204 })),
     })
     await offer(client, A, 'PT-KSV-7Q4K', 'Ana')
-    expect(JSON.parse(calls[0].body)).toEqual({ signPub: toHex(A.signPub), kxPub: toHex(A.kxPub), name: 'Ana' })
+    expect(JSON.parse(calls[0].body)).toEqual({ signPub: toHex(A.signPub), kxPub: toHex(A.kxPub), kxSig: kxSigOf(A), name: 'Ana' })
     expect(await poll(client, 'PT-KSV-7Q4K')).toBeNull()
     claimed = true
     const p = await poll(client, 'PT-KSV-7Q4K')
-    expect(p).toEqual({ deviceId: bRecord.deviceId, name: 'Marta', signPub: bRecord.signPub, kxPub: bRecord.kxPub, fingerprint: fingerprint(B.signPub) })
+    expect(p).toEqual({ deviceId: bRecord.deviceId, name: 'Marta', signPub: bRecord.signPub, kxPub: bRecord.kxPub, fingerprint: fingerprint(B.signPub, B.kxPub) })
   })
   it('claim returns the owner as a proposal; a wrong code reports the relay status', async () => {
     const { client } = fakeRelay({ 'POST /pair/PT-KSV-7Q4K/claim': () => Response.json(bRecord), 'POST /pair/PT-ZZZ-ZZZZ/claim': () => new Response('no such code', { status: 404 }) })
@@ -53,7 +53,14 @@ describe('pairing flow', () => {
     await expect(claim(client, A, 'PT-ZZZ-ZZZZ', 'Ana')).rejects.toMatchObject({ status: 404 })
   })
   it('a record whose key does not hash to its id is refused', () => {
-    expect(() => proposalOf({ ...bRecord, deviceId: 'AAAAAAAAAAAAAAAA' })).toThrow()
+    expect(() => proposalOf({ ...bRecord, deviceId: 'AAAAAAAAAAAAAAAA' })).toThrow(KeyError)
+  })
+  it('a record whose kx key was swapped by the relay is refused before any pair key exists', () => {
+    const C = keysFromSeeds(fromHex(vectors.a.kxSeed), fromHex(vectors.b.signSeed))
+    expect(() => proposalOf({ ...bRecord, kxPub: toHex(C.kxPub) })).toThrow(KeyError)
+    expect(() => proposalOf({ ...bRecord, kxPub: toHex(C.kxPub), kxSig: kxSigOf(C) })).toThrow(KeyError)
+    expect(() => proposalOf({ ...bRecord, kxSig: '' })).toThrow(KeyError)
+    expect(() => proposalOf({ ...(bRecord as Omit<typeof bRecord, 'kxSig'> & { kxSig?: string }), kxSig: undefined } as never)).toThrow(KeyError)
   })
   it('friendOf derives the pair key only once the user confirms, with every grant off', () => {
     const f = friendOf(A, proposalOf(bRecord), 1234)

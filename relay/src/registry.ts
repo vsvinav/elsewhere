@@ -2,11 +2,12 @@ import { DurableObject } from 'cloudflare:workers'
 import { pairIdOf, unhex } from './ident'
 
 /** What a device publishes to pair: its two public keys and the name it wants shown. */
-export interface PairRecord { signPub: string; kxPub: string; name: string; deviceId: string }
+export interface PairRecord { signPub: string; kxPub: string; kxSig: string; name: string; deviceId: string }
 interface Code { owner: string; a: PairRecord; b?: PairRecord; createdAt: number; consumed: boolean }
 
 export const CODE_TTL_MS = 24 * 3600 * 1000
 const CREATES_PER_HOUR = 10
+const CREATES_PER_HOUR_IP = 30
 const CLAIMS_PER_HOUR = 30
 const HOUR_MS = 3600 * 1000
 
@@ -34,9 +35,13 @@ export class Registry extends DurableObject<Env> {
     return c
   }
 
-  async createCode(code: string, rec: PairRecord, now: number): Promise<'created' | 'exists' | 'limited'> {
-    if (await this.code(code, now)) return 'exists'
-    if (!(await this.bump(`rate:create:${rec.deviceId}`, CREATES_PER_HOUR, now))) return 'limited'
+  /** Counters move before the lookup, so probing for live codes costs the same as making them and tells a stranger nothing. */
+  async createCode(code: string, rec: PairRecord, ip: string, now: number): Promise<'created' | 'own' | 'taken' | 'limited'> {
+    const byDevice = await this.bump(`rate:create:${rec.deviceId}`, CREATES_PER_HOUR, now)
+    const byIp = await this.bump(`rate:create-ip:${ip}`, CREATES_PER_HOUR_IP, now)
+    if (!byDevice || !byIp) return 'limited'
+    const live = await this.code(code, now)
+    if (live) return live.owner === rec.deviceId ? 'own' : 'taken'
     await this.store.put(`code:${code}`, { owner: rec.deviceId, a: rec, createdAt: now, consumed: false } satisfies Code)
     return 'created'
   }
