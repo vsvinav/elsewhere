@@ -28,6 +28,7 @@ import { Welcome } from '../account/Welcome'
 import { AuthFlow, takeAuthToken, type AuthResult } from '../account/AuthFlow'
 import { useAccount } from '../account/store'
 import { startVaultSync } from '../account/sync'
+import { frontDoor } from '../account/frontDoor'
 
 // deck.gl and Google Maps only ship when the map opens.
 const FlightScreen = lazy(() => import('../tabs/Flights/Flights').then((m) => ({ default: m.Flights })))
@@ -121,9 +122,10 @@ export function App() {
   const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }
   const bar = <ReadyBar ready={ready} />
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
-  if (auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} onDone={authDone} onClose={() => setAuth(null)} />
-  if (!acct.loaded) return <div className="tray">{bar}<Printing /></div>
-  if (!prof && !acct.session && !acct.welcomed) return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => {}} />
+  const door = frontDoor(acct, !!auth, !!prof)
+  if (door === 'loading') return <div className="tray">{bar}<Printing /></div>
+  if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
+  if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => {}} />
   if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
   // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.

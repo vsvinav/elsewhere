@@ -3,7 +3,7 @@ import { b64, fromHex, replaceKeys, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
-import { api, messageOf, type AccountClient, type AccountInfo } from './client'
+import { api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
 import { useAccount } from './store'
 import { markUploaded } from './sync'
 import { deriveKey, newSalt, okPassphrase, openVault, PASSPHRASE_MIN } from './vault'
@@ -27,7 +27,7 @@ export const COPY = {
   passphrase: 'Passphrase',
   confirm: 'Confirm passphrase',
   mismatch: "Those don't match.",
-  tooShort: `Use at least ${PASSPHRASE_MIN} characters.`,
+  tooShort: `At least ${PASSPHRASE_MIN} characters.`,
   unlockTitle: 'Enter your recovery passphrase',
   unlockSub: 'The one you set when you made this account. It opens the vault with your profile and identity.',
   unlock: 'Unlock',
@@ -38,6 +38,8 @@ export const COPY = {
   finishing: 'Signing you in…',
   checking: 'Checking the link…',
   linkTitle: (email: string) => `Log in as ${email}?`,
+  switchTitle: (email: string) => `Switch to ${email}?`,
+  switchSub: (current: string) => `You are signed in as ${current} on this device. Continuing signs that account out here first.`,
   linkSub: 'This link came from a mail. If you did not ask for it, it may be for someone else\'s account.',
   linkYes: 'Continue',
   linkNo: 'Not me',
@@ -61,13 +63,15 @@ interface Props {
   token?: string | null
   onDone(r: AuthResult): void
   onClose?(): void
+  /** The account already signed in on this device, if any; a link for another one asks to switch. */
+  current?: string | null
   client?: AccountClient
   /** Tests skip the slow key derivation. */
   derive?: typeof deriveKey
 }
 
 /** Email → code → passphrase (new account) or unlock (one with a vault). The same screens serve sign up and log in. */
-export function AuthFlow({ mode, token, onDone, onClose, client, derive = deriveKey }: Props) {
+export function AuthFlow({ mode, token, onDone, onClose, current, client, derive = deriveKey }: Props) {
   const c = useRef(client ?? api()).current
   const [step, setStep] = useState<Step>(token ? 'token' : 'email')
   const [email, setEmail] = useState('')
@@ -89,7 +93,10 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
     try { await c.start(email.trim()); setNote(COPY.resent) } catch (err) { setError(messageOf(err)) } finally { setBusy('') }
   }
   const landed = async (session: string, account: AccountInfo) => {
-    await useAccount.getState().setSession({ session, id: account.id, email: account.email })
+    // Whatever this device remembered of a previous vault is for another account or passphrase.
+    const a = useAccount.getState()
+    a.setKey(null); await a.setSalt(null); await a.setVaultAt(null); await markUploaded(null)
+    await a.setSession({ session, id: account.id, email: account.email })
     setEmail(account.email)
     setStep(account.hasVault ? 'unlock' : 'set')
   }
@@ -104,7 +111,12 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
     c.peek(token).then((r) => setLinkEmail(r.email), (err) => { setError(messageOf(err)); setStep('email') }).finally(() => setBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const linkYes = () => { if (token) void finish({ token }).then((ok) => { if (!ok) setStep('email') }) }
+  const linkYes = async () => {
+    if (!token) return
+    if (current) { setBusy(COPY.finishing); await logOut(c) }
+    const ok = await finish({ token })
+    if (!ok) setStep('email')
+  }
   const linkNo = () => { setLinkEmail(''); setStep('email') }
 
   const setPassphrase = async (p: string) => {
@@ -146,10 +158,10 @@ export function AuthFlow({ mode, token, onDone, onClose, client, derive = derive
           </header>
 
           {step === 'token' && linkEmail && (
-            <Screen title={COPY.linkTitle(linkEmail)} sub={COPY.linkSub}>
+            <Screen title={current ? COPY.switchTitle(linkEmail) : COPY.linkTitle(linkEmail)} sub={current ? COPY.switchSub(current) : COPY.linkSub}>
               {error && <p className="acct-err" role="alert">{error}</p>}
               <div className="ob-actions">
-                <button className="btn" onClick={linkYes} disabled={!!busy}>{COPY.linkYes}</button>
+                <button className="btn" onClick={() => void linkYes()} disabled={!!busy}>{COPY.linkYes}</button>
                 <button className="btn quiet ob-back" onClick={linkNo} disabled={!!busy}>{COPY.linkNo}</button>
                 {busy && <span className="acct-busy">{busy}</span>}
               </div>

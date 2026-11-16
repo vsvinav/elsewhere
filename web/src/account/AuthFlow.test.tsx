@@ -35,7 +35,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
     peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'a***@example.com' } },
     me: async () => account,
-    logout: async () => {},
+    logout: async () => { calls.push('logout') },
     putVault: async () => {},
     getVault: async () => vault,
     deleteMe: async () => {},
@@ -115,10 +115,12 @@ describe('AuthFlow', () => {
     const { host } = mount({ client: svc.client })
     type(host.querySelector<HTMLInputElement>('#acct-email')!, 'ada@example.com'); submit(host); await settle()
     expect(text(host, '.ob-title')).toBe(COPY.email)
-    expect(text(host, '[role=alert]')).toBe("Couldn't reach the account service. Check your connection and try again.")
+    expect(text(host, '[role=alert]')).toBe("Couldn't reach the account service. Check your connection.")
   })
   it('a mail-link token first asks "Log in as a***@example.com?"; Continue signs in without a code', async () => {
     const svc = fakeService(false)
+    // Leftovers from an earlier vault on this device go with the new session.
+    await useAccount.getState().setSalt('b2xk'); await useAccount.getState().setVaultAt(5); await useAccount.getState().setVaultHash('h'); useAccount.getState().setKey(new Uint8Array(32))
     const { host } = mount({ client: svc.client, token: 't' })
     await settle()
     expect(svc.calls).toEqual(['peek t'])
@@ -127,6 +129,21 @@ describe('AuthFlow', () => {
     await settle()
     expect(svc.calls).toEqual(['peek t', 'finish {"token":"t"}'])
     expect(text(host, '.ob-title')).toBe(COPY.setTitle)
+    const a = useAccount.getState()
+    expect([a.salt, a.vaultAt, a.vaultHash, a.key]).toEqual([null, null, null, null])
+    expect(db.store.has('account:salt')).toBe(false)
+  })
+  it('a link while another account is signed in asks to switch, and signs the old one out first', async () => {
+    const svc = fakeService(false)
+    await useAccount.getState().setSession({ session: 'old', id: 'acct_0', email: 'bo@example.com' })
+    const { host } = mount({ client: svc.client, token: 't', current: 'bo@example.com' })
+    await settle()
+    expect(text(host, '.ob-title')).toBe('Switch to a***@example.com?')
+    expect(host.textContent).toContain('You are signed in as bo@example.com on this device.')
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === COPY.linkYes)!.click())
+    await settle()
+    expect(svc.calls).toEqual(['peek t', 'logout', 'finish {"token":"t"}'])
+    expect(useAccount.getState().session).toEqual({ session: 'sess', id: 'acct_1', email: 'ada@example.com' })
   })
   it('"Not me" discards the token and goes to the email step; an expired link lands there with the message', async () => {
     const svc = fakeService(false)
@@ -149,6 +166,7 @@ describe('AuthFlow', () => {
     const vault = await encryptVault(await derive('open sesame', salt), salt, JSON.stringify(plain))
     const svc = fakeService(true, vault)
     const before = await loadKeys()
+    db.store.set('crew:code', { value: 'PT-AAA-AAAA', madeAt: 1 })
     const { host, onDone } = mount({ client: svc.client, mode: 'login' })
     type(host.querySelector<HTMLInputElement>('#acct-email')!, 'ada@example.com'); submit(host); await settle()
     for (let i = 1; i <= 6; i++) type(digit(host, i), String(i))
@@ -167,6 +185,8 @@ describe('AuthFlow', () => {
     expect(toHex(after.kxPriv)).toBe(KX)
     expect(toHex(after.signPriv)).not.toBe(toHex(before.signPriv))
     expect(db.store.get('crew:keys')).toEqual({ signSeed: SIGN, kxSeed: KX })
+    // The share code on offer belonged to the old identity.
+    expect(db.store.has('crew:code')).toBe(false)
     const a = useAccount.getState()
     expect(a.salt).toBe(vault.salt)
     expect(toHex(a.key!)).toBe(toHex(await derive('open sesame', salt)))
