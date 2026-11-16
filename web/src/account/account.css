@@ -1,5 +1,6 @@
 /* Accounts: welcome, email, code and passphrase screens share the front door's bill, stamps and caps. */
 .acct-welcome .lede { color: var(--ink); }
+.acct-welcome .sk + .lede { margin-top: 28px; }
 .acct-choices { display: grid; gap: 18px; align-content: start; margin-top: 10vh; max-width: 420px; }
 .acct-choices .caps { color: var(--ink-3); }
 .acct-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -27,11 +28,11 @@
 @media (prefers-reduced-motion: reduce) { .acct-busy::before { animation: none; } }
 
 /* The welcome sketch: graph paper, a dashed red route, ink pins, mustard stamps and a counting numeral. */
-.sk { position: relative; width: min(720px, 92vw); max-width: 100%; aspect-ratio: 4 / 3; margin-top: 36px; color: var(--ink); }
+.sk { position: relative; width: max(320px, min(720px, 92vw, (100svh - 540px) * 4 / 3)); max-width: 100%; aspect-ratio: 4 / 3; margin-top: 36px; color: var(--ink); }
 .sk svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .sk-route { fill: none; stroke: var(--red); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 8 6; vector-effect: non-scaling-stroke; }
 .sk-pin { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); translate: -50% -50%; }
-.sk-pin b { position: absolute; right: calc(100% + 6px); bottom: calc(100% + 6px); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; color: var(--ink); }
+.sk-pin b { position: absolute; right: calc(100% + 10px); bottom: calc(100% + 6px); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; color: var(--ink); }
 .sk-stamp { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--mustard); translate: -50% -50%; animation: sk-land 260ms var(--ease) both; }
 .sk-stamp.red { background: var(--red); animation: none; }
 @keyframes sk-land { 0% { scale: 0; } 70% { scale: 1.18; } 100% { scale: 1; } }
