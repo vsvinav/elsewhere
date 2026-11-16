@@ -23,7 +23,7 @@ export const messageOf = (e: unknown): string => (e instanceof AccountError ? ME
 export interface AccountClient {
   start(email: string): Promise<{ dev?: { code: string } }>
   finish(body: FinishBody): Promise<Finish>
-  /** The masked address behind a mail-link token, so the person holding the link can confirm it is theirs. */
+  /** The address behind a mail-link token, so the person holding the link can confirm it is theirs. */
   peek(token: string): Promise<{ email: string }>
   me(): Promise<AccountInfo>
   logout(): Promise<void>

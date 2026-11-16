@@ -161,12 +161,12 @@ describe('auth', () => {
     expect(rs.filter((r) => r.status === 200)).toHaveLength(20)
     expect(rs.filter((r) => r.status === 429)).toHaveLength(10)
   })
-  it('peek names the masked address behind a live token and nothing for a dead one', async () => {
+  it('peek names the address behind a live token and nothing for a dead one', async () => {
     await start('olive.p@example.com')
     const token = await tokenFor('olive.p@example.com')
     const r = await call('GET', `/auth/peek?token=${token}`)
     expect(r.status).toBe(200)
-    expect(await r.json()).toEqual({ email: 'o***@example.com' })
+    expect(await r.json()).toEqual({ email: 'olive.p@example.com' })
     expect((await call('GET', '/auth/peek?token=nope')).status).toBe(400)
     expect((await call('GET', `/auth/peek?token=${'e'.repeat(64)}`)).status).toBe(400)
     expect((await call('POST', '/auth/finish', { token })).status).toBe(200)

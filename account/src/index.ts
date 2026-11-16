@@ -63,8 +63,6 @@ async function parseBody(req: Request): Promise<Record<string, unknown> | null> 
 }
 
 const limiter = (env: Env): DurableObjectStub<Limiter> => env.LIMITER.get(env.LIMITER.idFromName('main'))
-/** First letter, stars, domain: enough to recognise your own address, not enough to learn someone else's. */
-const maskEmail = (e: string) => { const at = e.indexOf('@'); return `${e.slice(0, 1)}***${e.slice(at)}` }
 
 async function sendMail(env: Env, to: string, code: string, token: string): Promise<void> {
   const pretty = `${code.slice(0, 3)} ${code.slice(3)}`
@@ -117,7 +115,8 @@ async function authPeek(req: Request, env: Env, now: number): Promise<Response> 
   if (!(await finishAllowed(lim, req, null, now))) return fail('slow down', 429)
   const token = new URL(req.url).searchParams.get('token') ?? ''
   const email = TOKEN_RE.test(token) ? await lim.peek(token, now) : null
-  return email ? json({ email: maskEmail(email) }) : fail('expired', 400)
+  // Whoever holds the token has read the mail, so the full address is theirs to see; it is what the prompt confirms.
+  return email ? json({ email }) : fail('expired', 400)
 }
 
 async function authFinish(req: Request, env: Env, now: number): Promise<Response> {

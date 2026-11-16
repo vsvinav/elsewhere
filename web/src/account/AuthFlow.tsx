@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { b64, fromHex, replaceKeys, unb64 } from '../crew/keys'
+import { b64, fromHex, hasKeys, replaceKeys, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
@@ -42,6 +42,7 @@ export const COPY = {
   switchTitle: (email: string) => `Switch to ${email}?`,
   switchSub: (current: string) => `You are signed in as ${current} on this device. Continuing signs that account out here first.`,
   linkSub: 'This link came from a mail. If you did not ask for it, it may be for someone else\'s account.',
+  linkLocal: "Continuing puts this device's record and friends into that account.",
   linkYes: 'Continue',
   linkNo: 'Not me',
   back: 'Back',
@@ -60,7 +61,7 @@ export function takeAuthToken(loc: { hash: string; pathname: string; search: str
 type Step = 'email' | 'code' | 'set' | 'unlock' | 'token'
 interface Props {
   mode: 'signup' | 'login'
-  /** From `#auth=<token>` in the mail link: confirmed against its masked address, then finished without a code. */
+  /** From `#auth=<token>` in the mail link: confirmed against its address, then finished without a code. */
   token?: string | null
   onDone(r: AuthResult): void
   onClose?(): void
@@ -80,6 +81,7 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
   const [busy, setBusy] = useState('')
   const [note, setNote] = useState('')
   const [linkEmail, setLinkEmail] = useState('')
+  const [hasLocal, setHasLocal] = useState(false)
   const title = mode === 'signup' ? COPY.signUp : COPY.logIn
 
   const start = async (e?: FormEvent) => {
@@ -106,9 +108,11 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     try { const r = await c.finish(body); await landed(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
   }
   // A link logs in whoever opens it, so the address behind it is shown first and nothing happens until Continue.
+  // A device with a record or identity of its own is told that those follow the account.
   useEffect(() => {
     if (step !== 'token' || !token) return
     setBusy(COPY.checking)
+    hasKeys().then((k) => setHasLocal(k || profile.get() !== null), () => setHasLocal(profile.get() !== null))
     c.peek(token).then((r) => setLinkEmail(r.email), (err) => { setError(messageOf(err)); setStep('email') }).finally(() => setBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -160,6 +164,7 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
 
           {step === 'token' && linkEmail && (
             <Screen title={current ? COPY.switchTitle(linkEmail) : COPY.linkTitle(linkEmail)} sub={current ? COPY.switchSub(current) : COPY.linkSub}>
+              {hasLocal && <p className="acct-note">{COPY.linkLocal}</p>}
               {error && <p className="acct-err" role="alert">{error}</p>}
               <div className="ob-actions">
                 <button className="btn" onClick={() => void linkYes()} disabled={!!busy}>{COPY.linkYes}</button>
