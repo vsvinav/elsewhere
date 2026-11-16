@@ -2,7 +2,7 @@ name: Pages
 
 on:
   push:
-    branches: [main, v2]
+    branches: [main, v2, v3]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One site, two builds: main at the root, the v2 preview under /v2/.
+  # One site, three builds: main at the root, previews under /v2/ and /v3/.
   build:
     strategy:
       matrix:
@@ -24,6 +24,8 @@ jobs:
             out: .
           - ref: v2
             out: v2
+          - ref: v3
+            out: v3
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -75,6 +77,10 @@ jobs:
         with:
           name: site-v2
           path: site/v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-v3
+          path: site/v3
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
