@@ -126,7 +126,8 @@ describe('Settings', () => {
     return { fn, puts }
   }
   const askUpdate = async (host: HTMLElement, flush: () => Promise<unknown>, pass: string) => {
-    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.update)!.click())
+    // The form's submit button shares the Update label; only open the form when it is closed.
+    if (!host.querySelector('.st-vault form')) act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.update)!.click())
     const el = host.querySelector<HTMLInputElement>('.st-vault input[type=password]')!
     act(() => setValue(el, pass))
     act(() => { host.querySelector('.st-vault form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
