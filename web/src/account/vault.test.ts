@@ -37,6 +37,16 @@ describe('vault format', () => {
     // The passphrase is trimmed before derivation, so stray spaces around it do not lock the vault.
     expect(toHex(await deriveKey('pass phrase ok', salt))).toBe(toHex(key))
   })
+  it('opens an older Android plaintext: upper-case units and works keyed by placeId', async () => {
+    const salt = unb64(vectors.salt)
+    const key = await deriveKey('pass phrase ok', salt)
+    const raw = { v: 1, signPriv: 'aa'.repeat(32), kxPriv: 'bb'.repeat(32), profile: { name: 'Ada', units: 'MI', homes: [], works: [{ lat: 1, lng: 2, placeId: 'x', from: 0, to: null }] } }
+    const opened = await openVault(key, await encryptVault(key, salt, JSON.stringify(raw)))
+    expect(opened.profile.units).toBe('mi')
+    expect(opened.settings.units).toBe('mi')
+    expect(opened.profile.works[0].place_id).toBe('x')
+    expect(opened.profile.works[0]).not.toHaveProperty('placeId')
+  })
   it('a passphrase needs eight characters after trimming', () => {
     expect(PASSPHRASE_MIN).toBe(8)
     expect(okPassphrase('  short  ')).toBe(false)

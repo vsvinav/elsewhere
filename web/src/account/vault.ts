@@ -2,7 +2,7 @@
 // Byte-for-byte the same on Android (PBKDF2WithHmacSHA256 + AES/GCM/NoPadding); `vectors.json` pins the format.
 import { randomBytes } from '@noble/hashes/utils.js'
 import { b64, unb64 } from '../crew/keys'
-import type { Profile } from '../profile/profile'
+import type { Profile, Work } from '../profile/profile'
 
 export const PBKDF2_ITERS = 310000
 export const PASSPHRASE_MIN = 8
@@ -36,8 +36,21 @@ export async function decryptVault(key: Uint8Array, body: VaultBody): Promise<st
 
 export const newSalt = () => randomBytes(SALT_BYTES)
 export const sealVault = (key: Uint8Array, salt: Uint8Array, plain: VaultPlain) => encryptVault(key, salt, JSON.stringify(plain))
+const unitsOf = (u: unknown): 'km' | 'mi' => (String(u ?? '').toLowerCase() === 'mi' ? 'mi' : 'km')
+
+/** Older Android vaults wrote `units` upper-case and works with `placeId`; both shapes open into the canonical profile. */
+function normalizeProfile(raw: Profile): Profile {
+  const works = (raw.works ?? []).map((w) => {
+    const { placeId, ...rest } = w as Work & { placeId?: string }
+    return { ...rest, place_id: rest.place_id ?? placeId ?? '' }
+  })
+  return { ...raw, units: unitsOf(raw.units), homes: raw.homes ?? [], works }
+}
+
 export async function openVault(key: Uint8Array, body: VaultBody): Promise<VaultPlain> {
   const p = JSON.parse(await decryptVault(key, body)) as Partial<VaultPlain>
   if (p.v !== 1 || typeof p.signPriv !== 'string' || typeof p.kxPriv !== 'string' || !p.profile) throw new Error('not a vault')
-  return { v: 1, signPriv: p.signPriv, kxPriv: p.kxPriv, profile: p.profile, settings: { units: p.settings?.units ?? p.profile.units ?? 'km', relayUrl: p.settings?.relayUrl ?? '', accountUrl: p.settings?.accountUrl } }
+  const profile = normalizeProfile(p.profile)
+  const units = p.settings?.units ? unitsOf(p.settings.units) : profile.units
+  return { v: 1, signPriv: p.signPriv, kxPriv: p.kxPriv, profile, settings: { units, relayUrl: p.settings?.relayUrl ?? '', accountUrl: p.settings?.accountUrl } }
 }
