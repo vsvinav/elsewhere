@@ -27,6 +27,7 @@ const mount = (props: Partial<Parameters<typeof Welcome>[0]> = {}) => {
   return host
 }
 const counter = (host: HTMLElement) => host.querySelector('.sk-km')?.textContent
+const labels = (host: HTMLElement) => [...host.querySelectorAll('.sk-pin b')].map((b) => b.textContent)
 
 describe('Welcome', () => {
   it('shows the line and the three choices, in the agreed words', () => {
@@ -63,10 +64,11 @@ describe('Welcome', () => {
 })
 
 describe('Welcome sketch', () => {
-  it('pins every stop on the demo route and starts the counter at zero', () => {
+  it('pins every stop on the demo route, names only HOME during the hold, and starts the counter at zero', () => {
     vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
     const host = mount()
-    expect([...host.querySelectorAll('.sk-pin')].map((t) => t.textContent)).toEqual(POINTS.map((p) => p.label))
+    expect(host.querySelectorAll('.sk-pin').length).toBe(POINTS.length)
+    expect(labels(host)).toEqual(['HOME'])
     expect(counter(host)).toBe('0')
     expect(host.querySelectorAll('.sk-stamp').length).toBe(1)
     expect(host.querySelectorAll('.ob-mark').length).toBe(1)
@@ -82,6 +84,7 @@ describe('Welcome sketch', () => {
     act(() => { vi.advanceTimersByTime(TOTAL) })
     expect(counter(host)).toBe('14,920')
     expect(host.querySelectorAll('.sk-stamp').length).toBe(6)
+    expect(labels(host)).toEqual(POINTS.map((p) => p.label))
     const calls = raf.mock.calls.length
     act(() => { vi.advanceTimersByTime(1000) })
     expect(raf.mock.calls.length).toBe(calls)
@@ -93,6 +96,7 @@ describe('Welcome sketch', () => {
     const host = mount()
     expect(counter(host)).toBe('14,920')
     expect(host.querySelectorAll('.sk-stamp').length).toBe(6)
+    expect(labels(host)).toEqual(POINTS.map((p) => p.label))
     expect(raf).not.toHaveBeenCalled()
   })
 })
