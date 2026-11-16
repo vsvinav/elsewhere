@@ -2,19 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import type { Data } from '../../data/types'
 import type { Fact, Kind } from '../../analytics/facts'
 import { busiest, compareYears, cycleYear, streaks, todaysFact, yearsWithData } from '../../analytics/hub'
-import { fmtSpan, highlightState } from '../../analytics/highlights'
+import { fmtSpan } from '../../analytics/highlights'
 import { stats } from '../../analytics/stats'
 import { tilt } from '../../analytics/passport'
 import { MI, type Units } from '../../profile/units'
-import { useStore } from '../../store/useStore'
 import { n0, WEEKDAYS } from '../../world/fmt'
-import { dayMonth, dmy, headline } from '../highlights/copy'
+import { dmy } from '../highlights/copy'
 import { PassportCompact } from './Passport'
 import '../Trips/deck.css'
 import './hub.css'
 
 export const KIND_LABEL: Record<Kind, string> = { explored: 'Explored', record: 'Record', scale: 'Scale', habit: 'Habit' }
-const CARD_IDS = ['today', 'onthisday', 'streaks', 'passport', 'compare', 'rhythm'] as const
+const CARD_IDS = ['today', 'streaks', 'passport', 'compare', 'rhythm'] as const
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 /** "Sat" from the poster's MON..SUN. */
 const dayName = (d: number) => WEEKDAYS[d][0] + WEEKDAYS[d].slice(1).toLowerCase()
@@ -35,7 +34,6 @@ function Card({ id, kind, tone, className = '', selected, onFocus, open, childre
 
 export interface HubDeckProps {
   data: Data
-  raw: Data
   facts: Fact[]
   today: string
   units: Units
@@ -43,11 +41,9 @@ export interface HubDeckProps {
   onOpenPassport(): void
 }
 
-/** The Play deck: six cards along the top of the Facts tab, each opening its full pass. */
-export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPassport }: HubDeckProps) {
-  const goTo = useStore((s) => s.goTo)
+/** The Play deck: five cards in a strip under the Fun Facts hero, each opening its full pass. */
+export function HubDeck({ data, facts, today, units, onOpenKind, onOpenPassport }: HubDeckProps) {
   const fact = useMemo(() => todaysFact(facts, today), [facts, today])
-  const day = useMemo(() => highlightState(raw, today), [raw, today])
   const run = useMemo(() => streaks(data), [data])
   const years = useMemo(() => yearsWithData(data), [data])
   const rhythm = useMemo(() => { const s = stats(data); return { grid: s.rhythm, max: s.rhythmMax, peak: busiest(s.rhythm) } }, [data])
@@ -77,12 +73,6 @@ export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPass
     if (best !== selected) setSelected(best)
   }
 
-  const highlight = day.kind === 'highlight' || day.kind === 'short' ? day.highlight : null
-  const openDay = () => {
-    if (!highlight) return
-    goTo({ kind: 'range', from: highlight.range[0], to: highlight.range[1], label: 'On this day' })
-    useStore.setState((s) => ({ playhead: highlight.playhead ?? s.playhead, focus: highlight.placeIds.length ? { ids: highlight.placeIds, n: s.focus?.n ?? 1 } : s.focus }))
-  }
   const pick = (i: number) => ({ selected: i === selected, onFocus: () => setSelected(i) })
   const u = units === 'mi' ? 'mi' : 'km'
 
@@ -95,22 +85,7 @@ export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPass
           <div className="hub-date caps">{dmy(today)}</div>
         </Card>
 
-        <Card id="onthisday" kind="On this day" {...pick(1)} open={highlight ? { label: 'The map', aria: 'Open on the map', onClick: openDay } : undefined}>
-          {highlight ? (
-            <>
-              <h3 className="display hub-h">{highlight.city}</h3>
-              <p className="hub-lede">{dmy(highlight.date)} — you {highlight.verb} {highlight.city}.</p>
-              <div className="hub-date caps">{day.kind === 'short' ? `Your record starts ${dayMonth(day.starts)} — meanwhile, here's your farthest day so far.` : headline(highlight)}</div>
-            </>
-          ) : (
-            <>
-              <h3 className="display hub-h">Quiet day</h3>
-              <p className="hub-lede">{day.kind === 'quiet' && day.nearest ? `Nothing on ${dmy(today).slice(0, -5)} in earlier years. The nearest thing on record: ${dmy(day.nearest.date)}, ${day.nearest.city}.` : 'Nothing on this day in earlier years.'}</p>
-            </>
-          )}
-        </Card>
-
-        <Card id="streaks" kind="Streaks" tone="ink" {...pick(2)} open={{ label: 'Record facts', aria: 'Open record facts', onClick: () => onOpenKind('record') }}>
+        <Card id="streaks" kind="Streaks" tone="ink" {...pick(1)} open={{ label: 'Record facts', aria: 'Open record facts', onClick: () => onOpenKind('record') }}>
           <ul className="hub-streaks">
             <li><b className="display">{run.away?.n ?? 0}</b><span className="caps">Longest away streak</span><small>{run.away ? fmtSpan(run.away.from, run.away.to) : 'No nights away yet'}</small></li>
             <li><b className="display">{run.newWeeks?.n ?? 0}</b><span className="caps">Weeks with a new place</span><small>{run.newWeeks ? fmtSpan(run.newWeeks.from, run.newWeeks.to) : 'Nothing new yet'}</small></li>
@@ -118,11 +93,11 @@ export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPass
           </ul>
         </Card>
 
-        <Card id="passport" kind="Passport" {...pick(3)} open={{ label: 'Passport', aria: 'Open passport', onClick: onOpenPassport }}>
+        <Card id="passport" kind="Passport" {...pick(2)} open={{ label: 'Passport', aria: 'Open passport', onClick: onOpenPassport }}>
           <PassportCompact />
         </Card>
 
-        <Card id="compare" kind="Compare" {...pick(4)} open={{ label: 'Scale facts', aria: 'Open scale facts', onClick: () => onOpenKind('scale') }}>
+        <Card id="compare" kind="Compare" {...pick(3)} open={{ label: 'Scale facts', aria: 'Open scale facts', onClick: () => onOpenKind('scale') }}>
           <div className="hub-years">
             {([a, b] as const).map((y, i) => (
               <button key={i} type="button" className="hub-chip" aria-label={`Compare year ${y}`} disabled={years.length < 3} onClick={() => setPair(i === 0 ? [cycleYear(years, a, b), b] : [a, cycleYear(years, b, a)])}>{y}</button>
@@ -137,7 +112,7 @@ export function HubDeck({ data, raw, facts, today, units, onOpenKind, onOpenPass
           </table>
         </Card>
 
-        <Card id="rhythm" kind="Rhythm" tone="red" {...pick(5)} open={{ label: 'Habit facts', aria: 'Open habit facts', onClick: () => onOpenKind('habit') }}>
+        <Card id="rhythm" kind="Rhythm" tone="red" {...pick(4)} open={{ label: 'Habit facts', aria: 'Open habit facts', onClick: () => onOpenKind('habit') }}>
           <h3 className="display hub-h">{rhythm.peak ? `${dayName(rhythm.peak.d)} ${hh(rhythm.peak.h)}` : 'Home all week'}</h3>
           <p className="hub-lede">{rhythm.peak ? `Busiest: ${dayName(rhythm.peak.d)} ${hh(rhythm.peak.h)}. Hours away from home, by weekday and hour.` : 'No hours away from home on record.'}</p>
           <div className="heat-mini" role="img" aria-label="Heat grid of hours away from home by weekday and hour">
