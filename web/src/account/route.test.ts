@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOLD, LEG, POINTS, TOTAL, WOBBLE, pathD, sketchAt } from './sketch'
+import { HOLD, LEG, POINTS, TOTAL, WOBBLE, pathD, sketchAt } from './route'
 
 describe('sketchAt', () => {
   it('holds at home before the first leg', () => {

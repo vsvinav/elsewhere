@@ -54,3 +54,12 @@ export function sketchAt(t: number): Frame {
   const from = POINTS[i].km, to = POINTS[i + 1].km
   return { leg: i + 1, progress: (i + e) / LEGS, km: Math.round(from + (to - from) * e), stamps: i }
 }
+
+/** Length of the whole route on the sheet, so the draw can be driven without measuring the DOM. */
+export const PATH_LENGTH = (() => {
+  const pts: [number, number][] = [[POINTS[0].x, POINTS[0].y]]
+  for (let i = 0; i < LEGS; i++) { pts.push(...WOBBLE[i]); pts.push([POINTS[i + 1].x, POINTS[i + 1].y]) }
+  let len = 0
+  for (let i = 1; i < pts.length; i++) len += Math.hypot((pts[i][0] - pts[i - 1][0]) * W, (pts[i][1] - pts[i - 1][1]) * H)
+  return len
+})()
