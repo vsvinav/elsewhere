@@ -1,0 +1,21 @@
+name = "elsewhere-account"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets, set once per deploy: `wrangler secret put RESEND_KEY`, `wrangler secret put MAIL_FROM`
+# (e.g. "Elsewhere <hello@elsewhere.app>"), `wrangler secret put LINK_BASE` (e.g. "https://vsvinav.github.io/elsewhere/v3/").
+[vars]
+DEV_MAIL = "0"
+
+[[kv_namespaces]]
+binding = "ACCOUNTS"
+id = "replace-me"
+
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "Limiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limiter"]

@@ -24,6 +24,11 @@ import { Places } from '../tabs/Places/Places'
 import { Trips } from '../tabs/Trips/Trips'
 import { Pass, Field } from '../world'
 import { RangeBar } from './RangeBar'
+import { Welcome } from '../account/Welcome'
+import { AuthFlow, takeAuthToken, type AuthResult } from '../account/AuthFlow'
+import { useAccount } from '../account/store'
+import { startVaultSync } from '../account/sync'
+import { frontDoor } from '../account/frontDoor'
 
 // deck.gl and Google Maps only ship when the map opens.
 const FlightScreen = lazy(() => import('../tabs/Flights/Flights').then((m) => ({ default: m.Flights })))
@@ -51,6 +56,13 @@ export function App() {
   const prof = useProfile()
   const { mapsKey } = useSettings()
   const gated = useKeyGate()
+  // Accounts: the welcome screen comes before onboarding on a fresh device; a mail link's token signs in straight away.
+  const acct = useAccount()
+  const [auth, setAuth] = useState<{ mode: 'signup' | 'login'; token?: string } | null>(() => { const token = takeAuthToken(); return token ? { mode: 'login', token } : null })
+  const [needImport, setNeedImport] = useState(false)
+  useEffect(() => { void useAccount.getState().load() }, [])
+  useEffect(() => startVaultSync(), [])
+  const authDone = (r: AuthResult) => { setAuth(null); void useAccount.getState().setWelcomed(true); if (r.restored) setNeedImport(true) }
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
@@ -110,8 +122,14 @@ export function App() {
   const goHome = () => { useStore.getState().setTab('home'); scrollTo({ top: 0, behavior: 'smooth' }) }
   const bar = <ReadyBar ready={ready} />
   if (error) return <div className="tray"><LoadFailed error={error} /></div>
+  const door = frontDoor(acct, !!auth, !!prof)
+  if (door === 'loading') return <div className="tray">{bar}<Printing /></div>
+  if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
+  if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => {}} />
   if (!record && noDemo) return <>{bar}<Onboarding key="new" data={null} demo={false} stage={stage} importError={importError} importFile={ctx.importFile} initial={null} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
+  // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.
+  if (prof && needImport && !mine && !editing) return <>{bar}<Onboarding key="import" data={data} demo stage={stage} importError={importError} importFile={ctx.importFile} initial={prof} importFirst onClose={() => setNeedImport(false)} /></>
   // A returning visitor's saved key is checked once before the record prints on it; onboarding carries its own check.
   if (prof && !editing && gated) return <div className="tray">{bar}<KeyGate /></div>
   if (!prof || editing) {

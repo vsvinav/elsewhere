@@ -28,3 +28,7 @@
 .settings .setting .usage .fine { margin: 0; }
 .settings .setting .usage button { justify-self: start; padding: 0; border: 0; background: none; color: var(--ink-3); font: 700 11px/1 var(--body); letter-spacing: 0.18em; text-transform: uppercase; text-decoration: underline; cursor: pointer; }
 .settings .setting .usage button:hover { color: var(--red); }
+
+.settings .st-vault { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.settings .st-vault form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.settings .st-vault input { font: 15px/1.3 var(--body); padding: 8px 10px; border: 1.5px solid var(--ink); background: var(--stock); color: var(--ink); min-width: 220px; }

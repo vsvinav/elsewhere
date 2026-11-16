@@ -1,7 +1,13 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useRecord } from './App'
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, TEST_PROMPT, askLlm, modelOf, type LlmProvider } from '../ask/llm'
-import { DEFAULT_RELAY, settings, useSettings, type MapProvider } from '../ingest/settings'
+import { DEFAULT_ACCOUNT, DEFAULT_RELAY, settings, useSettings, type MapProvider } from '../ingest/settings'
+import { AuthFlow } from '../account/AuthFlow'
+import { api, deleteAccount, logOut, messageOf } from '../account/client'
+import { useAccount } from '../account/store'
+import { uploadVault, vaultStatus, type VaultStatus } from '../account/sync'
+import { b64, unb64 } from '../crew/keys'
+import { deriveKey, newSalt, okPassphrase, openVault, PASSPHRASE_MIN } from '../account/vault'
 import { profile, useProfile } from '../profile/profile'
 import { KeyCheck } from '../profile/KeyCheck'
 import { useStore } from '../store/useStore'
@@ -10,8 +16,24 @@ import { Field } from '../world'
 import './settings.css'
 
 export const SETTINGS_TITLE = 'SETTINGS'
-export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', units: 'UNITS', data: 'DATA' } as const
+export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', account: 'ACCOUNT', units: 'UNITS', data: 'DATA' } as const
 export const RELAY_CAPTION = 'Friends pair and share through this relay. It holds only device ids and encrypted pings; leave it empty to turn Crew off.'
+export const ACCOUNT = {
+  signIn: 'Log in or sign up',
+  signedOut: 'An account keeps a sealed copy of your profile and identity, so a new device can pick up where this one left off.',
+  caption: 'The account service holds your email and a vault only your passphrase opens. The record itself stays in this browser.',
+  fresh: 'Recovery vault: up to date',
+  stale: 'Recovery vault: out of date',
+  empty: 'Recovery vault: nothing to keep yet',
+  wrong: "That's not it",
+  tooShort: `At least ${PASSPHRASE_MIN} characters.`,
+  update: 'Update',
+  updateHint: 'Enter your recovery passphrase to seal the latest copy.',
+  logOut: 'Log out',
+  del: 'Delete account',
+  delConfirm: 'Delete your account? The vault on the service goes with it. Your record and profile stay in this browser.',
+  url: 'Account service URL',
+} as const
 export const PROVIDER_LABEL: Record<LlmProvider, string> = { openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini', custom: 'Ollama / custom' }
 export const LLM_CAPTION = 'Your key is stored in this browser only and is sent straight to the provider you choose.'
 export const NO_KEY_STATUS = 'Add a key first'
@@ -21,6 +43,8 @@ export const CLEAR_CONFIRM = "Clear this browser's record? Your import and profi
 /** Everything a visitor configures, on one page over the tour. Keys never leave the browser. */
 export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
   const close = useStore((s) => s.closeSettings)
+  const [auth, setAuth] = useState(false)
+  if (auth) return <AuthFlow mode="login" onDone={() => setAuth(false)} onClose={() => setAuth(false)} />
   return (
     <main className="strip settings">
       <button className="btn quiet back" onClick={close}>← Back</button>
@@ -28,6 +52,7 @@ export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
       <MapsSection />
       <AskSection fetchFn={fetchFn} />
       <CrewSection />
+      <AccountSection onSignIn={() => setAuth(true)} fetchFn={fetchFn} />
       <UnitsSection />
       <DataSection />
     </main>
@@ -139,6 +164,95 @@ function CrewSection() {
       </div>
       <p className="fine">{RELAY_CAPTION}</p>
     </section>
+  )
+}
+
+function AccountSection({ onSignIn, fetchFn }: { onSignIn(): void; fetchFn: typeof fetch }) {
+  const acct = useAccount()
+  const prof = useProfile()
+  const { accountUrl } = useSettings()
+  const [url, setUrl] = useState(accountUrl)
+  const [status, setStatus] = useState('')
+  const save = () => settings.set({ accountUrl: url.trim().replace(/\/+$/, '') || DEFAULT_ACCOUNT })
+  const state = vaultStatus(acct, prof)
+  const out = async () => { setStatus(''); await logOut(api(fetchFn)) }
+  const del = async () => {
+    if (!window.confirm(ACCOUNT.delConfirm)) return
+    setStatus('')
+    try { await deleteAccount(api(fetchFn)) } catch (e) { setStatus(messageOf(e)) }
+  }
+  return (
+    <section className="setting st-account">
+      <h2>{SECTION.account}</h2>
+      {acct.session ? (
+        <>
+          <Field label="Signed in as">{acct.session.email}</Field>
+          <VaultLine state={state} fetchFn={fetchFn} />
+          <div className="st-actions">
+            <button className="btn" onClick={out}>{ACCOUNT.logOut}</button>
+            <button className="btn danger" onClick={del}>{ACCOUNT.del}</button>
+            {status && <span role="status" className="st-status">{status}</span>}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="fine" style={{ margin: 0 }}>{ACCOUNT.signedOut}</p>
+          <div className="st-actions"><button className="btn" onClick={onSignIn}>{ACCOUNT.signIn}</button></div>
+        </>
+      )}
+      <div className="fields keys">
+        <div className="field">
+          <label className="lab" htmlFor="st-account">{ACCOUNT.url}</label>
+          <input id="st-account" className="val wide" value={url} onChange={(e) => setUrl(e.target.value)} onBlur={save} placeholder={DEFAULT_ACCOUNT} spellCheck={false} autoComplete="off" />
+        </div>
+      </div>
+      <p className="fine">{ACCOUNT.caption}</p>
+    </section>
+  )
+}
+
+/**
+ * "Up to date" or "out of date · Update". Update asks for the passphrase, since the key does not outlive the page, and
+ * proves it against the vault already on the service before anything is re-sealed; only a missing vault takes a new one.
+ */
+function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fetch }) {
+  const [asking, setAsking] = useState(false)
+  const [pass, setPass] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!okPassphrase(pass)) { setErr(ACCOUNT.tooShort); return }
+    setBusy(true); setErr('')
+    try {
+      const client = api(fetchFn)
+      const a = useAccount.getState()
+      const body = await client.getVault()
+      let salt: Uint8Array, key: Uint8Array
+      if (body) {
+        salt = unb64(body.salt); key = await deriveKey(pass, salt)
+        try { await openVault(key, body) } catch { setErr(ACCOUNT.wrong); return }
+      } else { salt = newSalt(); key = await deriveKey(pass, salt) }
+      await a.setSalt(b64(salt)); a.setKey(key)
+      if (await uploadVault({ client: () => client })) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection.")
+    } catch (e) { setErr(messageOf(e)) } finally { setBusy(false) }
+  }
+  if (state === 'none') return null
+  const line = state === 'fresh' ? ACCOUNT.fresh : state === 'empty' ? ACCOUNT.empty : ACCOUNT.stale
+  return (
+    <div className="st-vault">
+      <span role="status" className={`st-status${state === 'stale' ? '' : ' ok'}`}>{line}</span>
+      {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} onClick={() => setAsking(true)}>{ACCOUNT.update}</button>}
+      {asking && (
+        <form onSubmit={submit}>
+          <input type="password" aria-label="Recovery passphrase" placeholder="Recovery passphrase" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} disabled={busy} autoFocus />
+          <button className="btn" type="submit" style={{ margin: 0 }} disabled={busy || !pass.trim()}>{ACCOUNT.update}</button>
+          {busy && <span className="acct-busy">Sealing…</span>}
+          {err && <span role="alert" className="dz-err">{err}</span>}
+          {!err && !busy && <span className="fine" style={{ margin: 0 }}>{ACCOUNT.updateHint}</span>}
+        </form>
+      )}
+    </div>
   )
 }
 

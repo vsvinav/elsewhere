@@ -44,6 +44,10 @@ jobs:
       - if: hashFiles('relay/package-lock.json') != ''
         run: npm ci
         working-directory: relay
+      # Likewise the account e2e test starts the account Worker in-process; v3 ships one.
+      - if: hashFiles('account/package-lock.json') != ''
+        run: npm ci
+        working-directory: account
       - run: npm test
         env:
           CI: true

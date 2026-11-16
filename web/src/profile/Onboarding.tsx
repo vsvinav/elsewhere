@@ -32,12 +32,14 @@ interface Props {
   /** Editing an existing profile: start at the name step and prefill. */
   initial?: Profile | null
   onClose?: () => void
+  /** A restored profile with no record of its own yet: start at the import step, with the answers already filled in. */
+  importFirst?: boolean
 }
 
 /** The front door: file + key or the demo, then five short questions that make the record theirs. */
-export function Onboarding({ data, demo, stage, importError, importFile, initial, onClose }: Props) {
+export function Onboarding({ data, demo, stage, importError, importFile, initial, onClose, importFirst }: Props) {
   const { mapsKey } = useSettings()
-  const [step, setStep] = useState<Step>(initial || (data && !demo) ? 'name' : 'start')
+  const [step, setStep] = useState<Step>((initial && !importFirst) || (data && !demo) ? 'name' : 'start')
   const [name, setName] = useState(initial?.name ?? '')
   const [homes, setHomes] = useState<Home[]>(initial?.homes ?? [])
   const [works, setWorks] = useState<Work[]>(initial?.works ?? [])
