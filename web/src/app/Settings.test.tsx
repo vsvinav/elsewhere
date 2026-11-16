@@ -13,11 +13,17 @@ vi.hoisted(() => {
 })
 vi.mock('../ingest/keycheck', async (orig) => ({ ...(await orig<typeof import('../ingest/keycheck')>()), checkKey: async () => ({ ok: true }) }))
 vi.mock('@vis.gl/react-google-maps', () => ({ APIProvider: ({ children }: { children: unknown }) => children, Map: () => null, useMap: () => null }))
+vi.mock('../ingest/db', () => {
+  const m = new Map<string, unknown>()
+  return { kv: { get: async (k: string) => m.get(k), set: async (k: string, v: unknown) => { m.set(k, v) }, setAll: async (e: Record<string, unknown>) => { for (const [k, v] of Object.entries(e)) m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
+})
 
 import { Settings } from './Settings'
 import { RecordContext, type Record_ } from './App'
 import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
+import { resetAccountForTest, useAccount } from '../account/store'
+import { ACCOUNT } from './Settings'
 
 const rec: Record_ = { mine: true, stage: null, importError: null, enrichError: null, importFile() {}, reset: vi.fn(), editProfile() {} }
 const mount = (fetchFn?: typeof fetch) => {
@@ -38,14 +44,15 @@ const okFetch = (async () => Response.json({ choices: [{ message: { content: 'OK
 beforeEach(() => {
   settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://relay.elsewhere.app' })
   profile.set({ name: 'V', units: 'km', homes: [], works: [] })
+  resetAccountForTest()
   document.body.innerHTML = ''
 })
 
 describe('Settings', () => {
-  it('prints the five sections under the title', () => {
+  it('prints the six sections under the title', () => {
     const { host, unmount } = mount()
     expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
-    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'CREW', 'UNITS', 'DATA'])
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'CREW', 'ACCOUNT', 'UNITS', 'DATA'])
     expect(host.querySelector('label[for=st-map-id]')?.textContent).toBe('Map ID · optional')
     expect(host.querySelector('label[for=st-map-tiles]')?.textContent).toBe('Map provider')
     expect([...host.querySelectorAll('#st-map-tiles option')].map((o) => o.textContent)).toEqual(['Auto', 'Google', 'OpenStreetMap'])
@@ -60,6 +67,53 @@ describe('Settings', () => {
     expect(el.value).toBe('https://relay.elsewhere.app')
     act(() => { el.focus(); setValue(el, ' https://relay.example.org/ '); el.blur() })
     expect(settings.get().relayUrl).toBe('https://relay.example.org')
+    unmount()
+  })
+
+  it('Account service URL edits land in settings and fall back to the default when cleared', () => {
+    const { host, unmount } = mount()
+    const el = input(host, 'st-account')!
+    act(() => { el.focus(); setValue(el, ' https://acct.example.org/ '); el.blur() })
+    expect(settings.get().accountUrl).toBe('https://acct.example.org')
+    act(() => { el.focus(); setValue(el, ''); el.blur() })
+    expect(settings.get().accountUrl).toBe('https://account.elsewhere.app')
+    unmount()
+  })
+
+  it('signed out: offers to log in or sign up and opens the auth flow', () => {
+    const { host, unmount } = mount()
+    const btn = [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.signIn)!
+    expect(host.textContent).toContain(ACCOUNT.signedOut)
+    act(() => btn.click())
+    expect(host.querySelector('h2.ob-title')?.textContent).toBe('Your email')
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click())
+    expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
+    unmount()
+  })
+
+  it('signed in: shows the email, the vault state and the Update prompt when stale', async () => {
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, vaultAt: 1, pending: false })
+    const { host, unmount } = mount()
+    expect(host.textContent).toContain('v@example.org')
+    expect(host.textContent).toContain(ACCOUNT.fresh)
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === ACCOUNT.update)).toBe(false)
+    act(() => useAccount.setState({ pending: true }))
+    expect(host.textContent).toContain(ACCOUNT.stale)
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.update)!.click())
+    expect(host.querySelector('input[type=password]')).not.toBeNull()
+    expect(host.textContent).toContain(ACCOUNT.updateHint)
+    unmount()
+  })
+
+  it('Log out clears the session locally even when the service is unreachable', async () => {
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, salt: 'c2FsdA==', vaultAt: 1 })
+    settings.set({ accountUrl: 'http://127.0.0.1:1' })
+    const { host, flush, unmount } = mount()
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === ACCOUNT.logOut)!.click())
+    await flush()
+    await flush()
+    expect(useAccount.getState().session).toBeNull()
+    expect(host.textContent).toContain(ACCOUNT.signIn)
     unmount()
   })
 

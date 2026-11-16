@@ -41,6 +41,14 @@ export const COPY = {
 } as const
 
 export type AuthResult = { restored: boolean }
+
+/** The mail link lands on `#auth=<token>`; take the token and clear it from the address bar so a reload does not retry it. */
+export function takeAuthToken(loc: { hash: string; pathname: string; search: string } = location, replace: (url: string) => void = (u) => history.replaceState(null, '', u)): string | null {
+  const m = /^#auth=([0-9a-f]{64})$/i.exec(loc.hash)
+  if (!m) return null
+  replace(loc.pathname + loc.search)
+  return m[1].toLowerCase()
+}
 type Step = 'email' | 'code' | 'set' | 'unlock' | 'token'
 interface Props {
   mode: 'signup' | 'login'

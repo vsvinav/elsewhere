@@ -16,7 +16,7 @@ import { concatBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 import { fromHex, loadKeys, setKeysForTest, toHex, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { profile, type Profile } from '../profile/profile'
-import { AuthFlow, COPY } from './AuthFlow'
+import { AuthFlow, COPY, takeAuthToken } from './AuthFlow'
 import { AccountError, type AccountClient, type AccountInfo } from './client'
 import { resetAccountForTest, useAccount } from './store'
 import { encryptVault, type VaultBody, type VaultPlain } from './vault'
@@ -169,6 +169,15 @@ describe('AuthFlow', () => {
     expect(useAccount.getState().session?.session).toBe('sess')
     expect(useAccount.getState().key).toBeNull()
     expect(profile.get()).toBeNull()
+  })
+  it('takeAuthToken reads #auth= from the address and clears it; other hashes are left alone', () => {
+    const replaced: string[] = []
+    const tok = 'ab'.repeat(32)
+    expect(takeAuthToken({ hash: `#auth=${tok.toUpperCase()}`, pathname: '/v3/', search: '?x=1' }, (u) => replaced.push(u))).toBe(tok)
+    expect(replaced).toEqual(['/v3/?x=1'])
+    expect(takeAuthToken({ hash: '#settings', pathname: '/', search: '' }, (u) => replaced.push(u))).toBeNull()
+    expect(takeAuthToken({ hash: '#auth=short', pathname: '/', search: '' }, (u) => replaced.push(u))).toBeNull()
+    expect(replaced).toHaveLength(1)
   })
   it('Cancel hands control back when a closer is given', () => {
     const onClose = vi.fn()
