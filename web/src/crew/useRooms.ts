@@ -44,6 +44,5 @@ export function useRooms(deps: Deps = {}) {
     loadKeys().then((keys) => { if (on) stop = startRooms(relayUrl, keys, useCrew.getState().friends, deps) })
     return () => { on = false; stop?.() }
   // deps are injected once by tests and never change at runtime.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relayUrl, pairKey, tab, overlay])
 }

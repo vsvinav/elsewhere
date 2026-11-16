@@ -76,7 +76,6 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
     offer(client, keys, code.value, name).then(() => on && setOffered('ok'), () => on && setOffered('failed'))
     return () => { on = false }
   // The code is offered once per code; name changes mid-sheet keep the old offer.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, keys, code.value])
   useEffect(() => {
     if (offered !== 'ok') return

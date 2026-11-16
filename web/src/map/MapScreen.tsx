@@ -5,6 +5,7 @@ import { ArrivalTags, HoverTag } from './ArrivalTags'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { usePlayback } from './usePlayback'
+import { FriendTag, SonarNote } from '../crew/MapBits'
 
 /** Map and Play share one screen: Map pins every stop, Play runs the record along its trails. */
 export function MapScreen() {
@@ -16,6 +17,7 @@ export function MapScreen() {
       <MapView />
       {tab === 'map' ? <PinHud /> : <Hud />}
       {tab === 'play' && <ArrivalTags />}
+      {tab === 'map' && <><FriendTag /><SonarNote /></>}
       <HoverTag />
     </div>
   )

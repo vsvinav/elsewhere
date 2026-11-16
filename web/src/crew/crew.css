@@ -46,3 +46,17 @@
 .crew .chip[aria-pressed='true'] { background: var(--ink); color: var(--stock); }
 .crew .remove { margin-left: auto; }
 .crew .remove:hover { background: var(--red); border-color: var(--red); color: var(--stock); }
+
+/* On the map: the tag for a tapped friend, and the Sonar note. */
+.friend-tag { position: absolute; left: var(--gutter); top: calc(100px + env(safe-area-inset-top, 0px)); z-index: 5; display: inline-flex; align-items: center; gap: 12px; padding: 8px 10px 8px 8px; background: var(--stock); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--mustard); animation: origin-in 160ms var(--ease, ease) both; }
+.friend-tag .stamp-letter { width: 36px; height: 36px; display: grid; place-items: center; background: var(--mustard); border: 2px solid var(--ink); border-radius: 50%; font: 900 20px/1 var(--display); }
+.friend-tag .line { display: block; font: 800 14px/1.1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.friend-tag .both { display: block; margin-top: 3px; font: 600 12px/1.2 var(--body); color: var(--red); }
+.friend-tag button { border: 0; background: none; color: var(--ink-3); font: 700 18px/1 var(--body); cursor: pointer; padding: 0 4px; }
+.friend-tag button:hover { color: var(--red); }
+.sonar-note { position: absolute; right: var(--gutter); top: calc(100px + env(safe-area-inset-top, 0px)); z-index: 5; width: min(360px, calc(100vw - 2 * var(--gutter))); padding: 16px 18px; background: var(--ink); color: var(--stock); border-left: 6px solid var(--mustard); box-shadow: 6px 6px 0 var(--mustard); animation: origin-in 200ms var(--ease, ease) both; }
+.sonar-note h3 { margin: 0; font: 900 22px/1 var(--display); text-transform: uppercase; letter-spacing: 0.04em; color: var(--mustard); }
+.sonar-note p { margin: 8px 0 12px; font: 500 14px/1.4 var(--body); color: var(--stock-3); }
+.sonar-note .row { display: flex; gap: 8px; }
+.sonar-note .btn { margin: 0; cursor: pointer; }
+.sonar-note .btn.quiet { color: var(--stock); border-color: var(--stock-3); }
