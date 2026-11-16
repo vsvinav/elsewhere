@@ -15,6 +15,8 @@ import { GoogleDownNote } from './GoogleDownNote'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
 import { Settings } from './Settings'
+import { Crew } from '../crew/Crew'
+import { useRooms } from '../crew/useRooms'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
 import { Stats } from '../tabs/Stats/Stats'
@@ -66,7 +68,9 @@ export function App() {
   }, [record?.meta.source_sha256, homesKey])
   const tab = useStore((s) => s.tab)
   const settingsOpen = useStore((s) => s.settingsOpen)
-  const onMap = (tab === 'map' || tab === 'play') && !settingsOpen
+  const crewOpen = useStore((s) => s.crewOpen)
+  const onMap = (tab === 'map' || tab === 'play') && !settingsOpen && !crewOpen
+  useRooms()
   useEffect(() => {
     if (!onMap || !record || record.paths.length) return
     let live = true
@@ -121,6 +125,7 @@ export function App() {
           <div className="menu">
             <button onClick={ctx.editProfile}>Edit profile</button>
             <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); useStore.getState().openSettings() }}>Settings</button>
+            <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); useStore.getState().openCrew() }}>Crew</button>
             <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
             <UsageRow />
           </div>
@@ -129,7 +134,7 @@ export function App() {
       <StubNav />
       <GoogleDownNote />
       <NamingStamp progress={naming} />
-      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
+      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : crewOpen ? <Crew /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
     </div>
   )
 }
