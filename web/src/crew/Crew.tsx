@@ -1,10 +1,10 @@
 // Crew: who is paired with this record, how to pair, and what each friend may see.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../ingest/settings'
 import { useProfile } from '../profile/profile'
 import { useStore } from '../store/useStore'
 import { Field } from '../world'
-import { expiresIn, isExpired, newCode, parseCode } from './codes'
+import { currentCode, expiresIn, isExpired, parseCode, rotateCode, type ShareCode } from './codes'
 import { nextMidnight, useCrew, type Friend, type Grants } from './friends'
 import { fingerprint, fromHex, loadKeys, type DeviceKeys } from './keys'
 import { KeyError, POLL_MS, claim, friendOf, offer, poll, type Proposal } from './pairing'
@@ -38,7 +38,8 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
   const [keys, setKeys] = useState<DeviceKeys | null>(null)
   const [proposal, setProposal] = useState<Proposal | null>(null)
   useEffect(() => { let on = true; loadKeys().then((k) => { if (on) setKeys(k) }); return () => { on = false } }, [])
-  const client = keys && relayUrl ? relayClient(relayUrl, keys, fetchFn) : null
+  // One client per relay and key set: the offer effect below keys on it, so it must not change with every render.
+  const client = useMemo(() => (keys && relayUrl ? relayClient(relayUrl, keys, fetchFn) : null), [keys, relayUrl, fetchFn])
   const accept = async () => { if (!keys || !proposal) return; await useCrew.getState().add(friendOf(keys, proposal)); setProposal(null) }
   return (
     <main className="strip crew">
@@ -65,32 +66,40 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
 /** The share code, offered to the relay and polled while this page is open, plus a slot for a friend's code. */
 function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; keys: DeviceKeys; pollMs: number; onProposal(p: Proposal): void }) {
   const name = useProfile()?.name || 'A friend'
-  const [code, setCode] = useState(() => ({ value: newCode(), madeAt: Date.now() }))
+  const [code, setCode] = useState<ShareCode | null>(null)
   const [offered, setOffered] = useState<'pending' | 'ok' | 'failed'>('pending')
+  const renew = () => rotateCode().then(setCode)
+  const propose = (p: Proposal) => { onProposal(p); void renew() }
+  useEffect(() => { let on = true; currentCode().then((c) => { if (on) setCode(c) }); return () => { on = false } }, [])
   const [typed, setTyped] = useState('')
   const [status, setStatus] = useState('')
   const [tick, setTick] = useState(Date.now())
   const [pollNote, setPollNote] = useState('')
   const busy = useRef(false)
+  const value = code?.value
   useEffect(() => {
+    if (!value) return
     let on = true
     setOffered('pending')
-    offer(client, keys, code.value, name).then(() => on && setOffered('ok'), () => on && setOffered('failed'))
+    // A code already offered on an earlier open is still the relay's; it answers 409 to its owner, which is fine.
+    offer(client, keys, value, name).then(() => on && setOffered('ok'), (e) => on && setOffered(e instanceof RelayError && e.status === 409 ? 'ok' : 'failed'))
     return () => { on = false }
   // The code is offered once per code; name changes mid-sheet keep the old offer.
-  }, [client, keys, code.value])
+  }, [client, keys, value])
   useEffect(() => {
-    if (offered !== 'ok') return
+    if (offered !== 'ok' || !code) return
     let on = true
     const id = setInterval(async () => {
       if (busy.current || isExpired(code.madeAt, Date.now())) return
       busy.current = true
-      try { const p = await poll(client, code.value); if (on && p) onProposal(p) } catch (e) { if (on && e instanceof KeyError) setPollNote(BAD_KEYS) } finally { busy.current = false }
+      try { const p = await poll(client, code.value); if (on && p) propose(p) } catch (e) { if (on && e instanceof KeyError) setPollNote(BAD_KEYS) } finally { busy.current = false }
       if (on) setTick(Date.now())
     }, pollMs)
     return () => { on = false; clearInterval(id) }
-  }, [client, code, offered, pollMs, onProposal])
+  // propose is stable in what it does; onProposal comes from a state setter.
+  }, [client, code, offered, pollMs])
   const share = async () => {
+    if (!code) return
     const text = `Pair with me on Elsewhere: ${code.value}`
     if (navigator.share) { try { await navigator.share({ text }) } catch { /* dismissed */ } return }
     await navigator.clipboard?.writeText(code.value)
@@ -102,13 +111,14 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
     setStatus('')
     try { onProposal(await claim(client, keys, c, name)); setTyped('') } catch (e) { setStatus(relayWords(e)) }
   }
+  if (!code) return null
   return (
     <section className="bill pair-bill" aria-label="Pair">
       <div className="peel">
         <div className="caps">Your share code</div>
         <div className="code">{code.value}</div>
         <div className="fine expiry">{offered === 'failed' ? 'The relay did not take this code; try a new one.' : offered === 'pending' ? 'Offering to the relay…' : `Expires in ${expiresIn(code.madeAt, tick)}`}</div>
-        <div className="row crew-tools"><button className="btn" onClick={share}>Share code</button><button className="btn quiet" onClick={() => setCode({ value: newCode(), madeAt: Date.now() })}>New code</button></div>
+        <div className="row crew-tools"><button className="btn" onClick={share}>Share code</button><button className="btn quiet" onClick={renew}>New code</button></div>
         <label className="caps" htmlFor="crew-code">Enter a friend's code</label>
         <div className="row crew-tools">
           <input id="crew-code" value={typed} onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void pair() }} placeholder="PT-XXX-XXXX" spellCheck={false} autoComplete="off" />

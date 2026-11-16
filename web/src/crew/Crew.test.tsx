@@ -27,13 +27,13 @@ const pid = pairIdOf(A.signPub, B.signPub)
 const { kxSig: _kxSig, ...bKeys } = bRecord
 const marta: Friend = { ...bKeys, pairId: pid, pairKey: toHex(pairKeyOf(A.kxPriv, B.kxPub, pid)), addedAt: Date.UTC(2025, 10, 15), grants: { liveCity: false, livePrecise: false, sonar: false } }
 
-const fakeRelay = (answers: Record<string, () => Response>) => {
+const fakeRelay = (answers: Record<string, (path: string) => Response>) => {
   const calls: { method: string; path: string }[] = []
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input)); const method = init?.method ?? 'GET'
     calls.push({ method, path: url.pathname })
     const hit = Object.entries(answers).find(([k]) => { const [m, re] = k.split(' '); return m === method && new RegExp(`^${re}$`).test(url.pathname) })
-    return hit ? hit[1]() : new Response('nope', { status: 404 })
+    return hit ? hit[1](url.pathname) : new Response('nope', { status: 404 })
   }) as typeof fetch
   return { calls, fetchFn }
 }
@@ -81,6 +81,45 @@ describe('Crew', () => {
     unmount()
   })
 
+  it('offers the code once, even as the sheet re-renders around it, and keeps polling', async () => {
+    await useCrew.getState().add(marta)
+    let posts = 0
+    const { calls, fetchFn } = fakeRelay({ 'POST /pair/PT-[A-Z0-9]{3}-[A-Z0-9]{4}': () => new Response(posts++ === 0 ? 'created' : 'taken', { status: posts === 1 ? 201 : 409 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
+    const { host, flush, unmount } = mount(fetchFn)
+    await flush()
+    click(host.querySelector('.friend input[name=sonar]'))
+    await flush()
+    const pollsBefore = calls.filter((c) => c.method === 'GET').length
+    await flush()
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1)
+    expect(calls.filter((c) => c.method === 'GET').length).toBeGreaterThan(pollsBefore)
+    expect(host.querySelector('.expiry')!.textContent).toMatch(/^Expires in/)
+    unmount()
+  })
+  it('keeps one code for 24 h across opens; New code or a claim mints another', async () => {
+    const { calls, fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
+    const first = mount(fetchFn)
+    await first.flush()
+    const shown = first.host.querySelector('.code')!.textContent!
+    expect(db.store.get('crew:code')).toMatchObject({ value: shown })
+    first.unmount()
+    const second = mount(fetchFn)
+    await second.flush()
+    expect(second.host.querySelector('.code')!.textContent).toBe(shown)
+    click(byText(second.host, 'button', 'New code'))
+    await second.flush()
+    const minted = second.host.querySelector('.code')!.textContent!
+    expect(minted).not.toBe(shown)
+    expect(db.store.get('crew:code')).toMatchObject({ value: minted })
+    second.unmount()
+    db.store.set('crew:code', { value: minted, madeAt: Date.now() - 25 * 3600_000 })
+    const third = mount(fetchFn)
+    await third.flush()
+    expect(third.host.querySelector('.code')!.textContent).not.toBe(minted)
+    third.unmount()
+    // Each open offers its code again (the relay says 409 to its owner, which counts as offered); two were minted on top.
+    expect(calls.filter((c) => c.method === 'POST').map((c) => c.path.slice(-11))).toEqual([shown, shown, minted, expect.not.stringMatching(minted)])
+  })
   it('without a relay it only says where to set one', async () => {
     settings.set({ relayUrl: '' })
     const { host, flush, unmount } = mount(fakeRelay({}).fetchFn)
@@ -111,16 +150,20 @@ describe('Crew', () => {
   })
 
   it('a claim of my code arrives through polling and can be declined', async () => {
-    let claimed = false
-    const { fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => (claimed ? Response.json(bRecord) : new Response(null, { status: 204 })) })
+    let claimed = ''
+    const { fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': (path) => (path.endsWith(claimed) ? Response.json(bRecord) : new Response(null, { status: 204 })) })
     const { host, flush, unmount } = mount(fetchFn)
     await flush()
-    claimed = true
+    const first = host.querySelector('.code')!.textContent!
+    claimed = first
     await flush(); await flush()
     expect(host.querySelector('.crew-confirm b')?.textContent).toBe('Marta')
     click(byText(host.querySelector('.crew-confirm')!, 'button', 'No'))
     expect(host.querySelector('.crew-confirm')).toBeNull()
     expect(useCrew.getState().friends).toEqual([])
+    // The claimed code is spent on the relay, so a fresh one takes its place.
+    expect(host.querySelector('.code')!.textContent).not.toBe(first)
+    expect(db.store.get('crew:code')).not.toMatchObject({ value: first })
     unmount()
   })
 

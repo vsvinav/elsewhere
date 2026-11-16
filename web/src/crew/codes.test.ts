@@ -11,10 +11,13 @@ describe('share codes', () => {
     expect(parseCode('KSV7Q4K')).toBe('PT-KSV-7Q4K')
     expect(parseCode('elsewhere://pair/PT-KSV-7Q4K')).toBe('PT-KSV-7Q4K')
   })
+  it('parse reads I and L as 1 and O as 0, as a person would', () => {
+    expect(parseCode('PT-LIS-7Q4K')).toBe('PT-11S-7Q4K')
+    expect(parseCode('pt-kso-7q4k')).toBe('PT-KS0-7Q4K')
+    expect(parseCode('OIL7Q4K')).toBe('PT-011-7Q4K')
+  })
   it('parse rejects wrong lengths and excluded letters', () => {
     expect(parseCode('PT-KSV-7Q4')).toBeNull()
-    expect(parseCode('PT-KSO-7Q4K')).toBeNull()
-    expect(parseCode('PT-LIS-7Q4K')).toBeNull()
     expect(parseCode('PT-KSV-7U4K')).toBeNull()
     expect(parseCode('')).toBeNull()
   })
