@@ -30,6 +30,7 @@ import { profile } from '../profile/profile'
 import { useStore } from '../store/useStore'
 import { ACCOUNT_KV, resetAccountForTest, useAccount } from '../account/store'
 import { kv } from '../ingest/db'
+import { settings } from '../ingest/settings'
 import { WELCOME_LINE } from '../account/Welcome'
 
 const ses = { session: 's', id: 'acct_1', email: 'v@example.org' }
@@ -49,6 +50,8 @@ beforeEach(async () => {
   await kv.set(ACCOUNT_KV.welcomed, true); await kv.del(ACCOUNT_KV.session)
   profile.set({ name: 'V', units: 'km', homes: [{ lat: 48.85, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] })
   useStore.setState({ tab: 'home', settingsOpen: false, crewOpen: false })
+  // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
+  settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
 })
 afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()) })
