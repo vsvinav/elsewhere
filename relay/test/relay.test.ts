@@ -1,4 +1,4 @@
-import { SELF, reset } from 'cloudflare:test'
+import { SELF, env, reset, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { A, B, C, VECTOR_PAIR, VECTOR_SIG, VECTOR_TS, envelope, joinRoom, nextMessage, pair, pairOf, record, signed, wsQuery } from './helpers'
 
@@ -178,6 +178,44 @@ describe('rooms', () => {
   })
 })
 
+const registry = () => env.REGISTRY.get(env.REGISTRY.idFromName('main'))
+const storedKeys = async (prefix?: string) => runInDurableObject(registry(), async (_, state) => [...(await state.storage.list({ prefix })).keys()])
+// The alarm is driven by hand: with the clock pinned in the past, a scheduled one would fire at once and keep firing.
+const sweep = () => runInDurableObject(registry(), async (inst, state) => { await state.storage.deleteAlarm(); await inst.alarm(); return state.storage.getAlarm() })
+
+describe('registry housekeeping', () => {
+  it('an alarm sweeps codes, counters and unpaired devices a day on; paired devices stay', async () => {
+    const a = await A(), b = await B(), c = await C()
+    await pair(a, b)
+    expect((await signed(c, 'POST', '/pair/PT-CCC-CCCC', record(c, 'Cy'))).status).toBe(201)
+    expect(await storedKeys('code:')).toEqual(['code:PT-CCC-CCCC'])
+    expect(await storedKeys('rate:')).not.toHaveLength(0)
+    expect(await storedKeys('dev:')).toHaveLength(3)
+    expect(await sweep()).not.toBeNull()
+    expect(await storedKeys('code:')).toEqual(['code:PT-CCC-CCCC'])
+    vi.setSystemTime(T0 + 25 * 3600 * 1000)
+    // Everything timed is gone, so the sweep does not re-arm.
+    expect(await sweep()).toBeNull()
+    expect(await storedKeys('code:')).toEqual([])
+    expect(await storedKeys('rate:')).toEqual([])
+    expect(await storedKeys('owner:')).toEqual([])
+    expect((await storedKeys('dev:')).sort()).toEqual([`dev:${a.id}`, `dev:${b.id}`].sort())
+    expect(await storedKeys('member:')).toHaveLength(2)
+    // Pair members keep signing; the device that only ever made a code is unknown again.
+    expect((await signed(a, 'GET', `/room/${await pairOf(a, b)}/last`)).status).toBe(200)
+    expect((await signed(c, 'GET', '/pair/PT-CCC-CCCC')).status).toBe(401)
+  })
+  it('a device that pairs later keeps its record past the day', async () => {
+    const a = await A(), b = await B()
+    expect((await signed(a, 'POST', '/pair/PT-KSV-7Q4K', record(a, 'Ana'))).status).toBe(201)
+    vi.setSystemTime(T0 + 20 * 3600 * 1000)
+    expect((await signed(b, 'POST', '/pair/PT-KSV-7Q4K/claim', record(b, 'Bo'))).status).toBe(200)
+    vi.setSystemTime(T0 + 30 * 3600 * 1000)
+    await sweep()
+    expect((await storedKeys('dev:')).sort()).toEqual([`dev:${a.id}`, `dev:${b.id}`].sort())
+  })
+})
+
 describe('tombstone', () => {
   it('DELETE /devices/me wipes codes, pair memberships and last pings for that device', async () => {
     const a = await A(), b = await B()
@@ -192,5 +230,21 @@ describe('tombstone', () => {
     expect((await signed(b, 'POST', '/pair/PT-AAA-AAAA/claim', record(b, 'Bo'))).status).toBe(404)
     expect((await joinRoom(b, pid)).status).toBe(403)
     expect((await signed(b, 'GET', `/room/${pid}/last`)).status).toBe(403)
+  })
+  it('wipes only the codes the device made or claimed, without reading every code in the registry', async () => {
+    const a = await A(), b = await B(), c = await C()
+    for (let i = 0; i < 5; i++) expect((await signed(c, 'POST', `/pair/PT-CCC-CCC${i}`, record(c, 'Cy'))).status).toBe(201)
+    expect((await signed(a, 'POST', '/pair/PT-AAA-AAAA', record(a, 'Ana'))).status).toBe(201)
+    expect((await signed(b, 'POST', '/pair/PT-BBB-BBBB', record(b, 'Bo'))).status).toBe(201)
+    expect((await signed(a, 'POST', '/pair/PT-BBB-BBBB/claim', record(a, 'Ana'))).status).toBe(200)
+    const lists = await runInDurableObject(registry(), (_, state) => vi.spyOn(state.storage, 'list'))
+    expect((await signed(a, 'DELETE', '/devices/me')).status).toBe(204)
+    // The sweep's own full list may land in between; the tombstone itself reads only this device's own entries.
+    const prefixes = lists.mock.calls.filter(([opts]) => opts !== undefined).map(([opts]) => (opts as { prefix?: string }).prefix ?? '')
+    expect(prefixes.some((p) => p === `owner:${a.id}:`)).toBe(true)
+    expect(prefixes.every((p) => p.startsWith(`member:${a.id}:`) || p.startsWith(`owner:${a.id}:`))).toBe(true)
+    expect((await storedKeys('code:')).sort()).toEqual(Array.from({ length: 5 }, (_, i) => `code:PT-CCC-CCC${i}`))
+    expect(await storedKeys(`owner:${a.id}:`)).toEqual([])
+    expect(await storedKeys(`owner:${b.id}:`)).toEqual([])
   })
 })
