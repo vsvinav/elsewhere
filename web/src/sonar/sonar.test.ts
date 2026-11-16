@@ -72,6 +72,10 @@ describe('newcomerAbsence and eligible', () => {
     expect(newcomerAbsence(side({ absenceDays: 3, fix: fix(NOW - 60_000) }), side({ absenceDays: 200, fix: fix(NOW - HOUR) }))).toBe(3)
     expect(newcomerAbsence(side({ absenceDays: null, fix: fix(NOW) }), side({ absenceDays: 200, fix: fix(NOW - HOUR) }))).toBe(Infinity)
   })
+  it('on an equal arrival time I am the newcomer', () => {
+    expect(newcomerAbsence(side({ absenceDays: 3, fix: fix(NOW) }), side({ absenceDays: 200, fix: fix(NOW) }))).toBe(3)
+    expect(newcomerAbsence(side({ absenceDays: 200, fix: fix(NOW) }), side({ absenceDays: 3, fix: fix(NOW) }))).toBe(200)
+  })
   it('both fresh, near, non-habitat, absence 200 → eligible', () => expect(eligible(side(), side(), NOW)).toBe(true))
   it('me habitat → not eligible', () => expect(eligible(side({ habitat: true }), side(), NOW)).toBe(false))
   it('friend habitat → not eligible', () => expect(eligible(side(), side({ habitat: true }), NOW)).toBe(false))

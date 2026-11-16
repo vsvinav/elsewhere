@@ -12,7 +12,7 @@ const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
 import { useRooms } from './useRooms'
-import { useCrew, type Friend } from './friends'
+import { resetSeenHitsForTest, sonarHooks, useCrew, type Friend } from './friends'
 import { deviceIdOf, fromHex, keysFromSeeds, open, pairIdOf, pairKeyOf, seal, setKeysForTest, toHex, type Envelope } from './keys'
 import { settings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
@@ -28,7 +28,8 @@ const ping = seal(key, pid, marta.deviceId, { type: 'ping', t: Math.floor(Date.n
 const sockets: FakeWS[] = []
 class FakeWS { url: string; readyState = 0; onopen: (() => void) | null = null; onmessage: ((e: { data: string }) => void) | null = null; onclose: (() => void) | null = null; sent: string[] = []; closed = false; constructor(url: string) { this.url = url; sockets.push(this) } send(s: string) { this.sent.push(s) } close() { this.closed = true; this.readyState = 3; this.onclose?.() } }
 const lastCalls: string[] = []
-const fetchFn = (async (input: RequestInfo | URL) => { lastCalls.push(new URL(String(input)).pathname); return Response.json([ping]) }) as typeof fetch
+let lastAnswer: Envelope = ping
+const fetchFn = (async (input: RequestInfo | URL) => { lastCalls.push(new URL(String(input)).pathname); return Response.json([lastAnswer]) }) as typeof fetch
 
 function Probe() { useRooms({ WS: FakeWS as unknown as typeof WebSocket, fetchFn }); return null }
 const mount = () => {
@@ -39,12 +40,13 @@ const mount = () => {
 }
 
 beforeEach(async () => {
-  db.store.clear(); sockets.length = 0; lastCalls.length = 0
+  db.store.clear(); sockets.length = 0; lastCalls.length = 0; lastAnswer = ping
   setKeysForTest(A)
   settings.set({ relayUrl: 'https://relay.test' })
   useStore.setState({ tab: 'home', crewOpen: false, settingsOpen: false })
   useCrew.setState({ loaded: false, friends: [marta], fixes: {}, hit: null, tag: null })
   db.store.set('crew:friends', [marta])
+  resetSeenHitsForTest()
 })
 afterEach(() => useCrew.getState().setSender(null))
 
@@ -64,6 +66,29 @@ describe('useRooms', () => {
     act(() => useStore.getState().setTab('stats'))
     await flush()
     expect(sockets[0].closed).toBe(true)
+    unmount()
+  })
+  it('a hit already heard and cleared does not ring again when /last re-seeds the room', async () => {
+    const heard = vi.spyOn(sonarHooks, 'heard').mockImplementation(() => {})
+    const t = Math.floor(Date.now() / 1000) + 1
+    const hit = seal(key, pid, marta.deviceId, { type: 'ping', t, grade: 'sonar', lat: 38.7, lng: -9.1, city: 'Lisbon', habitat: false, absenceDays: 200, hit: { id: 'h1', t } })
+    const { flush, unmount } = mount()
+    act(() => useStore.getState().setTab('map'))
+    await flush()
+    act(() => sockets[0].onmessage?.({ data: JSON.stringify(hit) }))
+    expect(useCrew.getState().hit).toMatchObject({ pairId: pid, id: 'h1' })
+    expect(heard).toHaveBeenCalledTimes(1)
+    act(() => useCrew.getState().clearHit())
+    useCrew.setState({ fixes: {} })
+    lastAnswer = hit
+    act(() => useStore.getState().setTab('stats'))
+    await flush()
+    act(() => useStore.getState().setTab('map'))
+    await flush()
+    expect(lastCalls).toEqual([`/room/${pid}/last`, `/room/${pid}/last`])
+    expect(useCrew.getState().fixes[pid]).toMatchObject({ city: 'Lisbon' })
+    expect(useCrew.getState().hit).toBeNull()
+    expect(heard).toHaveBeenCalledTimes(1)
     unmount()
   })
   it('a revoke from Crew is sealed for the pair and sent down the open socket', async () => {
