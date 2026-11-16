@@ -3,7 +3,7 @@ import { useAccount } from './store'
 import '../profile/onboarding.css'
 import './account.css'
 
-export const WELCOME_LINE = 'Keep going. Your record grows with you.'
+export const WELCOME_LINE = 'Your life, mapped as you live it.'
 export const SIGN_UP = 'Sign up'
 export const LOG_IN = 'Log in'
 export const CONTINUE_WITHOUT = 'Continue without an account'

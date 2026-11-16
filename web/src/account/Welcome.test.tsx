@@ -19,7 +19,7 @@ describe('Welcome', () => {
   it('shows the line and the three choices, in the agreed words', () => {
     const host = document.body.appendChild(document.createElement('div'))
     act(() => createRoot(host).render(createElement(Welcome, { onSignUp() {}, onLogIn() {}, onContinue() {} })))
-    expect(WELCOME_LINE).toBe('Keep going. Your record grows with you.')
+    expect(WELCOME_LINE).toBe('Your life, mapped as you live it.')
     expect(host.querySelector('.lede')?.textContent).toBe(WELCOME_LINE)
     expect(buttons(host).map((b) => b.textContent)).toEqual([SIGN_UP, LOG_IN, CONTINUE_WITHOUT])
     expect([SIGN_UP, LOG_IN, CONTINUE_WITHOUT]).toEqual(['Sign up', 'Log in', 'Continue without an account'])
