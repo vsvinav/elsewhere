@@ -7,7 +7,7 @@ import { api, deleteAccount, logOut, messageOf } from '../account/client'
 import { useAccount } from '../account/store'
 import { uploadVault, vaultStatus, type VaultStatus } from '../account/sync'
 import { b64, unb64 } from '../crew/keys'
-import { deriveKey, newSalt, okPassphrase, openVault, PASSPHRASE_MIN } from '../account/vault'
+import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from '../account/vault'
 import { profile, useProfile } from '../profile/profile'
 import { KeyCheck } from '../profile/KeyCheck'
 import { useStore } from '../store/useStore'
@@ -27,6 +27,7 @@ export const ACCOUNT = {
   empty: 'Recovery vault: nothing to keep yet',
   wrong: "That's not it",
   tooShort: `At least ${PASSPHRASE_MIN} characters.`,
+  tooEasy: "That one's too easy to guess.",
   update: 'Update',
   updateHint: 'Enter your recovery passphrase to seal the latest copy.',
   logOut: 'Log out',
@@ -222,7 +223,6 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
   const [err, setErr] = useState('')
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!okPassphrase(pass)) { setErr(ACCOUNT.tooShort); return }
     setBusy(true); setErr('')
     try {
       const client = api(fetchFn)
@@ -232,7 +232,12 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
       if (body) {
         salt = unb64(body.salt); key = await deriveKey(pass, salt)
         try { await openVault(key, body) } catch { setErr(ACCOUNT.wrong); return }
-      } else { salt = newSalt(); key = await deriveKey(pass, salt) }
+      } else {
+        // Only a fresh vault takes a new passphrase; one already sealed is proved against, whatever it is.
+        const problem = passphraseProblem(pass)
+        if (problem) { setErr(problem === 'short' ? ACCOUNT.tooShort : ACCOUNT.tooEasy); return }
+        salt = newSalt(); key = await deriveKey(pass, salt)
+      }
       await a.setSalt(b64(salt)); a.setKey(key)
       if (await uploadVault({ client: () => client })) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection.")
     } catch (e) { setErr(messageOf(e)) } finally { setBusy(false) }

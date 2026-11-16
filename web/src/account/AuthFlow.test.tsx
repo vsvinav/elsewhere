@@ -79,8 +79,10 @@ describe('AuthFlow', () => {
     expect(text(host, '.ob-title')).toBe(COPY.setTitle)
     expect(host.textContent).toContain("Only you know this. We can't reset it.")
     const p = host.querySelector<HTMLInputElement>('#acct-pass')!, q = host.querySelector<HTMLInputElement>('#acct-pass2')!
-    type(p, 'short'); type(q, 'short'); submit(host); await settle()
-    expect(text(host, '[role=alert]')).toBe(COPY.tooShort)
+    type(p, 'elevenchars'); type(q, 'elevenchars'); submit(host); await settle()
+    expect(text(host, '[role=alert]')).toBe('At least 12 characters.')
+    type(p, 'password1234'); type(q, 'password1234'); submit(host); await settle()
+    expect(text(host, '[role=alert]')).toBe("That one's too easy to guess.")
     expect(onDone).not.toHaveBeenCalled()
     type(p, 'correct horse'); type(q, 'correct horsf'); submit(host); await settle()
     expect(text(host, '[role=alert]')).toBe(COPY.mismatch)

@@ -6,7 +6,7 @@ import { Stamp } from '../world'
 import { api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
 import { useAccount } from './store'
 import { markUploaded } from './sync'
-import { deriveKey, newSalt, okPassphrase, openVault, PASSPHRASE_MIN } from './vault'
+import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from './vault'
 import '../profile/onboarding.css'
 import './account.css'
 
@@ -28,6 +28,7 @@ export const COPY = {
   confirm: 'Confirm passphrase',
   mismatch: "Those don't match.",
   tooShort: `At least ${PASSPHRASE_MIN} characters.`,
+  tooEasy: "That one's too easy to guess.",
   unlockTitle: 'Enter your recovery passphrase',
   unlockSub: 'The one you set when you made this account. It opens the vault with your profile and identity.',
   unlock: 'Unlock',
@@ -258,9 +259,9 @@ function SetPassphrase({ busy, error, onSubmit }: { busy: string; error: string;
   const [p, setP] = useState('')
   const [q, setQ] = useState('')
   const [touched, setTouched] = useState(false)
-  const short = !okPassphrase(p), mismatch = p.trim() !== q.trim()
-  const hint = touched && short ? COPY.tooShort : touched && mismatch && q ? COPY.mismatch : ''
-  const submit = (e: FormEvent) => { e.preventDefault(); setTouched(true); if (!short && !mismatch) onSubmit(p) }
+  const problem = passphraseProblem(p), mismatch = p.trim() !== q.trim()
+  const hint = touched && problem ? (problem === 'short' ? COPY.tooShort : COPY.tooEasy) : touched && mismatch && q ? COPY.mismatch : ''
+  const submit = (e: FormEvent) => { e.preventDefault(); setTouched(true); if (!problem && !mismatch) onSubmit(p) }
   return (
     <Screen title={COPY.setTitle} sub={COPY.setSub}>
       <form className="acct-form" onSubmit={submit}>
@@ -271,7 +272,7 @@ function SetPassphrase({ busy, error, onSubmit }: { busy: string; error: string;
         <input id="acct-pass2" className="ob-input" type="password" autoComplete="new-password" value={q} onChange={(e) => setQ(e.target.value)} onBlur={() => setTouched(true)} disabled={!!busy} />
         {(hint || error) && <p className="acct-err" role="alert">{error || hint}</p>}
         <div className="ob-actions">
-          <button className="btn" type="submit" disabled={!!busy || short || mismatch}>{COPY.continue}</button>
+          <button className="btn" type="submit" disabled={!!busy || !!problem || mismatch}>{COPY.continue}</button>
           {busy && <span className="acct-busy">{busy}</span>}
         </div>
       </form>
