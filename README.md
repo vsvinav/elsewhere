@@ -83,6 +83,7 @@ v2 is being built on the `v2` branch and published as a preview at **https://vsv
 | **Settings** | One page for keys, units, Ask Elsewhere, Crew relay, and clearing data. | **Settings** chip by the masthead, or ▾ → Settings (`#settings`). | ▾ (the **E**) → Settings. |
 | **Crew** | Pair with friends by code or QR; opt in per friend to *Live · city*, *Live · precise* and *Sonar*. | ▾ → **Crew** (`#crew`). Friends' stamps appear on the Map. | ▾ → **Crew**; Map → **Share** to broadcast while recording. |
 | **Sonar** | Pings you both when you and a friend are within a mile and neither of you is usually there. | Rings and a tone on the Map. | Rings on the Map and a notification. |
+| **Accounts** | Sign up with an email code; a passphrase-sealed vault carries your profile and Crew identity to a new device. The record itself never leaves the device. | Welcome screen on first open; **Settings → Account**. | Welcome screen on first open; Settings → Account. |
 
 ### Setting up Crew and Sonar
 
@@ -99,6 +100,18 @@ Paste that URL into **Settings → Crew → Relay URL** on every device, then:
 3. **Sonar.** Toggle *Sonar* for the friend (it also turns on *Live · city*). It fires only when you are both within a mile, both away from the places you usually are, after at least 14 days away, once per 24 hours — so two phones on the same desk at home will stay quiet by design.
 
 Leaving the Relay URL empty turns Crew off. Removing a friend tells their device to remove you too.
+
+### Running the account service
+
+Accounts need a second small Worker in [`account/`](account/): it mails six-digit codes, keeps sessions, and stores one **encrypted** vault per account that only your passphrase opens (the service never sees the key). Create a KV namespace, put its id in `account/wrangler.toml`, set the mail secrets and deploy:
+
+```bash
+cd account && npm ci && npx wrangler login && npx wrangler kv namespace create ACCOUNTS
+npx wrangler secret put RESEND_KEY && npx wrangler secret put MAIL_FROM && npx wrangler secret put LINK_BASE
+npx wrangler deploy   # prints https://….workers.dev
+```
+
+Paste that URL into **Settings → Account → Account service URL**. For local work set `DEV_MAIL = "1"` in `wrangler.toml` and the code comes back in the response instead of a mail.
 
 <p align="center">
 <img src="docs/screenshots/flights.png" width="400" alt="Flights: globe with red routes and labelled airports">
