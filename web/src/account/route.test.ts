@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOLD, LEG, POINTS, TOTAL, WOBBLE, pathD, sketchAt } from './route'
+import { HOLD, LEG, LEG_END, PATH_LENGTH, POINTS, TOTAL, WOBBLE, pathD, sketchAt } from './route'
 
 describe('sketchAt', () => {
   it('holds at home before the first leg', () => {
@@ -13,10 +13,14 @@ describe('sketchAt', () => {
     expect(s.km).toBeLessThan(420)
     expect(s.stamps).toBe(0)
     expect(s.progress).toBeGreaterThan(0)
-    expect(s.progress).toBeLessThan(0.2)
+    expect(s.progress).toBeLessThan(LEG_END[1] / PATH_LENGTH)
   })
-  it('lands the first stamp exactly when the leg ends', () => {
-    expect(sketchAt(HOLD + LEG)).toMatchObject({ km: 420, stamps: 1, progress: 0.2 })
+  it('lands each stamp exactly as the pen reaches its pin, legs being unequal in length', () => {
+    expect(sketchAt(HOLD + LEG)).toMatchObject({ km: 420, stamps: 1 })
+    expect(LEG_END[1] / PATH_LENGTH).not.toBeCloseTo(0.2, 2)
+    for (let k = 1; k <= 5; k++) expect(sketchAt(HOLD + LEG * k).progress * PATH_LENGTH).toBeCloseTo(LEG_END[k], 6)
+    expect(LEG_END[0]).toBe(0)
+    expect(LEG_END[5]).toBeCloseTo(PATH_LENGTH, 6)
   })
   it('rests on the full route after the last leg', () => {
     expect(sketchAt(TOTAL)).toMatchObject({ km: 14920, stamps: 5, progress: 1 })

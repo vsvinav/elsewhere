@@ -36,10 +36,22 @@ export function pathD(): string {
   return parts.join(' ')
 }
 
+/** Cumulative route length to each pin on the sheet, measured from the geometry so the draw needs no DOM. */
+export const LEG_END: number[] = (() => {
+  const out = [0]
+  let prev: [number, number] = [POINTS[0].x, POINTS[0].y], len = 0
+  for (let i = 0; i < LEGS; i++) {
+    for (const p of [...WOBBLE[i], [POINTS[i + 1].x, POINTS[i + 1].y] as [number, number]]) { len += Math.hypot((p[0] - prev[0]) * W, (p[1] - prev[1]) * H); prev = p }
+    out.push(len)
+  }
+  return out
+})()
+export const PATH_LENGTH = LEG_END[LEGS]
+
 export interface Frame {
   /** 0 during the hold, 1..5 while a leg is in flight, 6 once the route is done. */
   leg: number
-  /** Fraction of the whole path drawn, legs taking equal shares. */
+  /** Fraction of the whole path drawn; the pen reaches pin i exactly as leg i ends. */
   progress: number
   km: number
   /** Far pins the route has reached. */
@@ -52,14 +64,5 @@ export function sketchAt(t: number): Frame {
   const i = Math.floor((t - HOLD) / LEG)
   const e = ease((t - HOLD - i * LEG) / LEG)
   const from = POINTS[i].km, to = POINTS[i + 1].km
-  return { leg: i + 1, progress: (i + e) / LEGS, km: Math.round(from + (to - from) * e), stamps: i }
+  return { leg: i + 1, progress: (LEG_END[i] + (LEG_END[i + 1] - LEG_END[i]) * e) / PATH_LENGTH, km: Math.round(from + (to - from) * e), stamps: i }
 }
-
-/** Length of the whole route on the sheet, so the draw can be driven without measuring the DOM. */
-export const PATH_LENGTH = (() => {
-  const pts: [number, number][] = [[POINTS[0].x, POINTS[0].y]]
-  for (let i = 0; i < LEGS; i++) { pts.push(...WOBBLE[i]); pts.push([POINTS[i + 1].x, POINTS[i + 1].y]) }
-  let len = 0
-  for (let i = 1; i < pts.length; i++) len += Math.hypot((pts[i][0] - pts[i - 1][0]) * W, (pts[i][1] - pts[i - 1][1]) * H)
-  return len
-})()
