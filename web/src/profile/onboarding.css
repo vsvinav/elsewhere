@@ -18,7 +18,8 @@
 .ob-error { margin-top: 14px; font: 600 14px/1.4 var(--body); color: var(--red-2); }
 .ob-key { margin-top: 26px; max-width: 520px; }
 .ob-key .val { width: 100%; font: 500 16px/1.4 var(--body); padding: 10px 12px; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
-.ob-demo { margin-top: 28px; }
+.ob-try { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-top: 18px; border-top: 2px dashed var(--ink); max-width: 520px; }
+.ob-demo { margin: 0; }
 
 .ob-q { max-width: 920px; margin-top: 8vh; animation: ob-in 0.5s var(--ease) both; }
 @keyframes ob-in { from { opacity: 0; transform: translateY(14px); } }

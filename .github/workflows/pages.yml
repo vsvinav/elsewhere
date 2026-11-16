@@ -45,6 +45,12 @@ jobs:
       - run: npm test
         env:
           CI: true
+      # Bake the synthetic demo record (Ada, eighteen months in Lisbon) so visitors without an export can try the site.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -q . && python3 scripts/make_sample.py --out web/public/data
+        working-directory: .
       # Keys are optional: without them the site still imports a record and draws OpenStreetMap tiles.
       - run: npm run build
         env:

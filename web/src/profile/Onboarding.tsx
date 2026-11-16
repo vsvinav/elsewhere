@@ -118,7 +118,12 @@ export function Onboarding({ data, demo, stage, importError, importFile, initial
                 </Field>
                 <KeyCheck />
               </div>
-              {demo && data && !gated && <button className="btn quiet ob-demo" onClick={() => setStep('name')}>Try the demo record instead →</button>}
+              {demo && data && !gated && (
+                <div className="ob-try">
+                  <span className="caps">No export yet?</span>
+                  <button className="btn ob-demo" onClick={() => setStep('name')}>Try it with a demo record →</button>
+                </div>
+              )}
               </div>
             </div>
           )}
