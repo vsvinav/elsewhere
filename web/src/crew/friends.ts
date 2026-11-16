@@ -1,6 +1,7 @@
 // Friends: who is paired, what each may see, and the last fix each has sent.
 import { create } from 'zustand'
 import { kv } from '../ingest/db'
+import { FRESH_MS } from '../sonar/sonar'
 import { sonarHeard } from '../sonar/ping'
 import { fromHex, open, seal, type Envelope } from './keys'
 
@@ -13,13 +14,18 @@ export interface Friend {
 export type Grade = 'city' | 'precise' | 'sonar'
 export interface Ping { type: 'ping'; t: number; grade: Grade; lat: number; lng: number; city: string | null; habitat: boolean; absenceDays: number; hit: { id: string; t: number } | null }
 export type Message = Ping | { type: 'stop' } | { type: 'revoke' }
-/** A friend's last known position; `at` is when this browser received it. */
+/** A friend's last known position; `t` is the sender's clock and drives staleness, `at` is when this browser received it. */
 export interface Fix { pairId: string; t: number; lat: number; lng: number; city: string | null; grade: Grade; at: number }
 export interface Hit { pairId: string; id: string; at: number }
 
 export const FRIENDS_KV = 'crew:friends'
 export const STALE_MS = 15 * 60_000
 export const DROP_MS = 24 * 3600_000
+/** Sonar hit ids already acted on; a replayed envelope cannot ring twice. */
+export const SEEN_HITS = 64
+const seenHits: string[] = []
+const seenHit = (id: string) => { if (seenHits.includes(id)) return true; seenHits.push(id); if (seenHits.length > SEEN_HITS) seenHits.shift(); return false }
+export const resetSeenHitsForTest = () => { seenHits.length = 0 }
 export type Sender = (pairId: string, m: Message) => void
 /** Replaceable so tests and the map can watch for hits without an AudioContext. */
 export const sonarHooks = { heard: (): void => { if (typeof document !== 'undefined') sonarHeard() } }
@@ -79,12 +85,16 @@ export const useCrew = create<CrewState>((set, get) => ({
     if (!m || typeof m !== 'object') return
     if (m.type === 'stop') { const { [f.pairId]: _, ...fixes } = get().fixes; set({ fixes }); return }
     if (m.type === 'revoke') { forget(f.pairId); void save(get().friends); return }
-    if (m.type !== 'ping' || typeof m.lat !== 'number' || typeof m.lng !== 'number') return
-    const fix: Fix = { pairId: f.pairId, t: m.t, lat: m.lat, lng: m.lng, city: m.city ?? null, grade: m.grade, at: now }
+    if (m.type !== 'ping' || typeof m.lat !== 'number' || typeof m.lng !== 'number' || typeof m.t !== 'number') return
     const s = get()
+    // Replay guard: sender time must move forward for the pair and sit near our clock.
+    const last = s.fixes[f.pairId]
+    if ((last && m.t <= last.t) || Math.abs(now / 1000 - m.t) > FRESH_MS / 1000) return
+    const fix: Fix = { pairId: f.pairId, t: m.t, lat: m.lat, lng: m.lng, city: m.city ?? null, grade: m.grade, at: now }
     const muted = (f.mutedUntil ?? 0) > now
-    const fresh = m.hit && s.hit?.id !== m.hit.id && !muted
-    set({ fixes: { ...s.fixes, [f.pairId]: fix }, hit: fresh && m.hit ? { pairId: f.pairId, id: m.hit.id, at: now } : s.hit })
+    const hit = m.hit && typeof m.hit.id === 'string' && !seenHit(m.hit.id) ? m.hit : null
+    const fresh = !!hit && !muted
+    set({ fixes: { ...s.fixes, [f.pairId]: fix }, hit: fresh && hit ? { pairId: f.pairId, id: hit.id, at: now } : s.hit })
     if (fresh) sonarHooks.heard()
   },
   setTag: (pairId) => set({ tag: pairId }),
@@ -103,7 +113,7 @@ export const sealFor = (f: Friend, from: string, m: Message) => seal(fromHex(f.p
 export function visibleFixes(fixes: Record<string, Fix>, now: number): (Fix & { stale: boolean })[] {
   const out: (Fix & { stale: boolean })[] = []
   for (const f of Object.values(fixes)) {
-    const age = now - f.at
+    const age = now - f.t * 1000
     if (age > DROP_MS) continue
     out.push({ ...f, stale: age > STALE_MS })
   }

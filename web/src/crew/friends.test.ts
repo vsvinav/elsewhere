@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
-import { DROP_MS, STALE_MS, ageLabel, sonarHooks, useCrew, visibleFixes, type Friend, type Ping } from './friends'
+import { DROP_MS, SEEN_HITS, STALE_MS, ageLabel, resetSeenHitsForTest, sonarHooks, useCrew, visibleFixes, type Friend, type Ping } from './friends'
 import { deviceIdOf, fromHex, keysFromSeeds, pairIdOf, pairKeyOf, seal, setKeysForTest, toHex } from './keys'
 import vectors from './vectors.json'
 
@@ -18,6 +18,7 @@ const ping = (p: Partial<Ping> = {}): Ping => ({ type: 'ping', t: Math.floor(NOW
 
 beforeEach(async () => {
   db.store.clear()
+  resetSeenHitsForTest()
   setKeysForTest(A)
   useCrew.setState({ loaded: false, friends: [], fixes: {}, hit: null, tag: null })
   await useCrew.getState().load()
@@ -71,27 +72,55 @@ describe('receive', () => {
     await vi.waitFor(() => expect(useCrew.getState().friends).toEqual([]))
     expect(db.store.get('crew:friends')).toEqual([])
   })
+  it('replays and stale clocks are dropped: t must be a number, move forward, and sit within FRESH of now', () => {
+    const r = useCrew.getState().receive
+    r(fromMarta(ping({ t: 'soon' as unknown as number })), NOW)
+    expect(useCrew.getState().fixes).toEqual({})
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) - 11 * 60 })), NOW)
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) + 11 * 60 })), NOW)
+    expect(useCrew.getState().fixes).toEqual({})
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) - 60, city: 'Lisbon' })), NOW)
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) - 60, city: 'Replay' })), NOW + 1000)
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) - 120, city: 'Older' })), NOW + 2000)
+    expect(useCrew.getState().fixes[pid].city).toBe('Lisbon')
+    r(fromMarta(ping({ t: Math.floor(NOW / 1000) - 30, city: 'Porto' })), NOW + 3000)
+    expect(useCrew.getState().fixes[pid].city).toBe('Porto')
+  })
+  it('a hit id already seen is ignored, with a bounded memory of 64', () => {
+    const heard = vi.fn(); sonarHooks.heard = heard
+    const r = useCrew.getState().receive
+    const t0 = Math.floor(NOW / 1000) - 300
+    r(fromMarta(ping({ t: t0, hit: { id: 'h0', t: t0 } })), NOW)
+    r(fromMarta(ping({ t: t0 + 1, hit: { id: 'h0', t: t0 } })), NOW)
+    expect(heard).toHaveBeenCalledTimes(1)
+    for (let i = 1; i <= SEEN_HITS; i++) r(fromMarta(ping({ t: t0 + 1 + i, hit: { id: `h${i}`, t: t0 } })), NOW)
+    expect(heard).toHaveBeenCalledTimes(1 + SEEN_HITS)
+    useCrew.getState().clearHit()
+    r(fromMarta(ping({ t: t0 + 200, hit: { id: 'h0', t: t0 } })), NOW)
+    expect(heard).toHaveBeenCalledTimes(2 + SEEN_HITS)
+  })
   it('a ping carrying a hit records one Sonar hit and sounds it once; muted friends stay silent', async () => {
     const heard = vi.fn(); sonarHooks.heard = heard
     useCrew.getState().receive(fromMarta(ping({ grade: 'sonar', hit: { id: `${pid}:1`, t: 1 } })), NOW)
     expect(useCrew.getState().hit).toEqual({ pairId: pid, id: `${pid}:1`, at: NOW })
-    useCrew.getState().receive(fromMarta(ping({ grade: 'sonar', hit: { id: `${pid}:1`, t: 1 } })), NOW + 5000)
+    useCrew.getState().receive(fromMarta(ping({ t: Math.floor(NOW / 1000) - 55, grade: 'sonar', hit: { id: `${pid}:1`, t: 1 } })), NOW + 5000)
     expect(useCrew.getState().hit?.at).toBe(NOW)
     expect(heard).toHaveBeenCalledTimes(1)
     await useCrew.getState().mute(pid, NOW + 3600_000)
-    useCrew.getState().receive(fromMarta(ping({ grade: 'sonar', hit: { id: `${pid}:2`, t: 2 } })), NOW + 6000)
+    useCrew.getState().receive(fromMarta(ping({ t: Math.floor(NOW / 1000) - 50, grade: 'sonar', hit: { id: `${pid}:2`, t: 2 } })), NOW + 6000)
     expect(heard).toHaveBeenCalledTimes(1)
     expect(useCrew.getState().hit?.id).toBe(`${pid}:1`)
   })
 })
 
 describe('visibleFixes', () => {
-  const fix = (ageMs: number) => ({ pairId: pid, t: Math.floor((NOW - ageMs) / 1000), lat: 0, lng: 0, city: null, grade: 'city' as const, at: NOW - ageMs })
-  it('fresh under 15 min, stale after, dropped after 24 h', () => {
+  const fix = (ageMs: number) => ({ pairId: pid, t: Math.floor((NOW - ageMs) / 1000), lat: 0, lng: 0, city: null, grade: 'city' as const, at: NOW })
+  it('fresh under 15 min, stale after, dropped after 24 h, all by the sender clock', () => {
     expect(STALE_MS).toBe(15 * 60_000); expect(DROP_MS).toBe(24 * 3600_000)
     expect(visibleFixes({ a: fix(60_000) }, NOW)).toEqual([{ ...fix(60_000), stale: false }])
     expect(visibleFixes({ a: fix(STALE_MS + 1) }, NOW)[0].stale).toBe(true)
-    expect(visibleFixes({ a: fix(DROP_MS + 1) }, NOW)).toEqual([])
+    expect(visibleFixes({ a: fix(DROP_MS + 1000) }, NOW)).toEqual([])
+    expect(visibleFixes({ a: { ...fix(60_000), at: NOW - DROP_MS * 2 } }, NOW)[0].stale).toBe(false)
   })
   it('ageLabel reads like a person', () => {
     expect(ageLabel(Math.floor(NOW / 1000) - 10, NOW)).toBe('just now')
