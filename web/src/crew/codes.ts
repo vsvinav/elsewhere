@@ -30,12 +30,18 @@ export function expiresIn(madeAt: number, now: number): string {
 }
 
 export const CODE_KV = 'crew:code'
-export interface ShareCode { value: string; madeAt: number }
+/** `offeredAt` is set once the relay holds the code, so later opens need not offer it again. */
+export interface ShareCode { value: string; madeAt: number; offeredAt?: number }
 const mint = async (now: number): Promise<ShareCode> => { const c = { value: newCode(), madeAt: now }; await kv.set(CODE_KV, c); return c }
 /** The one code this device is offering: kept for its 24 h so reopening the sheet shows the same code a friend may already have. */
 export async function currentCode(now = Date.now()): Promise<ShareCode> {
   const c = await kv.get<ShareCode>(CODE_KV)
   return c && typeof c.value === 'string' && typeof c.madeAt === 'number' && !isExpired(c.madeAt, now) ? c : mint(now)
+}
+export async function markOffered(c: ShareCode, now = Date.now()): Promise<ShareCode> {
+  const out = { ...c, offeredAt: now }
+  await kv.set(CODE_KV, out)
+  return out
 }
 /** After New code or once a friend has claimed the current one. */
 export const rotateCode = (now = Date.now()) => mint(now)

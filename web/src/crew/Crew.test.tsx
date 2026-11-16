@@ -101,11 +101,18 @@ describe('Crew', () => {
     const first = mount(fetchFn)
     await first.flush()
     const shown = first.host.querySelector('.code')!.textContent!
-    expect(db.store.get('crew:code')).toMatchObject({ value: shown })
+    expect(db.store.get('crew:code')).toMatchObject({ value: shown, offeredAt: expect.any(Number) })
     first.unmount()
+    const again = mount(fetchFn)
+    await again.flush()
+    expect(again.host.querySelector('.code')!.textContent).toBe(shown)
+    expect(again.host.querySelector('.expiry')!.textContent).toMatch(/^Expires in/)
+    again.unmount()
     const second = mount(fetchFn)
     await second.flush()
     expect(second.host.querySelector('.code')!.textContent).toBe(shown)
+    // An offered code is not offered again on later opens; the relay counts every POST against the device.
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1)
     click(byText(second.host, 'button', 'New code'))
     await second.flush()
     const minted = second.host.querySelector('.code')!.textContent!
@@ -117,8 +124,7 @@ describe('Crew', () => {
     await third.flush()
     expect(third.host.querySelector('.code')!.textContent).not.toBe(minted)
     third.unmount()
-    // Each open offers its code again (the relay says 409 to its owner, which counts as offered); two were minted on top.
-    expect(calls.filter((c) => c.method === 'POST').map((c) => c.path.slice(-11))).toEqual([shown, shown, minted, expect.not.stringMatching(minted)])
+    expect(calls.filter((c) => c.method === 'POST').map((c) => c.path.slice(-11))).toEqual([shown, minted, expect.not.stringMatching(minted)])
   })
   it('without a relay it only says where to set one', async () => {
     settings.set({ relayUrl: '' })

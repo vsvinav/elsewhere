@@ -4,7 +4,7 @@ import { useSettings } from '../ingest/settings'
 import { useProfile } from '../profile/profile'
 import { useStore } from '../store/useStore'
 import { Field } from '../world'
-import { currentCode, expiresIn, isExpired, parseCode, rotateCode, type ShareCode } from './codes'
+import { currentCode, expiresIn, isExpired, markOffered, parseCode, rotateCode, type ShareCode } from './codes'
 import { nextMidnight, useCrew, type Friend, type Grants } from './friends'
 import { fingerprint, fromHex, loadKeys, type DeviceKeys } from './keys'
 import { KeyError, POLL_MS, claim, friendOf, offer, poll, type Proposal } from './pairing'
@@ -77,15 +77,19 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
   const [pollNote, setPollNote] = useState('')
   const busy = useRef(false)
   const value = code?.value
+  const held = !!code?.offeredAt
   useEffect(() => {
     if (!value) return
+    if (held) { setOffered('ok'); return }
     let on = true
     setOffered('pending')
-    // A code already offered on an earlier open is still the relay's; it answers 409 to its owner, which is fine.
-    offer(client, keys, value, name).then(() => on && setOffered('ok'), (e) => on && setOffered(e instanceof RelayError && e.status === 409 ? 'ok' : 'failed'))
+    // Every POST counts against this device at the relay, so a code is offered once and remembered as held.
+    offer(client, keys, value, name).then(
+      () => { if (on) { setOffered('ok'); void markOffered({ value, madeAt: code!.madeAt }).then((c) => on && setCode(c)) } },
+      (e) => on && setOffered(e instanceof RelayError && e.status === 409 ? 'ok' : 'failed'))
     return () => { on = false }
   // The code is offered once per code; name changes mid-sheet keep the old offer.
-  }, [client, keys, value])
+  }, [client, keys, value, held])
   useEffect(() => {
     if (offered !== 'ok' || !code) return
     let on = true

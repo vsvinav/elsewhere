@@ -25,7 +25,10 @@ async function startRelay(): Promise<Relay | null> {
       await sleep(100)
     }
     await w.stop()
-  } catch { /* no workerd here */ }
+  } catch (e) {
+    // A laptop without workerd skips this file; CI has it and must not silently pass.
+    if (process.env.CI) throw e
+  }
   return null
 }
 
