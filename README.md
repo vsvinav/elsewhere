@@ -63,6 +63,43 @@ Everything can be changed later from the ▾ menu by the masthead, which also st
 
 Pick any range — a year, the last 90 days, two dates from the calendar — and every tab updates. Each card saves as a PNG, framed for a story or a post.
 
+## What's new in v2 (preview)
+
+v2 is being built on the `v2` branch and published as a preview at **https://vsvinav.github.io/elsewhere/v2/** (the root URL stays on v1). Android gets a matching APK per release, tagged `v2.0.0-alpha.N`. Where to find each addition:
+
+| Feature | What it does | Web | Android |
+| --- | --- | --- | --- |
+| **Year wheel** | Spin a dial of years to re-range the whole record. | Tour, under the headline. | Tour hero. |
+| **Highlights** | A full-width "On this day" card: where you were on today's date in earlier years. | Facts, at the top. | Facts, at the top. |
+| **Fun Facts hero** | The rotating deck of shorter, ruder facts, with ←/→, Shuffle and kind chips. | Facts, below Highlights. | Facts — swipe the deck. |
+| **Play strip** | Five small games off your record (streaks, records, "earlier this year"…). | Facts, the PLAY strip. | Facts, the PLAY strip. |
+| **Passport** | Stamps per country, printed as a passport page. | Facts, bottom of the page (the deck's "Passport" card jumps there). | Facts, bottom. |
+| **Doors** | Tap any month or figure to open the Dates behind it; the back button returns you. | Numbers → month bars and *door to door*; Dates. | Same. |
+| **Trip deck** | Each trip as a card you can open, swipe and share. | Dates. | Dates. |
+| **Heat** | A density layer of where you go most. | Map → **HEAT** chip. | Map → **HEAT** chip. |
+| **Live now** | Your current position and a pulsing stamp while recording. | — (no recorder in the browser) | Map → **LIVE** chip while *Record on this phone* is running. |
+| **Snap a place** | Attach a photo to a stop; it shows on the stop's card. | Stops → open a stop → **Snap**. | Stops → open a stop → **SNAP** stamp. |
+| **Globe share** | Share the Flights globe as a card. | Flights → Save. | Flights → Save. |
+| **Settings** | One page for keys, units, Ask Elsewhere, Crew relay, and clearing data. | **Settings** chip by the masthead, or ▾ → Settings (`#settings`). | ▾ (the **E**) → Settings. |
+| **Crew** | Pair with friends by code or QR; opt in per friend to *Live · city*, *Live · precise* and *Sonar*. | ▾ → **Crew** (`#crew`). Friends' stamps appear on the Map. | ▾ → **Crew**; Map → **Share** to broadcast while recording. |
+| **Sonar** | Pings you both when you and a friend are within a mile and neither of you is usually there. | Rings and a tone on the Map. | Rings on the Map and a notification. |
+
+### Setting up Crew and Sonar
+
+Crew needs a relay — a tiny Cloudflare Worker in [`relay/`](relay/) that holds device ids and **encrypted** pings only (it can't read locations). Deploy it once on the free tier:
+
+```bash
+cd relay && npm ci && npx wrangler login && npx wrangler deploy   # prints https://….workers.dev
+```
+
+Paste that URL into **Settings → Crew → Relay URL** on every device, then:
+
+1. **Pair.** On one device open Crew and read the code (`PT-XXX-XXXX`; Android can also show a QR). On the other, type it under *Enter a friend's code* (or scan). Both see "Pair with *name*?" with an 8-character fingerprint — check they match, then confirm.
+2. **Share.** Toggle *Live · city* or *Live · precise* for that friend. Android broadcasts while **Record on this phone** is running (Map → **Share**); the browser only receives, since it has no recorder.
+3. **Sonar.** Toggle *Sonar* for the friend (it also turns on *Live · city*). It fires only when you are both within a mile, both away from the places you usually are, after at least 14 days away, once per 24 hours — so two phones on the same desk at home will stay quiet by design.
+
+Leaving the Relay URL empty turns Crew off. Removing a friend tells their device to remove you too.
+
 <p align="center">
 <img src="docs/screenshots/flights.png" width="400" alt="Flights: globe with red routes and labelled airports">
 <img src="docs/screenshots/replay.png" width="400" alt="Replay: a car marker leading its trail across a map">
