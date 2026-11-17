@@ -233,6 +233,22 @@ describe('push and pull', () => {
 })
 
 describe('state machine', () => {
+  it('the remembered status does not interrupt a round already under way', async () => {
+    await useAccount.getState().setDriveKeyed(true)
+    db.store.set('sync:key', KEY)
+    let release!: () => void
+    const f = fakeClient()
+    const list = f.c.listSync
+    f.c.listSync = () => new Promise((r) => { release = () => r(list()) })
+    const round = syncNow({ client: () => f.c })
+    await Promise.resolve()
+    expect(useSync.getState().status).toEqual({ kind: 'syncing' })
+    await loadSyncStatus()
+    expect(useSync.getState().status).toEqual({ kind: 'syncing' })
+    release()
+    await round
+    expect(useSync.getState().status).toMatchObject({ kind: 'idle' })
+  })
   it('is off without a Google account, locked without the key, idle after a round, syncing in between, and errors by kind', async () => {
     await useAccount.getState().setDriveKeyed(false)
     await loadSyncStatus()

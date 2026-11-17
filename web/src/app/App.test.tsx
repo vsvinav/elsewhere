@@ -81,11 +81,12 @@ afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()); globa
 describe('a second browser', () => {
   const KEY = new Uint8Array(32).fill(7)
   const stay = { id: stayId('d_phone', 1700000000), lat: 48.86, lng: 2.35, name: 'Café de Flore', start: 1700000000, end: 1700003600 }
-  const service = () => {
+  const service = (slow = 0) => {
     const blob = sealBlob(KEY, 'd_phone:2023-11', { v: 1, stays: [stay] }, 500)
     const calls: string[] = []
     globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
       const path = new URL(url).pathname; calls.push(`${init.method ?? 'GET'} ${path}`)
+      if (slow) await new Promise((r) => setTimeout(r, slow))
       if (path === '/sync') return Response.json([{ key: 'd_phone:2023-11', ts: 500, size: 1 }])
       if (path === '/sync/d_phone%3A2023-11') return Response.json(blob)
       return new Response(null, { status: 204 })
@@ -94,11 +95,15 @@ describe('a second browser', () => {
   }
   const signedInWithKey = async () => { await kv.set(ACCOUNT_KV.session, ses); await kv.set(ACCOUNT_KV.driveKeyed, true); await kv.set(SYNC_KEY_KV, b64(KEY)) }
 
-  it('with nothing imported, the stays pulled on sign-in become the record and the tour prints on them', async () => {
+  it('with nothing imported, the stays pulled on sign-in become the record and the tour prints on them, with no import door on the way', async () => {
     bundle.missing = true
     await signedInWithKey()
-    const calls = service()
+    const calls = service(30)
     const host = await mount()
+    for (let i = 0; i < 6; i++) {
+      expect(host.textContent).not.toContain('Your phone keeps the record.')
+      await act(() => new Promise((r) => setTimeout(r, 15)))
+    }
     expect(calls).toContain('GET /sync/d_phone%3A2023-11')
     expect(useSync.getState().status).toMatchObject({ kind: 'idle' })
     const saved = await kv.get<{ visits: { place_id: string }[]; places: Record<string, { label: string | null }> }>('record')

@@ -187,6 +187,7 @@ export async function loadSyncStatus(deps: EngineDeps = {}): Promise<void> {
   const a = useAccount.getState()
   if (!a.session || !a.driveKeyed) { useSync.getState().setStatus({ kind: 'off' }); return }
   const [key, lastTs] = await Promise.all([d.key(), loadLastTs()])
+  if (useSync.getState().status.kind === 'syncing') return
   useSync.getState().setStatus(key ? { kind: 'idle', lastTs } : { kind: 'error', error: 'locked', lastTs })
 }
 
