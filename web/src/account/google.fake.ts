@@ -9,6 +9,8 @@ export function fakeGis() {
       id: {
         initialize: (c: Init) => { state.init = c },
         renderButton: (host: HTMLElement) => {
+          // The real library logs a warning and draws nothing until initialize() has run.
+          if (!state.init) return
           host.innerHTML = ''
           const b = document.createElement('div'); b.setAttribute('role', 'button'); b.textContent = 'Sign in with Google'
           b.addEventListener('click', () => { state.clicks++ })

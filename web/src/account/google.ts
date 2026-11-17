@@ -30,16 +30,25 @@ function load(): Promise<GoogleIdentity> {
 
 /** Google's own button, drawn off screen: the only thing that opens Google's sign-in popup is a click on it. */
 let hidden: HTMLElement | null = null
+let pending: ((r: { credential?: string }) => void) | null = null
+let initialised = false
 function googleButton(g: GoogleIdentity): HTMLElement | null {
+  if (!initialised) {
+    // One initialize for the page; GIS refuses to draw the button before it, and the callback fans out to whoever asked.
+    g.accounts.id.initialize({ client_id: clientId(), ux_mode: 'popup', callback: (r) => pending?.(r) })
+    initialised = true
+  }
   if (!hidden || !document.body.contains(hidden)) {
     hidden = document.createElement('div')
     hidden.setAttribute('aria-hidden', 'true')
     hidden.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none'
     document.body.appendChild(hidden)
-    g.accounts.id.renderButton(hidden, { type: 'standard', size: 'large' })
   }
+  if (!hidden.querySelector('div[role=button]')) g.accounts.id.renderButton(hidden, { type: 'standard', size: 'large' })
   return hidden.querySelector<HTMLElement>('div[role=button]')
 }
+
+export function resetGoogleForTest(): void { hidden = null; pending = null; initialised = false; loading = null }
 
 /** Fetches the script and draws the hidden button ahead of the tap, so the forwarded click still counts as a gesture. */
 export function warm(): void {
@@ -50,9 +59,9 @@ export function warm(): void {
 export async function signIn(): Promise<{ idToken: string }> {
   const g = await load()
   return new Promise((resolve, reject) => {
-    g.accounts.id.initialize({ client_id: clientId(), ux_mode: 'popup', callback: (r) => (r.credential ? resolve({ idToken: r.credential }) : reject(new Error('google'))) })
+    pending = (r) => { pending = null; r.credential ? resolve({ idToken: r.credential }) : reject(new Error('google')) }
     const b = googleButton(g)
-    if (!b) return reject(new Error('google'))
+    if (!b) { pending = null; return reject(new Error('google')) }
     b.click()
   })
 }

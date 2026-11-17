@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeGis } from './google.fake'
-import { GSI_SRC, signIn, type GoogleIdentity } from './google'
+import { GSI_SRC, resetGoogleForTest, signIn, warm, type GoogleIdentity } from './google'
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
-afterEach(() => { delete (window as { google?: unknown }).google; document.head.innerHTML = ''; document.body.innerHTML = ''; vi.unstubAllEnvs() })
+afterEach(() => { resetGoogleForTest(); delete (window as { google?: unknown }).google; document.head.innerHTML = ''; document.body.innerHTML = ''; vi.unstubAllEnvs() })
 
 describe('google sign-in', () => {
   it('injects the GIS script once, renders Google\'s button offscreen, clicks it, and resolves with the credential', async () => {
@@ -32,6 +32,19 @@ describe('google sign-in', () => {
     expect(g.clicks).toBe(2)
     g.credential('second')
     expect(await p2).toEqual({ idToken: 'second' })
+  })
+  it('warms up before any tap and the later tap still reaches Google\'s button', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'web.apps.googleusercontent.com')
+    const g = fakeGis()
+    ;(window as { google?: GoogleIdentity }).google = g.gis
+    warm()
+    await tick()
+    expect(document.querySelectorAll('[aria-hidden] div[role=button]').length).toBe(1)
+    const p = signIn()
+    await tick()
+    expect(g.clicks).toBe(1)
+    g.credential('warmed')
+    expect(await p).toEqual({ idToken: 'warmed' })
   })
   it('rejects when the script fails to load or Google never calls back with a credential', async () => {
     const failing = signIn()
