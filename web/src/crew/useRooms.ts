@@ -1,4 +1,4 @@
-// Keeps a socket open to each friend's room while the Map is showing, so stamps move as pings arrive.
+// Keeps a socket open to each friend's room while the Map or Crew tab is showing, so stamps move as pings arrive.
 import { useEffect } from 'react'
 import { useSettings } from '../ingest/settings'
 import { useStore } from '../store/useStore'
@@ -31,18 +31,17 @@ export function startRooms(base: string, keys: DeviceKeys, friends: Friend[], de
 
 export function useRooms(deps: Deps = {}) {
   const { relayUrl } = useSettings()
-  const tab = useStore((s) => s.tab)
-  const overlay = useStore((s) => s.crewOpen)
+  const open = useStore((s) => s.tab === 'map' || s.tab === 'crew')
   const loaded = useCrew((s) => s.loaded)
   const friends = useCrew((s) => s.friends)
   const pairKey = friends.map((f) => f.pairId).join(',')
   useEffect(() => { if (!loaded) void useCrew.getState().load() }, [loaded])
   useEffect(() => {
-    if (!relayUrl || !pairKey || (tab !== 'map' && !overlay)) return
+    if (!relayUrl || !pairKey || !open) return
     let stop: (() => void) | undefined
     let on = true
     loadKeys().then((keys) => { if (on) stop = startRooms(relayUrl, keys, useCrew.getState().friends, deps) })
     return () => { on = false; stop?.() }
   // deps are injected once by tests and never change at runtime.
-  }, [relayUrl, pairKey, tab, overlay])
+  }, [relayUrl, pairKey, open])
 }

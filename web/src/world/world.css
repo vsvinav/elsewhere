@@ -120,6 +120,9 @@ body[data-scrolled] .tourline, body[data-scrolled] .rangebar { transform: transl
 .ticket button[aria-current='page'] { color: var(--red); }
 .ticket button[aria-current='page']::after { content: ''; position: absolute; left: 20%; right: 20%; bottom: 0; height: 5px; background: var(--red); }
 .ticket button:focus-visible { outline-offset: -4px; outline-color: var(--mustard); }
+.ticket button .lbl { display: inline-flex; align-items: center; gap: 5px; }
+.ticket button .live { width: 6px; height: 6px; border-radius: 50%; background: var(--red); flex: 0 0 auto; }
+.ticket button[aria-current='page'] .live { background: var(--stock); }
 .ticket .brand { flex: 0 0 auto; padding: 0 28px; display: grid; place-items: center; color: var(--stock); background: none; border: 0; cursor: pointer; font: 900 22px/1 var(--display); letter-spacing: 0.02em; text-transform: uppercase; border-right: 2px dashed var(--ink-3); }
 .ticket .brand:hover { color: var(--red); }
 .ticket .brand i { color: var(--red); font-style: normal; }

@@ -14,11 +14,12 @@ export interface Friend {
 }
 export type Grade = 'city' | 'precise' | 'sonar'
 /** `test` marks a Test Sonar ping: it rings on both sides whatever the distance, carries no position and is never recorded. */
-export interface Ping { type: 'ping'; t: number; grade: Grade; lat: number | null; lng: number | null; city: string | null; habitat: boolean; absenceDays: number; hit: { id: string; t: number; test?: true } | null; test?: true }
+export interface Ping { type: 'ping'; t: number; grade: Grade; lat: number | null; lng: number | null; city: string | null; habitat: boolean; absenceDays: number; hit: { id: string; t: number; test?: true; rehearsal?: boolean } | null; test?: true }
 export type Message = Ping | { type: 'stop' } | { type: 'revoke' }
 /** A friend's last known position; `t` is the sender's clock and drives staleness, `at` is when this browser received it. */
 export interface Fix { pairId: string; t: number; lat: number; lng: number; city: string | null; grade: Grade; at: number }
-export interface Hit { pairId: string; id: string; at: number; test?: true }
+/** `rehearsal` is set by the sender when the ping fired under its rehearsal switch. */
+export interface Hit { pairId: string; id: string; at: number; test?: true; rehearsal?: true }
 
 export const FRIENDS_KV = 'crew:friends'
 export const STALE_MS = 15 * 60_000
@@ -28,6 +29,18 @@ export const SEEN_HITS = 64
 const seenHits: string[] = []
 const seenHit = (id: string) => { if (seenHits.includes(id)) return true; seenHits.push(id); if (seenHits.length > SEEN_HITS) seenHits.shift(); return false }
 export const resetSeenHitsForTest = () => { seenHits.length = 0 }
+/** Hit ids whose sheet was put away, kept across reloads so a re-seeded room cannot raise it again. */
+export const SHEET_SEEN_LS = 'sonar:sheetSeen'
+/** After Dismiss, no new sheet for the same friend for a while; the map note and the ring still happen. */
+export const SHEET_QUIET_MS = 5 * 60_000
+const readSheetSeen = (): string[] => { try { const v = JSON.parse(localStorage.getItem(SHEET_SEEN_LS) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] } }
+let sheetSeen = readSheetSeen()
+const sheetSeenAdd = (id: string) => {
+  if (sheetSeen.includes(id)) return
+  sheetSeen = [...sheetSeen, id].slice(-SEEN_HITS)
+  try { localStorage.setItem(SHEET_SEEN_LS, JSON.stringify(sheetSeen)) } catch { /* private mode */ }
+}
+export const resetSheetSeenForTest = () => { sheetSeen = [] }
 export type Sender = (pairId: string, m: Message) => void
 /** Replaceable so tests and the map can watch for hits without an AudioContext. */
 export const sonarHooks = { heard: (): void => { if (typeof document !== 'undefined') sonarHeard() } }
@@ -37,6 +50,10 @@ interface CrewState {
   friends: Friend[]
   fixes: Record<string, Fix>
   hit: Hit | null
+  /** The hit the Sonar sheet is showing. Only the sheet's Dismiss empties it, so the map note's own clock cannot pull the sheet down mid-photo. */
+  sheetHit: Hit | null
+  /** Per pair, when a dismissed sheet may rise again. */
+  sheetQuiet: Record<string, number>
   /** Pair id of the friend whose tag is showing on the map. */
   tag: string | null
   load(): Promise<void>
@@ -48,6 +65,7 @@ interface CrewState {
   receive(e: Envelope, now?: number): void
   setTag(pairId: string | null): void
   clearHit(): void
+  dismissSheet(now?: number): void
   /** Test Sonar: ring here and send the same hit to one friend, so both ends can be checked from one room. */
   testFire(pairId: string, now?: number): Ping['hit']
 }
@@ -57,7 +75,7 @@ const save = (friends: Friend[]) => kv.set(FRIENDS_KV, friends)
 const isFriend = (f: unknown): f is Friend => !!f && typeof (f as Friend).pairId === 'string' && typeof (f as Friend).pairKey === 'string'
 
 export const useCrew = create<CrewState>((set, get) => ({
-  loaded: false, friends: [], fixes: {}, hit: null, tag: null,
+  loaded: false, friends: [], fixes: {}, hit: null, sheetHit: null, sheetQuiet: {}, tag: null,
   load: async () => {
     const raw = await kv.get<Friend[]>(FRIENDS_KV)
     set({ loaded: true, friends: Array.isArray(raw) ? raw.filter(isFriend) : [] })
@@ -99,21 +117,29 @@ export const useCrew = create<CrewState>((set, get) => ({
     const muted = (f.mutedUntil ?? 0) > now
     const hit = m.hit && typeof m.hit.id === 'string' && !seenHit(m.hit.id) ? m.hit : null
     const fresh = !!hit && !muted
-    const next = fresh && hit ? { pairId: f.pairId, id: hit.id, at: now, ...(test ? { test: true as const } : {}) } : s.hit
+    const next = fresh && hit ? { pairId: f.pairId, id: hit.id, at: now, ...(test ? { test: true as const } : {}), ...(hit.rehearsal === true ? { rehearsal: true as const } : {}) } : s.hit
+    const sheetHit = fresh && hit && !s.sheetHit && !sheetSeen.includes(hit.id) && (s.sheetQuiet[f.pairId] ?? 0) <= now ? next : s.sheetHit
     // A test ping carries no position: it only rings. A real one moves the stamp.
-    if (test) set({ hit: next })
-    else set({ fixes: { ...s.fixes, [f.pairId]: { pairId: f.pairId, t: m.t, lat: m.lat as number, lng: m.lng as number, city: m.city ?? null, grade: m.grade, at: now } }, hit: next })
+    if (test) set({ hit: next, sheetHit })
+    else set({ fixes: { ...s.fixes, [f.pairId]: { pairId: f.pairId, t: m.t, lat: m.lat as number, lng: m.lng as number, city: m.city ?? null, grade: m.grade, at: now } }, hit: next, sheetHit })
     if (fresh) sonarHooks.heard()
   },
   setTag: (pairId) => set({ tag: pairId }),
   clearHit: () => set({ hit: null }),
+  dismissSheet: (now = Date.now()) => {
+    const h = get().sheetHit
+    if (!h) return
+    sheetSeenAdd(h.id)
+    set({ sheetHit: null, sheetQuiet: { ...get().sheetQuiet, [h.pairId]: now + SHEET_QUIET_MS } })
+  },
   testFire: (pairId, now = Date.now()) => {
     const f = get().friends.find((x) => x.pairId === pairId)
     if (!f || !sender) return null
     const t = Math.floor(now / 1000)
     const hit = { id: toHex(randomBytes(4)), t, test: true as const }
     seenHit(hit.id)
-    set({ hit: { pairId, id: hit.id, at: now, test: true } })
+    const mine: Hit = { pairId, id: hit.id, at: now, test: true }
+    set({ hit: mine, sheetHit: get().sheetHit ?? mine })
     sonarHooks.heard()
     sender(pairId, { type: 'ping', t, grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit, test: true })
     return hit
@@ -124,7 +150,7 @@ export const useCrew = create<CrewState>((set, get) => ({
 function forget(pairId: string) {
   const s = useCrew.getState()
   const { [pairId]: _, ...fixes } = s.fixes
-  useCrew.setState({ friends: s.friends.filter((f) => f.pairId !== pairId), fixes, tag: s.tag === pairId ? null : s.tag, hit: s.hit?.pairId === pairId ? null : s.hit })
+  useCrew.setState({ friends: s.friends.filter((f) => f.pairId !== pairId), fixes, tag: s.tag === pairId ? null : s.tag, hit: s.hit?.pairId === pairId ? null : s.hit, sheetHit: s.sheetHit?.pairId === pairId ? null : s.sheetHit })
 }
 
 export const sealFor = (f: Friend, from: string, m: Message) => seal(fromHex(f.pairKey), f.pairId, from, m)
@@ -138,6 +164,9 @@ export function visibleFixes(fixes: Record<string, Fix>, now: number): (Fix & { 
   }
   return out
 }
+
+/** Someone's fix is fresher than the stale line: the Crew tab wears its live dot. */
+export const anyLive = (fixes: Record<string, Fix>, now: number) => Object.values(fixes).some((f) => now - f.t * 1000 <= STALE_MS)
 
 export function ageLabel(t: number, now: number): string {
   const s = Math.max(0, Math.floor(now / 1000) - t)

@@ -29,15 +29,16 @@ function usePhotoUrl(id: string | null): string {
 /**
  * The "snap" entry: a file input that opens the camera on a phone and the picker on a desk. The first time, a sheet
  * says where the photos go; after that, straight to the camera. A taken picture is stored and opened as its card.
+ * `caption` is written on the photo as taken, for a card that already knows who it is with; `onStart` fires on the press.
  */
-export function SnapButton({ place, variant = 'button', children }: { place: SnapPlace; variant?: 'stamp' | 'button'; children?: ReactNode }) {
+export function SnapButton({ place, variant = 'button', caption, onStart, children }: { place: SnapPlace; variant?: 'stamp' | 'button'; caption?: string; onStart?(): void; children?: ReactNode }) {
   const input = useRef<HTMLInputElement>(null)
   const [sheet, setSheet] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const add = usePhotos((s) => s.add)
 
-  const start = () => { if (privacySeen()) input.current?.click(); else setSheet(true) }
+  const start = () => { onStart?.(); if (privacySeen()) input.current?.click(); else setSheet(true) }
   const accept = () => { markPrivacy(); setSheet(false); input.current?.click() }
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -46,7 +47,7 @@ export function SnapButton({ place, variant = 'button', children }: { place: Sna
     setBusy(true)
     try {
       const [blob, exif] = await Promise.all([downscale(f), readExif(f).catch(() => null)])
-      const photo = await add(blob, resolveMeta({ place, exif, now: Date.now() }))
+      const photo = await add(blob, resolveMeta({ place, exif, now: Date.now() }), caption)
       setOpen(photo.id)
     } catch (err) { console.error(err) } finally { setBusy(false) }
   }
