@@ -18,6 +18,7 @@ import { useStore } from '../store/useStore'
 import { Settings } from './Settings'
 import { Crew } from '../crew/Crew'
 import { useRooms } from '../crew/useRooms'
+import { SonarSheet } from '../crew/SonarSheet'
 import { StubNav } from './StubNav'
 import { Home } from '../tabs/Home/Home'
 import { Stats } from '../tabs/Stats/Stats'
@@ -182,7 +183,7 @@ export function App() {
       <StubNav />
       <GoogleDownNote />
       <NamingStamp progress={naming} />
-      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : tab === 'crew' ? <Crew /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
+      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : tab === 'crew' ? <Crew /> : <><RangeBar /><Screen /></>}<SonarSheet /></DataContext.Provider></RecordContext.Provider>}
     </div>
   )
 }

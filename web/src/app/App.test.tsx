@@ -50,7 +50,8 @@ import { b64 } from '../crew/keys'
 import { SYNC_KEY_KV } from '../account/driveKey'
 import { resetSyncForTest, useSync } from '../sync/store'
 import { importSource, monthOf, sealBlob, stayId } from '../sync/wire'
-import { useCrew } from '../crew/friends'
+import { useCrew, type Friend } from '../crew/friends'
+import { SNAP_TOGETHER } from '../crew/SonarSheet'
 import { LIVE_LABEL } from './StubNav'
 
 const ses = { session: 's', id: 'acct_1', email: 'v@example.org' }
@@ -71,7 +72,7 @@ beforeEach(async () => {
   await kv.set(ACCOUNT_KV.welcomed, true); await kv.del(ACCOUNT_KV.session)
   profile.set({ name: 'V', units: 'km', homes: [{ lat: 48.85, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] })
   useStore.setState({ tab: 'home', settingsOpen: false })
-  useCrew.setState({ fixes: {} })
+  useCrew.setState({ friends: [], fixes: {}, hit: null })
   // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
   settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
@@ -203,5 +204,14 @@ describe('Crew tab', () => {
     expect(crew().textContent).toBe('Crew')
     await act(async () => useCrew.setState({ fixes: { p1: { pairId: 'p1', t: t - 16 * 60, lat: 0, lng: 0, city: null, grade: 'sonar', at: Date.now() } } }))
     expect(crew().querySelector('.live')).toBeNull()
+  })
+  it('a Sonar hit raises the sheet over whichever tab is open', async () => {
+    const marta: Friend = { deviceId: 'd', name: 'Marta', signPub: '00', kxPub: '00', pairId: 'p1', pairKey: '00', addedAt: 0, grants: { liveCity: true, livePrecise: false, sonar: true } }
+    await mount()
+    const t = Math.floor(Date.now() / 1000)
+    await act(async () => useCrew.setState({ friends: [marta], fixes: { p1: { pairId: 'p1', t, lat: 48.85, lng: 2.35, city: 'Paris', grade: 'sonar', at: Date.now() } }, hit: { pairId: 'p1', id: `app:${Date.now()}`, at: Date.now() } }))
+    const sheet = document.querySelector('[role=dialog][aria-label=Sonar]')!
+    expect(sheet.querySelector('h2')?.textContent).toBe('Marta is within a mile')
+    expect([...sheet.querySelectorAll('button')].map((b) => b.textContent)).toEqual([SNAP_TOGETHER, 'Dismiss'])
   })
 })
