@@ -162,12 +162,18 @@ describe('push and pull', () => {
 })
 
 describe('state machine', () => {
-  it('is off without a key, idle after a round, syncing in between, and errors by kind', async () => {
-    db.store.delete('sync:key')
+  it('is off without a Google account, locked without the key, idle after a round, syncing in between, and errors by kind', async () => {
+    await useAccount.getState().setDriveKeyed(false)
     await loadSyncStatus()
     expect(useSync.getState().status).toEqual({ kind: 'off' })
     await syncNow()
     expect(useSync.getState().status).toEqual({ kind: 'off' })
+    await useAccount.getState().setDriveKeyed(true)
+    db.store.delete('sync:key')
+    await loadSyncStatus()
+    expect(useSync.getState().status).toEqual({ kind: 'error', error: 'locked', lastTs: null })
+    await syncNow()
+    expect(useSync.getState().status).toEqual({ kind: 'error', error: 'locked', lastTs: null })
     db.store.set('sync:key', KEY)
     await loadSyncStatus()
     expect(useSync.getState().status).toEqual({ kind: 'idle', lastTs: null })

@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Sync section > off: says how to turn it on and offers nothing else 1`] = `
+<section
+  class="setting st-sync"
+>
+  <h2>
+    SYNC
+  </h2>
+  <div
+    class="st-actions"
+  >
+    <span
+      class="st-status"
+      role="status"
+    >
+      Sync is off — sign in with Google to turn it on.
+    </span>
+  </div>
+</section>
+`;

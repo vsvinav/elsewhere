@@ -22,6 +22,8 @@ export interface EngineDeps {
   drive?: () => Promise<string>
 }
 const defaults: Required<EngineDeps> = { client: () => api(), now: Date.now, record: () => null, key: loadLocalKey, drive: driveToken }
+/** The app tells the engine where the current record is, so a round started from anywhere pushes it. */
+export const setRecordSource = (f: () => Data | null) => { defaults.record = f }
 
 const hashOf = (x: unknown) => bytesToHex(sha256(utf8ToBytes(JSON.stringify(x))))
 const NAME_MAX = 200
@@ -147,9 +149,10 @@ async function run(deps: EngineDeps): Promise<void> {
   const d = { ...defaults, ...deps }
   const s = useSync.getState()
   const a = useAccount.getState()
-  const key = a.session && a.driveKeyed ? await d.key() : null
-  if (!key) { s.setStatus({ kind: 'off' }); return }
+  if (!a.session || !a.driveKeyed) { s.setStatus({ kind: 'off' }); return }
+  const key = await d.key()
   const lastTs = await loadLastTs()
+  if (!key) { s.setStatus({ kind: 'error', error: 'locked', lastTs }); return }
   s.setStatus({ kind: 'syncing' })
   try {
     await pull(key, d)
@@ -164,8 +167,9 @@ async function run(deps: EngineDeps): Promise<void> {
 export async function loadSyncStatus(deps: EngineDeps = {}): Promise<void> {
   const d = { ...defaults, ...deps }
   const a = useAccount.getState()
-  const key = a.session && a.driveKeyed ? await d.key() : null
-  useSync.getState().setStatus(key ? { kind: 'idle', lastTs: await loadLastTs() } : { kind: 'off' })
+  if (!a.session || !a.driveKeyed) { useSync.getState().setStatus({ kind: 'off' }); return }
+  const [key, lastTs] = await Promise.all([d.key(), loadLastTs()])
+  useSync.getState().setStatus(key ? { kind: 'idle', lastTs } : { kind: 'error', error: 'locked', lastTs })
 }
 
 /**

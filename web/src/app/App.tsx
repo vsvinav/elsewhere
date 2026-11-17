@@ -29,7 +29,7 @@ import { Welcome } from '../account/Welcome'
 import { AuthFlow, takeAuthToken, type AuthResult } from '../account/AuthFlow'
 import { useAccount } from '../account/store'
 import { startVaultSync } from '../account/sync'
-import { loadSyncStatus, syncNow } from '../sync/engine'
+import { loadSyncStatus, setRecordSource, syncNow } from '../sync/engine'
 import { useSync } from '../sync/store'
 import { frontDoor } from '../account/frontDoor'
 
@@ -66,11 +66,11 @@ export function App() {
   useEffect(() => { void useAccount.getState().load() }, [])
   useEffect(() => startVaultSync(), [])
   // Sync runs against the record this device holds; a round starts once the account is known and after each import.
-  const recordRef = useRef<Data | null>(null)
-  recordRef.current = record
-  const syncDeps = useMemo(() => ({ record: () => (mine ? recordRef.current : null) }), [mine])
+  const recordRef = useRef<{ d: Data | null; mine: boolean }>({ d: null, mine: false })
+  recordRef.current = { d: record, mine }
+  useEffect(() => setRecordSource(() => (recordRef.current.mine ? recordRef.current.d : null)), [])
   const syncReady = acct.loaded && !!acct.session && acct.driveKeyed
-  useEffect(() => { if (!acct.loaded) return; void loadSyncStatus().then(() => { if (syncReady) return syncNow(syncDeps) }) }, [acct.loaded, syncReady, syncDeps])
+  useEffect(() => { if (!acct.loaded) return; void loadSyncStatus().then(() => { if (syncReady) return syncNow() }) }, [acct.loaded, syncReady])
   const staysVersion = useSync((s) => s.staysVersion)
   const authDone = (r: AuthResult) => { setAuth(null); const a = useAccount.getState(); void a.setWelcomed(true); a.setShowWelcome(false); if (r.restored) setNeedImport(true) }
   const showWelcome = (v: boolean) => useAccount.getState().setShowWelcome(v)
@@ -115,7 +115,7 @@ export function App() {
   const data = useMemo(() => (record ? { ...record, places: apply(record.places, cache, mapsKey) } : null), [record, cache, mapsKey])
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,
-    importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); recordRef.current = d; if (profileStore.get()) useStore.getState().setTab('home'); if (useAccount.getState().driveKeyed) void syncNow({ record: () => d }) }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
+    importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); recordRef.current = { d, mine: true }; if (profileStore.get()) useStore.getState().setTab('home'); if (useAccount.getState().driveKeyed) void syncNow() }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
     // Without a bundled sample, starting over lands on the front door, same as a first visit.
     reset: () => { profileStore.set(null); setRecord(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e))) },
     editProfile: () => setEditing(true),
