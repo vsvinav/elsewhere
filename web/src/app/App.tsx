@@ -105,8 +105,7 @@ export function App() {
   }, [record?.meta.source_sha256, homesKey, staysVersion])
   const tab = useStore((s) => s.tab)
   const settingsOpen = useStore((s) => s.settingsOpen)
-  const crewOpen = useStore((s) => s.crewOpen)
-  const onMap = (tab === 'map' || tab === 'play') && !settingsOpen && !crewOpen
+  const onMap = (tab === 'map' || tab === 'play') && !settingsOpen
   useRooms()
   // Remembered per record so a record with no track at all is asked once, not on every render.
   const pathsFor = useRef<string | null>(null)
@@ -175,7 +174,6 @@ export function App() {
           <div className="menu">
             <button onClick={ctx.editProfile}>Edit profile</button>
             <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); useStore.getState().openSettings() }}>Settings</button>
-            <button onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); useStore.getState().openCrew() }}>Crew</button>
             <button onClick={ctx.reset}>{mine ? 'Start over' : 'Set up your record'}</button>
             <UsageRow />
           </div>
@@ -184,7 +182,7 @@ export function App() {
       <StubNav />
       <GoogleDownNote />
       <NamingStamp progress={naming} />
-      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : crewOpen ? <Crew /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
+      {data && <RecordContext.Provider value={ctx}><DataContext.Provider value={data}>{settingsOpen ? <Settings /> : tab === 'crew' ? <Crew /> : <><RangeBar /><Screen /></>}</DataContext.Provider></RecordContext.Provider>}
     </div>
   )
 }

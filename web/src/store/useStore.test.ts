@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useStore, type Door } from './useStore'
+import { TABS, useStore, type Door } from './useStore'
 const syncTabFromHash = () => useStore.getState().syncFromHash()
 
 const reset = () => { location.hash = 'home'; useStore.setState({ tab: 'home', range: null, pin: null, playhead: null, origin: null, focus: null, hiddenCats: ['food'] as never, playing: false }) }
@@ -204,22 +204,19 @@ describe('settings over the tabs', () => {
   })
 })
 
-describe('crew over the tabs', () => {
-  beforeEach(() => useStore.setState({ crewOpen: false }))
-  it('opens at #crew over the tab, closes back to it, and closes Settings if that was open', () => {
+describe('crew as a tab', () => {
+  it('is the ninth tab, after Replay, and opens at #crew, closing Settings if that was open', () => {
+    expect(TABS).toEqual(['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play', 'crew'])
     useStore.getState().setTab('map')
     useStore.getState().openSettings()
-    useStore.getState().openCrew()
+    useStore.getState().setTab('crew')
     expect(location.hash).toBe('#crew')
-    expect(useStore.getState()).toMatchObject({ tab: 'map', crewOpen: true, settingsOpen: false })
-    useStore.getState().closeCrew()
-    expect(location.hash).toBe('#map')
-    expect(useStore.getState().crewOpen).toBe(false)
+    expect(useStore.getState()).toMatchObject({ tab: 'crew', settingsOpen: false })
   })
-  it('a typed #crew opens it and moving to a tab closes it', () => {
+  it('a typed #crew lands on it and moving to another tab leaves it', () => {
     back('crew')
-    expect(useStore.getState().crewOpen).toBe(true)
+    expect(useStore.getState().tab).toBe('crew')
     back('stats')
-    expect(useStore.getState()).toMatchObject({ tab: 'stats', crewOpen: false })
+    expect(useStore.getState().tab).toBe('stats')
   })
 })

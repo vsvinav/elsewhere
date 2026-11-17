@@ -139,6 +139,9 @@ export function visibleFixes(fixes: Record<string, Fix>, now: number): (Fix & { 
   return out
 }
 
+/** Someone's fix is fresher than the stale line: the Crew tab wears its live dot. */
+export const anyLive = (fixes: Record<string, Fix>, now: number) => Object.values(fixes).some((f) => now - f.t * 1000 <= STALE_MS)
+
 export function ageLabel(t: number, now: number): string {
   const s = Math.max(0, Math.floor(now / 1000) - t)
   if (s < 60) return 'just now'

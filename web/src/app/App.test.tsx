@@ -50,6 +50,8 @@ import { b64 } from '../crew/keys'
 import { SYNC_KEY_KV } from '../account/driveKey'
 import { resetSyncForTest, useSync } from '../sync/store'
 import { importSource, monthOf, sealBlob, stayId } from '../sync/wire'
+import { useCrew } from '../crew/friends'
+import { LIVE_LABEL } from './StubNav'
 
 const ses = { session: 's', id: 'acct_1', email: 'v@example.org' }
 const realFetch = globalThis.fetch
@@ -68,7 +70,8 @@ beforeEach(async () => {
   document.body.innerHTML = ''
   await kv.set(ACCOUNT_KV.welcomed, true); await kv.del(ACCOUNT_KV.session)
   profile.set({ name: 'V', units: 'km', homes: [{ lat: 48.85, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] })
-  useStore.setState({ tab: 'home', settingsOpen: false, crewOpen: false })
+  useStore.setState({ tab: 'home', settingsOpen: false })
+  useCrew.setState({ fixes: {} })
   // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
   settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
@@ -175,5 +178,30 @@ describe('no record and no demo', () => {
     expect(host.textContent).toContain('Your phone keeps the record.')
     expect([...host.querySelectorAll('.ob-actions .btn')].map((b) => b.textContent)).toEqual(['Get the Android app', 'Add a Google Timeline export'])
     expect(host.querySelector('.ob-drop')).toBeNull()
+  })
+})
+
+describe('Crew tab', () => {
+  const tabs = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.ticket button:not(.brand)')]
+  it('is the ninth tab, at #crew, and the account menu no longer carries it', async () => {
+    const host = await mount()
+    expect(tabs(host).map((b) => b.textContent)).toEqual(['Tour', 'Numbers', 'Facts', 'Stops', 'Dates', 'Flights', 'Map', 'Replay', 'Crew'])
+    expect([...host.querySelectorAll('.account .menu button')].map((b) => b.textContent)).not.toContain('Crew')
+    await act(async () => tabs(host).at(-1)!.click())
+    expect(location.hash).toBe('#crew')
+    expect(useStore.getState().tab).toBe('crew')
+    expect(host.querySelector('.crew-head')?.textContent).toBe('CREW · no friends yet')
+    expect(host.querySelector('.rangebar')).toBeNull()
+  })
+  it('wears a red dot while a friend is live, and loses it once the fix is stale', async () => {
+    const host = await mount()
+    const crew = () => tabs(host).at(-1)!
+    expect(crew().querySelector('.live')).toBeNull()
+    const t = Math.floor(Date.now() / 1000)
+    await act(async () => useCrew.setState({ fixes: { p1: { pairId: 'p1', t: t - 60, lat: 0, lng: 0, city: null, grade: 'sonar', at: Date.now() } } }))
+    expect(crew().querySelector('.live')?.getAttribute('aria-label')).toBe(LIVE_LABEL)
+    expect(crew().textContent).toBe('Crew')
+    await act(async () => useCrew.setState({ fixes: { p1: { pairId: 'p1', t: t - 16 * 60, lat: 0, lng: 0, city: null, grade: 'sonar', at: Date.now() } } }))
+    expect(crew().querySelector('.live')).toBeNull()
   })
 })

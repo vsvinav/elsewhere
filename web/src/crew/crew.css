@@ -1,6 +1,5 @@
-/* Crew: one sheet over the tour; a pair bill, then a passport row of friends. */
+/* Crew: its own tab; a pair bill, then a passport row of friends. */
 .crew { display: grid; gap: 28px; }
-.crew .crew-tools .back { margin: 0; padding: 10px 14px; font-size: 13px; }
 .crew .crew-head { color: var(--ink-3); }
 .crew .crew-head b { color: var(--red); }
 .crew h1 { margin: -16px 0 0; font: 900 clamp(64px, 11vw, 160px)/0.82 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }

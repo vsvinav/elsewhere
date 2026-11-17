@@ -57,7 +57,7 @@ beforeEach(async () => {
   setKeysForTest(A)
   settings.set({ relayUrl: 'https://relay.test' })
   profile.set({ name: 'Ana', units: 'km', homes: [], works: [] })
-  useStore.setState({ crewOpen: true, tab: 'home' })
+  useStore.setState({ tab: 'crew' })
   useCrew.setState({ loaded: false, friends: [], fixes: {}, hit: null, tag: null })
   useCrew.getState().setSender(null)
   await useCrew.getState().load()

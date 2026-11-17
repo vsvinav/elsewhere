@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../ingest/settings'
 import { useProfile } from '../profile/profile'
-import { useStore } from '../store/useStore'
 import { Field } from '../world'
 import { currentCode, expiresIn, isExpired, markOffered, parseCode, rotateCode, type ShareCode } from './codes'
 import { nextMidnight, useCrew, type Friend, type Grants } from './friends'
@@ -33,7 +32,6 @@ const countWord = (n: number) => (n === 0 ? 'no friends yet' : n === 1 ? '1 frie
 const dateOf = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 
 export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof fetch; pollMs?: number }) {
-  const close = useStore((s) => s.closeCrew)
   const { relayUrl } = useSettings()
   const friends = useCrew((s) => s.friends)
   const [keys, setKeys] = useState<DeviceKeys | null>(null)
@@ -44,7 +42,6 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
   const accept = async () => { if (!keys || !proposal) return; await useCrew.getState().add(friendOf(keys, proposal)); setProposal(null) }
   return (
     <main className="strip crew">
-      <div className="crew-tools"><button className="btn quiet back" onClick={close}>← Back</button></div>
       <div className="caps crew-head">CREW · {countWord(friends.length)}</div>
       <h1>CREW</h1>
       <p className="fine lede">People who can see where you are. Each card shows exactly what that person gets. {VIEWER_NOTE}</p>
