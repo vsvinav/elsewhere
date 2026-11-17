@@ -7,6 +7,9 @@ vi.hoisted(() => {
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
 })
 
+const driveCalls = vi.hoisted(() => ({ deleted: [] as string[] }))
+vi.mock('./driveKey', async (orig) => ({ ...(await orig<typeof import('./driveKey')>()), deleteKey: async (token: string) => { if (token === 'bad') throw new Error('auth'); driveCalls.deleted.push(token) } }))
+
 import { AccountError, accountClient, api, deleteAccount, logOut, messageOf } from './client'
 import { ACCOUNT_KV, resetAccountForTest, useAccount } from './store'
 
@@ -133,6 +136,19 @@ describe('account client', () => {
     await expect(deleteAccount(api(fakeFetch(() => Response.json({ error: 'nope' }, { status: 500 })).fn))).rejects.toMatchObject({ status: 500 })
     expect(useAccount.getState().session?.session).toBe('s')
     await deleteAccount(api(fakeFetch(() => new Response(null, { status: 204 })).fn))
+    expect(useAccount.getState().session).toBeNull()
+    expect(driveCalls.deleted).toEqual([])
+  })
+  it('deleteAccount on a Google account also removes the sync key from Drive, and goes ahead when Drive will not answer', async () => {
+    await useAccount.getState().setSession({ session: 's', id: 'acct_1', email: 'a@b.co' })
+    await useAccount.getState().setDriveKeyed(true)
+    const ok = api(fakeFetch(() => new Response(null, { status: 204 })).fn)
+    await deleteAccount(ok, async () => 'tok')
+    expect(driveCalls.deleted).toEqual(['tok'])
+    expect(useAccount.getState().session).toBeNull()
+    await useAccount.getState().setSession({ session: 's', id: 'acct_1', email: 'a@b.co' })
+    await useAccount.getState().setDriveKeyed(true)
+    await deleteAccount(ok, async () => 'bad')
     expect(useAccount.getState().session).toBeNull()
   })
 })
