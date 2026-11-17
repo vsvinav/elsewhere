@@ -17,12 +17,15 @@ const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string
 
 const stored = (): Partial<Settings> => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}') } catch { return {} } }
 // Older blobs lack `llm` or carry only part of it.
-const migrate = (p: Partial<Settings>): Settings => ({ ...ENV, ...p, llm: { ...DEFAULT_LLM, ...(p.llm ?? {}) } })
+// Placeholder hosts an early build shipped and the vault may still carry; they never resolved to a service.
+const RETIRED = new Set(['relay.elsewhere.app', 'account.elsewhere.app'])
+const live = (url: string | undefined, fallback: string) => (url !== undefined && RETIRED.has(url.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')) ? fallback : url)
+const migrate = (p: Partial<Settings>): Settings => ({ ...ENV, ...p, llm: { ...DEFAULT_LLM, ...(p.llm ?? {}) }, relayUrl: live(p.relayUrl, DEFAULT_RELAY) ?? DEFAULT_RELAY, accountUrl: live(p.accountUrl, DEFAULT_ACCOUNT) ?? DEFAULT_ACCOUNT })
 let cur: Settings = migrate(stored())
 const subs = new Set<() => void>()
 export const settings = {
   get: () => cur,
-  set: (patch: Partial<Settings>) => { cur = { ...cur, ...patch }; localStorage.setItem(LS, JSON.stringify(cur)); subs.forEach((f) => f()) },
+  set: (patch: Partial<Settings>) => { cur = migrate({ ...cur, ...patch }); localStorage.setItem(LS, JSON.stringify(cur)); subs.forEach((f) => f()) },
   /** A different key starts unchecked and un-accepted. */
   setKey: (mapsKey: string) => { if (mapsKey !== cur.mapsKey) { resetGoogleDown(); settings.set({ mapsKey, keyOk: null, mapsOk: null, keyError: '', limited: false }) } },
   subscribe: (f: () => void) => { subs.add(f); return () => { subs.delete(f) } },

@@ -28,6 +28,17 @@ describe('settings', () => {
     expect(JSON.parse(mem.get('elsewhere.settings')!).relayUrl).toBe('')
   })
 
+  it('the retired placeholder hosts read as the live defaults', async () => {
+    mem.set('elsewhere.settings', JSON.stringify({ relayUrl: 'https://relay.elsewhere.app', accountUrl: 'https://account.elsewhere.app/' }))
+    const { settings, DEFAULT_RELAY, DEFAULT_ACCOUNT } = await import('./settings')
+    expect(settings.get().relayUrl).toBe(DEFAULT_RELAY)
+    expect(settings.get().accountUrl).toBe(DEFAULT_ACCOUNT)
+    settings.set({ relayUrl: 'https://relay.example.org' })
+    expect(settings.get().relayUrl).toBe('https://relay.example.org')
+    settings.set({ relayUrl: 'https://relay.elsewhere.app' })
+    expect(settings.get().relayUrl).toBe(DEFAULT_RELAY)
+  })
+
   it('fills in missing llm fields inside a partial blob', async () => {
     mem.set('elsewhere.settings', JSON.stringify({ llm: { provider: 'gemini', key: 'g' } }))
     const { settings } = await import('./settings')
