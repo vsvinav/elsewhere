@@ -12,7 +12,7 @@ const db = vi.hoisted(() => {
 })
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
-import { BAD_KEYS, Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, SONAR_COPY, TEST_FIRE_COPY, VIEWER_NOTE } from './Crew'
+import { BAD_KEYS, CONFIRM_COPY, Crew, CONFIRM_REMOVE, EMPTY_RELAY, NO_FRIENDS, RELAY_DOWN, SONAR_COPY, TEST_FIRE_COPY, VIEWER_NOTE, relayWords } from './Crew'
 import { sonarHooks, useCrew, type Friend, type Ping } from './friends'
 import { deviceIdOf, fingerprint, fromHex, keysFromSeeds, kxSigOf, pairIdOf, pairKeyOf, setKeysForTest, toHex } from './keys'
 import { settings } from '../ingest/settings'
@@ -146,17 +146,19 @@ describe('Crew', () => {
     expect(sheet.textContent).toContain('Pair with')
     expect(sheet.querySelector('b')?.textContent).toBe('Marta')
     expect(sheet.textContent).toContain(fingerprint(B.signPub, B.kxPub))
+    expect(sheet.textContent).toContain(CONFIRM_COPY)
     expect(useCrew.getState().friends).toEqual([])
     click(byText(sheet, 'button', 'Yes, pair'))
     await flush()
-    expect(useCrew.getState().friends[0]).toMatchObject({ name: 'Marta', pairId: pid, grants: { liveCity: false, livePrecise: false, sonar: false } })
+    expect(useCrew.getState().friends[0]).toMatchObject({ name: 'Marta', pairId: pid, grants: { liveCity: true, livePrecise: false, sonar: true } })
+    expect(host.querySelector('.friend .grant.on input[name=sonar]')).toBeTruthy()
     expect(host.querySelector('.crew-head')?.textContent).toBe('CREW · 1 friend')
     expect(byText(host, '.friend .nm', 'Marta')).toBeTruthy()
     unmount()
   })
 
   it('a claim of my code arrives through polling and can be declined', async () => {
-    let claimed = ''
+    let claimed = 'not yet'
     const { fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': (path) => (path.endsWith(claimed) ? Response.json(bRecord) : new Response(null, { status: 204 })) })
     const { host, flush, unmount } = mount(fetchFn)
     await flush()
@@ -206,6 +208,31 @@ describe('Crew', () => {
     expect(m).toMatchObject({ type: 'ping', grade: 'sonar', test: true, hit: { id: expect.stringMatching(/^[0-9a-f]{8}$/), test: true } })
     expect(useCrew.getState().hit).toMatchObject({ pairId: pid, id: m.hit!.id, test: true })
     expect(heard).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+  it('an unreachable relay is reported in one sentence, pointing at Settings', async () => {
+    expect(relayWords(new TypeError('Failed to fetch'))).toBe(RELAY_DOWN)
+    expect(RELAY_DOWN).toBe('Couldn\'t reach the relay. Check your connection, or the Relay URL in Settings.')
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => { if (String(input).endsWith('/claim')) throw new TypeError('Failed to fetch'); return init?.method === 'POST' ? new Response('created', { status: 201 }) : new Response(null, { status: 204 }) }) as typeof fetch
+    const { host, flush, unmount } = mount(fetchFn)
+    await flush()
+    act(() => setValue(host.querySelector<HTMLInputElement>('#crew-code')!, 'PT-KSV-7Q4K'))
+    click(byText(host, 'button', 'Pair'))
+    await flush()
+    expect(host.querySelector('.crew-status')?.textContent).toBe(RELAY_DOWN)
+    unmount()
+  })
+  it('polls once as soon as the code is up, so a claim made while the tab was away lands at once', async () => {
+    let first = ''
+    const { calls, fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': (path) => { first ||= path; return path === first ? Response.json(bRecord) : new Response(null, { status: 204 }) } })
+    const { host, unmount } = mount(fetchFn)
+    await act(() => new Promise((r) => setTimeout(r, 10)))
+    // The claimed code was asked about once; the fresh code that replaced it, once too.
+    const gets = calls.filter((c) => c.method === 'GET').map((c) => c.path)
+    expect(gets[0]).toBe(first)
+    expect(gets).toHaveLength(2)
+    expect(gets[1]).not.toBe(first)
+    expect(host.querySelector('.crew-confirm b')?.textContent).toBe('Marta')
     unmount()
   })
   it('a wrong code is reported in words', async () => {

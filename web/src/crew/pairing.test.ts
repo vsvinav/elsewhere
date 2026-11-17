@@ -62,10 +62,10 @@ describe('pairing flow', () => {
     expect(() => proposalOf({ ...bRecord, kxSig: '' })).toThrow(KeyError)
     expect(() => proposalOf({ ...(bRecord as Omit<typeof bRecord, 'kxSig'> & { kxSig?: string }), kxSig: undefined } as never)).toThrow(KeyError)
   })
-  it('friendOf derives the pair key only once the user confirms, with every grant off', () => {
+  it('friendOf derives the pair key only once the user confirms; city and Sonar start on, precise off', () => {
     const f = friendOf(A, proposalOf(bRecord), 1234)
     const pid = pairIdOf(A.signPub, B.signPub)
-    expect(f).toMatchObject({ deviceId: bRecord.deviceId, name: 'Marta', pairId: pid, pairKey: toHex(pairKeyOf(A.kxPriv, B.kxPub, pid)), addedAt: 1234, grants: { liveCity: false, livePrecise: false, sonar: false } })
+    expect(f).toMatchObject({ deviceId: bRecord.deviceId, name: 'Marta', pairId: pid, pairKey: toHex(pairKeyOf(A.kxPriv, B.kxPub, pid)), addedAt: 1234, grants: { liveCity: true, livePrecise: false, sonar: true } })
     expect(toHex(pairKeyOf(B.kxPriv, A.kxPub, pid))).toBe(f.pairKey)
   })
 })

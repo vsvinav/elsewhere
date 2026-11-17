@@ -16,11 +16,13 @@ export const NO_FRIENDS = 'Nobody yet. Trade codes with a friend and their stamp
 export const SONAR_COPY = "Ping us both when we're within a mile and neither of us is usually there."
 export const CONFIRM_REMOVE = (name: string) => `Remove ${name}? Their key goes here and yours goes there.`
 export const TEST_FIRE_COPY = 'Fires on both phones now, ignoring distance. Nothing is recorded.'
+export const CONFIRM_COPY = "You'll see each other's city on the map, and Sonar pings you both when you're somewhere new together. Precise location stays off until you turn it on."
+export const RELAY_DOWN = "Couldn't reach the relay. Check your connection, or the Relay URL in Settings."
 export const PAIR_NOTE = 'A code pairs two devices; it never carries your location or stats. Scanning a QR needs the phone.'
 
 const RELAY_WORDS: Record<number, string> = { 404: 'No such code. Check it and try again.', 410: 'That code was already used. Ask for a new one.', 409: "That's your own code.", 429: 'Too many tries for now. Wait a little.', 401: 'The relay did not accept this browser.' }
 export const BAD_KEYS = "Couldn't verify this friend's keys. Ask them for a new code."
-export const relayWords = (e: unknown) => (e instanceof KeyError ? BAD_KEYS : e instanceof RelayError ? RELAY_WORDS[e.status] ?? `The relay said ${e.status}.` : 'Could not reach the relay.')
+export const relayWords = (e: unknown) => (e instanceof KeyError ? BAD_KEYS : e instanceof RelayError ? RELAY_WORDS[e.status] ?? `The relay said ${e.status}.` : RELAY_DOWN)
 
 const GRANT_LABEL: { key: keyof Grants; label: string; sub: string }[] = [
   { key: 'liveCity', label: 'Live · city', sub: 'Which city, roughly where' },
@@ -51,6 +53,7 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
           <div className="caps">Pair with <b>{proposal.name}</b>?</div>
           <Field label="Their fingerprint">{proposal.fingerprint}</Field>
           <p className="fine">Check these eight letters match on their screen. Nothing is shared until you both say yes.</p>
+          <p className="fine">{CONFIRM_COPY}</p>
           <div className="row crew-tools"><button className="btn" onClick={accept}>Yes, pair</button><button className="btn quiet" onClick={() => setProposal(null)}>No</button></div>
         </div>
       )}
@@ -65,7 +68,8 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
 function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; keys: DeviceKeys; pollMs: number; onProposal(p: Proposal): void }) {
   const name = useProfile()?.name || 'A friend'
   const [code, setCode] = useState<ShareCode | null>(null)
-  const [offered, setOffered] = useState<'pending' | 'ok' | 'failed'>('pending')
+  // The offer's outcome is remembered against the code it was for, so a fresh code never inherits the last one's 'ok'.
+  const [offer_, setOffer] = useState<{ of: string; state: 'pending' | 'ok' | 'failed' }>({ of: '', state: 'pending' })
   const renew = () => rotateCode().then(setCode)
   const propose = (p: Proposal) => { onProposal(p); void renew() }
   useEffect(() => { let on = true; currentCode().then((c) => { if (on) setCode(c) }); return () => { on = false } }, [])
@@ -75,9 +79,11 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
   const [pollNote, setPollNote] = useState('')
   const busy = useRef(false)
   const value = code?.value
+  const madeAt = code?.madeAt
   const held = !!code?.offeredAt
   useEffect(() => {
     if (!value) return
+    const setOffered = (state: 'pending' | 'ok' | 'failed') => setOffer({ of: value, state })
     if (held) { setOffered('ok'); return }
     let on = true
     setOffered('pending')
@@ -88,18 +94,21 @@ function PairBill({ client, keys, pollMs, onProposal }: { client: RelayClient; k
     return () => { on = false }
   // The code is offered once per code; name changes mid-sheet keep the old offer.
   }, [client, keys, value, held])
+  const offered = offer_.of === value ? offer_.state : 'pending'
   useEffect(() => {
-    if (offered !== 'ok' || !code) return
+    if (offered !== 'ok' || !value || madeAt == null) return
     let on = true
-    const id = setInterval(async () => {
-      if (busy.current || isExpired(code.madeAt, Date.now())) return
+    const ask = async () => {
+      if (busy.current || isExpired(madeAt, Date.now())) return
       busy.current = true
-      try { const p = await poll(client, code.value); if (on && p) propose(p) } catch (e) { if (on && e instanceof KeyError) setPollNote(BAD_KEYS) } finally { busy.current = false }
-      if (on) setTick(Date.now())
-    }, pollMs)
+      try { const p = await poll(client, value); if (on && p) propose(p) } catch (e) { if (on && e instanceof KeyError) setPollNote(BAD_KEYS) } finally { busy.current = false }
+    }
+    // A claim made while this tab was away is waiting at the relay: ask once now, then on the clock.
+    void ask()
+    const id = setInterval(async () => { await ask(); if (on) setTick(Date.now()) }, pollMs)
     return () => { on = false; clearInterval(id) }
-  // propose is stable in what it does; onProposal comes from a state setter.
-  }, [client, code, offered, pollMs])
+  // propose is stable in what it does; onProposal comes from a state setter. Keyed on the code's value, so marking it held does not poll again.
+  }, [client, value, madeAt, offered, pollMs])
   const share = async () => {
     if (!code) return
     const text = `Pair with me on Elsewhere: ${code.value}`

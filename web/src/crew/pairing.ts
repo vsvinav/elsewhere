@@ -1,5 +1,5 @@
 // Pairing: show a code, or enter a friend's, then confirm before anything is saved.
-import type { Friend } from './friends'
+import type { Friend, Grants } from './friends'
 import { deviceIdOf, fingerprint, fromHex, kxSigOf, pairIdOf, pairKeyOf, toHex, verifyKxSig, type DeviceKeys } from './keys'
 import type { PairRecord, RelayClient } from './relay'
 
@@ -28,7 +28,10 @@ export const offer = (client: RelayClient, keys: DeviceKeys, code: string, name:
 export const poll = async (client: RelayClient, code: string) => { const r = await client.pollCode(code); return r ? proposalOf(r) : null }
 export const claim = async (client: RelayClient, keys: DeviceKeys, code: string, name: string) => proposalOf(await client.claimCode(code, myRecord(keys, name)))
 
+/** What a new friend gets on confirm: the city and Sonar, so pairing shows something; precise waits for a deliberate switch. */
+export const DEFAULT_GRANTS: Grants = { liveCity: true, livePrecise: false, sonar: true }
+
 export function friendOf(keys: DeviceKeys, p: Proposal, now = Date.now()): Friend {
   const pairId = pairIdOf(keys.signPub, fromHex(p.signPub))
-  return { deviceId: p.deviceId, name: p.name, signPub: p.signPub, kxPub: p.kxPub, pairId, pairKey: toHex(pairKeyOf(keys.kxPriv, fromHex(p.kxPub), pairId)), addedAt: now, grants: { liveCity: false, livePrecise: false, sonar: false } }
+  return { deviceId: p.deviceId, name: p.name, signPub: p.signPub, kxPub: p.kxPub, pairId, pairKey: toHex(pairKeyOf(keys.kxPriv, fromHex(p.kxPub), pairId)), addedAt: now, grants: { ...DEFAULT_GRANTS } }
 }
