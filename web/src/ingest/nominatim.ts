@@ -48,16 +48,17 @@ export function address(lat: number, lng: number): Promise<string | null> {
   })
 }
 
-/** Address for a point as it lands; undefined while loading. */
-export function useAddress(lat: number, lng: number): string | null | undefined {
+/** Address for a point as it lands; undefined while loading or while `on` is false (nothing is fetched until it is). */
+export function useAddress(lat: number, lng: number, on = true): string | null | undefined {
   const k = keyOf(lat, lng)
   const [a, setA] = useState<string | null | undefined>(undefined)
   useEffect(() => {
+    if (!on) return
     let live = true
     setA(undefined)
     address(lat, lng).then((v) => { if (live) setA(v) })
     return () => { live = false }
-  }, [k, lat, lng])
+  }, [k, lat, lng, on])
   return a
 }
 
