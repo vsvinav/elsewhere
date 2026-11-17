@@ -65,6 +65,8 @@ describe('the way back to Welcome', () => {
   it('signed out, the header carries a Log in chip that opens the welcome screen; Not now returns to the tour', async () => {
     const host = await mount()
     expect(host.querySelector('.tourline')).not.toBeNull()
+    expect(host.querySelector('.tourline .caps .who')?.textContent).toMatch(/record$/)
+    expect(host.querySelector('.tourline .chip.settings')?.textContent).toBe('Settings')
     expect(host.textContent).not.toContain(WELCOME_LINE)
     await act(async () => chip(host)!.click())
     expect(host.textContent).toContain(WELCOME_LINE)

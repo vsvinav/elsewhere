@@ -24,7 +24,7 @@
 .acct-quote { margin: 0; font: 800 clamp(20px, 2vw, 26px)/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--red); }
 
 .acct-code { display: flex; gap: 10px; }
-.acct-code input { width: clamp(40px, 7vw, 64px); height: clamp(56px, 9vw, 84px); padding: 0; border: 0; border-bottom: 4px solid var(--ink); background: transparent; color: var(--ink); text-align: center; font: 900 clamp(32px, 5vw, 56px)/1 var(--display); font-variant-numeric: tabular-nums; }
+.acct-code input { width: clamp(44px, 7vw, 64px); height: clamp(56px, 9vw, 84px); padding: 0; border: 0; border-bottom: 4px solid var(--ink); background: transparent; color: var(--ink); text-align: center; font: 900 clamp(32px, 5vw, 56px)/1 var(--display); font-variant-numeric: tabular-nums; }
 .acct-code input:focus { outline: none; border-bottom-color: var(--red); }
 .acct-code input:nth-child(3) { margin-right: 14px; }
 
@@ -67,3 +67,4 @@
 .st-vault { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .st-vault form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .st-vault input { font: 500 15px/1.4 var(--body); padding: 8px 10px; border: 2px solid var(--ink); background: transparent; color: var(--ink); min-width: 220px; }
+@media (pointer: coarse) { .acct-link { padding: 12px 0; } }
