@@ -2,7 +2,7 @@ name: Pages
 
 on:
   push:
-    branches: [main, v2, v3]
+    branches: [v3]
   workflow_dispatch:
 
 permissions:
@@ -15,17 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One site, three builds: main at the root, previews under /v2/ and /v3/.
+  # One site, one build: v3 under /v3/. The root and /v2/ only forward there, so a login
+  # cannot leak into an older build that shares this origin's storage.
   build:
-    strategy:
-      matrix:
-        include:
-          - ref: main
-            out: .
-          - ref: v2
-            out: v2
-          - ref: v3
-            out: v3
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.ref }}
+          ref: v3
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -60,14 +52,14 @@ jobs:
       # Keys are optional: without them the site still imports a record and draws OpenStreetMap tiles.
       - run: npm run build
         env:
-          VITE_BASE: /${{ github.event.repository.name }}/${{ matrix.out == '.' && '' || format('{0}/', matrix.out) }}
+          VITE_BASE: /${{ github.event.repository.name }}/v3/
           VITE_GOOGLE_MAPS_KEY: ${{ secrets.VITE_GOOGLE_MAPS_KEY }}
           VITE_GOOGLE_MAP_ID: ${{ secrets.VITE_GOOGLE_MAP_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
       - run: cp dist/index.html dist/404.html
       - uses: actions/upload-artifact@v4
         with:
-          name: site-${{ matrix.ref }}
+          name: site-v3
           path: web/dist
 
   assemble:
@@ -76,16 +68,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: site-main
-          path: site
-      - uses: actions/download-artifact@v4
-        with:
-          name: site-v2
-          path: site/v2
-      - uses: actions/download-artifact@v4
-        with:
           name: site-v3
           path: site/v3
+      - run: |
+          cat > site/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>Elsewhere</title>
+          <meta http-equiv="refresh" content="0; url=/elsewhere/v3/">
+          <script>location.replace('/elsewhere/v3/')</script>
+          <a href="/elsewhere/v3/">Elsewhere has moved</a>
+          HTML
+          mkdir -p site/v2 && cp site/index.html site/v2/index.html
+          # Pages only reads the root 404; v3's copy of its index keeps deep links inside the app.
+          cp site/v3/404.html site/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
