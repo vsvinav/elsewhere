@@ -6,4 +6,6 @@ interface Env {
   RESEND_KEY?: string
   MAIL_FROM?: string
   LINK_BASE?: string
+  /** OAuth client IDs whose Google ID tokens sign in here, comma-separated (web and Android). */
+  GOOGLE_CLIENT_ID?: string
 }

@@ -1,6 +1,7 @@
 // The account service: email magic codes, 90-day sessions and one client-encrypted recovery vault per account.
 // It holds no plaintext beyond the email address; the vault is bytes it cannot read.
 import type { Limiter } from './limiter'
+import { claimedEmail, verifyIdToken } from './google'
 export { Limiter } from './limiter'
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
@@ -135,15 +136,31 @@ async function authFinish(req: Request, env: Env, now: number): Promise<Response
   }
   if (result.ok === 'expired') return fail('expired', 400)
   if (result.ok === 'wrong') return fail('wrong code', 401)
-  const tok = { email: result.email }
+  return sessionFor(env, result.email, now)
+}
 
-  let id = await env.ACCOUNTS.get(`email:${tok.email}`)
+/** A Google ID token stands in for the mailed code; the address it carries lands on the same account the mail would. */
+async function authGoogle(req: Request, env: Env, now: number): Promise<Response> {
+  const lim = limiter(env)
+  const body = await parseBody(req)
+  const claimed = normalizeEmail(claimedEmail(body?.idToken))
+  if (!(await finishAllowed(lim, req, claimed, now))) return fail('slow down', 429)
+  if (!body || typeof body.idToken !== 'string') return fail('bad request', 400)
+  const audiences = (env.GOOGLE_CLIENT_ID ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  const email = normalizeEmail(await verifyIdToken(body.idToken, audiences, now))
+  if (!email) return fail('unauthorized', 401)
+  return sessionFor(env, email, now)
+}
+
+/** The account behind an address, made on first sight, and a fresh ninety-day session on it. */
+async function sessionFor(env: Env, email: string, now: number): Promise<Response> {
+  let id = await env.ACCOUNTS.get(`email:${email}`)
   let acct = id ? await env.ACCOUNTS.get<Account>(`acct:${id}`, 'json') : null
   if (!id || !acct) {
     id = `acct_${randomHex(8)}`
-    acct = { email: tok.email, created: now }
+    acct = { email, created: now }
     await env.ACCOUNTS.put(`acct:${id}`, JSON.stringify(acct))
-    await env.ACCOUNTS.put(`email:${tok.email}`, id)
+    await env.ACCOUNTS.put(`email:${email}`, id)
   }
   const session = randomHex(32)
   const ses: Session = { acct: id, exp: now + SESSION_TTL_S * 1000 }
@@ -184,6 +201,7 @@ async function handle(req: Request, env: Env): Promise<Response> {
   if (path === '/auth/start' && req.method === 'POST') return authStart(req, env, now)
   if (path === '/auth/finish' && req.method === 'POST') return authFinish(req, env, now)
   if (path === '/auth/peek' && req.method === 'GET') return authPeek(req, env, now)
+  if (path === '/auth/google' && req.method === 'POST') return authGoogle(req, env, now)
 
   const route = `${req.method} ${path}`
   if (!['GET /me', 'DELETE /me', 'DELETE /session', 'PUT /vault', 'GET /vault'].includes(route)) return fail('not found', 404)
