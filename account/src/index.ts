@@ -231,7 +231,8 @@ async function handle(req: Request, env: Env): Promise<Response> {
   if (path === '/auth/google' && req.method === 'POST') return authGoogle(req, env, now)
 
   const route = `${req.method} ${path}`
-  const syncKey = path.startsWith('/sync/') ? decodeURIComponent(path.slice('/sync/'.length)) : null
+  let syncKey: string | null = null
+  if (path.startsWith('/sync/')) { try { syncKey = decodeURIComponent(path.slice('/sync/'.length)) } catch { return fail('bad key', 400) } }
   const syncRoute = syncKey !== null && (req.method === 'GET' || req.method === 'PUT')
   if (!syncRoute && !['GET /me', 'DELETE /me', 'DELETE /session', 'PUT /vault', 'GET /vault', 'GET /sync', 'DELETE /sync'].includes(route)) return fail('not found', 404)
   const ses = await sessionOf(req, env, now)

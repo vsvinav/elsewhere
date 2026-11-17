@@ -284,7 +284,7 @@ describe('sync blobs', () => {
   })
   it('refuses keys outside the charset, oversized blobs and malformed bodies', async () => {
     const s = await signIn('syn-c@example.com')
-    for (const bad of ['Profile', 'i_AB:2026-03', 'i_:2026-03', 'x_abc', 'i_abc:2026-3', `i_${'a'.repeat(17)}:2026-03`, 'i_abc:2026-03/x', 'vault']) {
+    for (const bad of ['Profile', 'i_AB:2026-03', 'i_:2026-03', 'x_abc', 'i_abc:2026-3', `i_${'a'.repeat(17)}:2026-03`, 'i_abc:2026-03/x', 'vault', '%E0%A4%A', '%ZZ']) {
       expect((await authed(s.session, 'PUT', `/sync/${bad}`, blob(1))).status, bad).toBe(400)
       expect((await authed(s.session, 'GET', `/sync/${bad}`)).status, bad).toBe(400)
     }
