@@ -100,6 +100,14 @@ describe('Numbers', () => {
     expect(data.visits.some((v) => data.places[v.place_id]?.city === 'Paris' && v.start >= r[0] && v.end <= r[1])).toBe(true)
   })
 
+  it('the distance legend names modes in plain words, not raw constants', () => {
+    wrap(<Stats />)
+    const legend = document.querySelector('.legend')!
+    const labs = [...legend.querySelectorAll('span')].map((el) => el.textContent)
+    expect(labs).toEqual(['Flight', 'Car', 'Walk', 'Other'])
+    expect(document.body.textContent).not.toMatch(/FLYING|IN_PASSENGER_VEHICLE|WALKING/)
+  })
+
   it('the best month opens that month', () => {
     wrap(<Stats />)
     fireEvent.click(screen.getAllByRole('button', { name: /^Open on the map: Best month · / })[0])

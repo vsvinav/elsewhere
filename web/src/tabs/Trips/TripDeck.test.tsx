@@ -19,7 +19,7 @@ vi.mock('../../world/PlacePhoto', () => ({ PlacePhoto: () => createElement('div'
 
 const base = sampleData()
 const D = 86400, start = Date.UTC(2024, 4, 10) / 1000
-const lisbon: Trip = { start, end: start + 7 * D, nights: 7, anchor_cities: ['Lisbon', 'Sintra'], total_km_by_mode: { FLYING: 10_000 }, max_dist_from_home_km: 5180, memory: null }
+const lisbon: Trip = { start, end: start + 7 * D, nights: 7, anchor_cities: ['Lisbon', 'Sintra'], total_km_by_mode: { FLYING: 10_000, IN_TRAIN: 300, IN_PASSENGER_VEHICLE: 40 }, max_dist_from_home_km: 5180, memory: null }
 const data = { ...base, trips: [...base.trips, lisbon] }
 const wrap = () => render(<DataContext.Provider value={data}><Trips /></DataContext.Provider>)
 const deck = () => screen.getByRole('listbox', { name: 'Trip deck' })
@@ -78,6 +78,15 @@ describe('TripDeck', () => {
     fireEvent.click(within(target).getByRole('button', { name: `Open trip ${title}` }))
     const passes = screen.getAllByRole('button', { name: / pass · / })
     expect(passes.map((p) => p.getAttribute('aria-expanded'))).toEqual(['false', 'true', 'false'])
+  })
+
+  it('an open pass names each mode in plain words, not the raw constant', () => {
+    wrap()
+    fireEvent.click(screen.getByRole('button', { name: /^Open pass · Lisbon/ }))
+    const bars = document.querySelector('.bars')!
+    const labs = [...bars.querySelectorAll('.lab')].map((el) => el.textContent)
+    expect(labs).toEqual(['Flight', 'Train', 'Car'])
+    expect(document.body.textContent).not.toMatch(/FLYING|IN_TRAIN|IN_PASSENGER_VEHICLE/)
   })
 
   it('prints a live map only on the selected card and its neighbours; the rest wait on blank stock', () => {
