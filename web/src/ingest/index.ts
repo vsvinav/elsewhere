@@ -1,5 +1,6 @@
 import type { Data, Path } from '../data/types'
 import type { Profile } from '../profile/profile'
+import { isSyncVisit, loadSyncedStays, SYNC_PLACE, toPVisit } from '../sync/local'
 import { kv } from './db'
 import { usePhotos } from '../photos/store'
 import type { Parsed } from './parse'
@@ -37,10 +38,20 @@ export function parsedFromData(d: Data): Parsed {
   return { visits: d.visits.map((v) => ({ ...v, type: 'UNKNOWN' })), activities: d.activities.map((a) => ({ ...a })), paths: d.paths, memories: [], frequent_places: d.profile.frequent_places, frequent_trips: d.profile.frequent_trips, persona: d.profile.persona, report: d.meta.import_report }
 }
 
+/** Stays pulled from other devices join the parsed visits, named through `frequent_places`, so they are drawn like the rest. */
+export async function withSyncedStays(parsed: Parsed): Promise<Parsed> {
+  const stays = Object.values(await loadSyncedStays().catch(() => ({})))
+  const visits = parsed.visits.filter((v) => !isSyncVisit(v)), frequent_places = parsed.frequent_places.filter((f) => !f.place_id.startsWith(SYNC_PLACE))
+  if (!stays.length) return { ...parsed, visits, frequent_places }
+  for (const s of stays) { const v = toPVisit(s); visits.push(v); frequent_places.push({ place_id: v.place_id, lat: s.lat, lng: s.lng, label: s.name || null }) }
+  visits.sort((a, b) => a.start - b.start)
+  return { ...parsed, visits, frequent_places }
+}
+
 /** Re-run derivation with a new profile; no re-parse. Imported records use their stored Parsed. */
 export async function rederive(current: Data, profile: Profile, onStage: (stage: string) => void): Promise<Data> {
   const stored = await kv.get<Parsed>('parsed').catch(() => undefined)
-  const parsed = stored ? { ...stored, paths: current.paths } : parsedFromData(current)
+  const parsed = await withSyncedStays(stored ? { ...stored, paths: current.paths } : parsedFromData(current))
   const { data } = await run({ parsed, source: { file: current.meta.source_file, sha256: current.meta.source_sha256 }, citiesUrl: CITIES(), profile }, onStage)
   if (stored) await kv.set('record', { ...data, paths: [] })
   return data

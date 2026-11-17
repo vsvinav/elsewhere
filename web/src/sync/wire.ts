@@ -18,7 +18,8 @@ export interface SyncBlob { v: 1; ts: number; nonce: string; ct: string }
 export interface Stay { id: string; lat: number; lng: number; name: string; start: number; end: number }
 /** One source's stays in one UTC month; `start`/`end` are epoch seconds. */
 export interface MonthChunk { v: 1; stays: Stay[] }
-export interface HomeWire { name: string; lat: number; lng: number; from: string | null; to: string | null; city: string; cc: string }
+/** `city` and `cc` are the web's own extras; a reader without them is fine, a writer without them is too. */
+export interface HomeWire { name: string; lat: number; lng: number; from: string | null; to: string | null; city?: string; cc?: string }
 export interface ProfileWire { v: 1; ts: number; name: string | null; homes: HomeWire[]; units: 'km' | 'mi' }
 export interface VaultBody2 { v: 2; iv: string; ct: string }
 

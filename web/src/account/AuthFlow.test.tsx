@@ -55,6 +55,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
     putVault: async (b) => { calls.push(`putVault v${b.v}`); vault = b; account.hasVault = true },
     getVault: async () => vault,
     deleteMe: async () => {},
+    listSync: async () => [], getSync: async () => null, putSync: async () => {}, deleteSync: async () => {},
   }
   return { client, calls, failStart: (e: AccountError | null) => { startFails = e }, get vault() { return vault } }
 }

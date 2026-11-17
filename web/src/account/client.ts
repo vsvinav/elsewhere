@@ -1,6 +1,7 @@
 // Plain HTTPS calls to the account service. A 401 on an authenticated call means the session is gone; the device forgets it.
 import { settings } from '../ingest/settings'
 import { useAccount } from './store'
+import type { SyncBlob } from '../sync/wire'
 import type { VaultBody } from './vault'
 
 export interface AccountInfo { id: string; email: string; created: number; hasVault: boolean }
@@ -32,6 +33,11 @@ export interface AccountClient {
   putVault(body: VaultBody): Promise<void>
   getVault(): Promise<VaultBody | null>
   deleteMe(): Promise<void>
+  /** The sealed sync blobs: what is there, one of them, store one (409 → `stale`), or drop them all. */
+  listSync(): Promise<{ key: string; ts: number; size: number }[]>
+  getSync(key: string): Promise<SyncBlob | null>
+  putSync(key: string, blob: SyncBlob): Promise<void>
+  deleteSync(): Promise<void>
 }
 export interface ClientOpts { fetchFn?: typeof fetch; session?: () => string | null; onUnauthorized?: () => void }
 
@@ -67,6 +73,13 @@ export function accountClient(base: string, opts: ClientOpts = {}): AccountClien
       catch (e) { if (e instanceof AccountError && e.status === 404) return null; throw e }
     },
     deleteMe: async () => { await call('DELETE', '/me', undefined, true) },
+    listSync: async () => (await call('GET', '/sync', undefined, true)).json(),
+    getSync: async (key) => {
+      try { return await (await call('GET', `/sync/${encodeURIComponent(key)}`, undefined, true)).json() }
+      catch (e) { if (e instanceof AccountError && e.status === 404) return null; throw e }
+    },
+    putSync: async (key, blob) => { await call('PUT', `/sync/${encodeURIComponent(key)}`, blob, true) },
+    deleteSync: async () => { await call('DELETE', '/sync', undefined, true) },
   }
 }
 
