@@ -146,7 +146,7 @@ describe('Settings', () => {
     await askUpdate(host, flush, 'correct horse battery')
     expect(svc.puts).toHaveLength(1)
     const a = useAccount.getState()
-    expect(a.salt).toBe(svc.puts[0].salt)
+    expect(a.salt).toBe((svc.puts[0] as { salt: string }).salt)
     expect(a.vaultAt).not.toBeNull()
     expect(host.textContent).toContain(ACCOUNT.fresh)
     unmount()

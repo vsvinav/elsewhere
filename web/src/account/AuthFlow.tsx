@@ -4,10 +4,11 @@ import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
 import { AccountError, api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
-import { clientId, signIn, warm } from './google'
+import { fetchOrCreateKey } from './driveKey'
+import { clientId, driveToken, signIn, warm } from './google'
 import { useAccount } from './store'
-import { markUploaded } from './sync'
-import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from './vault'
+import { markUploaded, uploadVault } from './sync'
+import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN, sealVaultWithDriveKey, type VaultBody, type VaultPlain } from './vault'
 import '../profile/onboarding.css'
 import './account.css'
 
@@ -19,6 +20,7 @@ export const COPY = {
   continue: 'Continue',
   google: 'Continue with Google',
   googleFail: "Google sign-in didn't finish. Try again.",
+  driveFail: "Elsewhere couldn't reach its folder in your Google Drive. Try again.",
   codeTitle: 'Check your mail',
   sent: (email: string) => `We sent a code to ${email}`,
   linkToo: 'Open the link in the mail works too.',
@@ -85,11 +87,16 @@ interface Props {
   derive?: typeof deriveKey
   /** Google's prompt; null hides the button. Defaults to the real one when a client ID is built in. */
   google?: (() => Promise<{ idToken: string }>) | null
+  /** A Drive app-folder token for the same Google account; the sync key lives behind it. */
+  drive?: () => Promise<string>
 }
 const defaultGoogle = () => (clientId() ? signIn : null)
 
-/** Email → code → passphrase (new account) or unlock (one with a vault). The same screens serve sign up and log in. */
-export function AuthFlow({ mode, token, onDone, onClose, current, client, derive = deriveKey, google = defaultGoogle() }: Props) {
+/**
+ * Email → code → passphrase (new account) or unlock (one with a vault). The same screens serve sign up and log in.
+ * A Google login skips the passphrase: the key in the account's Drive folder seals the vault instead.
+ */
+export function AuthFlow({ mode, token, onDone, onClose, current, client, derive = deriveKey, google = defaultGoogle(), drive = driveToken }: Props) {
   const c = useRef(client ?? api()).current
   const [step, setStep] = useState<Step>(token ? 'token' : 'email')
   const [email, setEmail] = useState('')
@@ -111,23 +118,47 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     setError(''); setNote(''); setBusy(COPY.resend)
     try { await c.start(email.trim()); setNote(COPY.resent) } catch (err) { setError(messageOf(err)) } finally { setBusy('') }
   }
+  // Whatever this device remembered of a previous vault is for another account or key.
   const landed = async (session: string, account: AccountInfo) => {
-    // Whatever this device remembered of a previous vault is for another account or passphrase.
     const a = useAccount.getState()
-    a.setKey(null); await a.setSalt(null); await a.setVaultAt(null); await markUploaded(null)
+    a.setKey(null); await a.setSalt(null); await a.setDriveKeyed(false); await a.setVaultAt(null); await markUploaded(null)
     await a.setSession({ session, id: account.id, email: account.email })
     setEmail(account.email)
-    setStep(account.hasVault ? 'unlock' : 'set')
+  }
+  const landedByMail = async (session: string, account: AccountInfo) => { await landed(session, account); setStep(account.hasVault ? 'unlock' : 'set') }
+  /** The Drive key in use: the vault is sealed under it from here on, and the key never sits in page memory. */
+  const [driveKey, setDriveKey] = useState<Uint8Array | null>(null)
+  const adoptDriveKey = async () => { const a = useAccount.getState(); a.setKey(null); await a.setSalt(null); await a.setDriveKeyed(true) }
+  const restore = async (plain: VaultPlain) => {
+    await replaceKeys(fromHex(plain.signPriv), fromHex(plain.kxPriv))
+    profile.set(migrate(plain.profile))
+    if (plain.settings.relayUrl) settings.set({ relayUrl: plain.settings.relayUrl })
+  }
+  /** After the Google session: fetch the key, then open a v:2 vault, migrate a v:1 one through the passphrase, or make a new one. */
+  const landedByGoogle = async (session: string, account: AccountInfo) => {
+    await landed(session, account)
+    let key: Uint8Array
+    try { key = await fetchOrCreateKey(await drive()) } catch { await logOut(c); setError(COPY.driveFail); return }
+    setDriveKey(key)
+    const body = account.hasVault ? await c.getVault() : null
+    if (body?.v === 1) { setStep('unlock'); return }
+    let plain: VaultPlain | null = null
+    if (body) { try { plain = await openVault(key, body) } catch { /* sealed under a key that is gone: the account starts a fresh vault */ } }
+    await adoptDriveKey()
+    const a = useAccount.getState()
+    if (plain) { await restore(plain); a.setPending(false); await a.setVaultAt(Date.now()); markUploaded(plain) }
+    else { await a.setVaultAt(null); markUploaded(null); await uploadVault({ client: () => c }) }
+    onDone({ restored: !!plain })
   }
   const finish = async (body: { email: string; code: string } | { token: string }) => {
     setError(''); setBusy(COPY.finishing)
-    try { const r = await c.finish(body); await landed(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
+    try { const r = await c.finish(body); await landedByMail(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
   }
   // Anything short of a session from Google reads as one line, unless the service was unreachable or said slow down.
   const googleIn = async () => {
     if (!google) return
     setError(''); setBusy(COPY.finishing)
-    try { const { idToken } = await google(); const r = await c.google(idToken); await landed(r.session, r.account) }
+    try { const { idToken } = await google(); const r = await c.google(idToken); await landedByGoogle(r.session, r.account) }
     catch (err) { setError(err instanceof AccountError && (err.status === 0 || err.status === 429) ? messageOf(err) : COPY.googleFail) }
     finally { setBusy('') }
   }
@@ -164,14 +195,19 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     try {
       const body = await c.getVault()
       if (!body) { setStep('set'); return }
+      if (body.v !== 1) { setStep('set'); return }
       const key = await derive(p, unb64(body.salt))
       let plain
       try { plain = await openVault(key, body) } catch { setError(COPY.wrong); return }
-      await replaceKeys(fromHex(plain.signPriv), fromHex(plain.kxPriv))
-      profile.set(migrate(plain.profile))
-      if (plain.settings.relayUrl) settings.set({ relayUrl: plain.settings.relayUrl })
+      await restore(plain)
       const a = useAccount.getState()
-      await a.setSalt(body.salt); a.setKey(key); a.setPending(false); await a.setVaultAt(Date.now()); markUploaded(plain)
+      if (driveKey) {
+        // The one-time migration: the vault moves under the Drive key and the passphrase is never asked for again.
+        const sealed: VaultBody = sealVaultWithDriveKey(driveKey, plain)
+        await c.putVault(sealed)
+        await adoptDriveKey()
+      } else { await a.setSalt(body.salt); a.setKey(key) }
+      a.setPending(false); await a.setVaultAt(Date.now()); markUploaded(plain)
       onDone({ restored: true })
     } catch (err) { setError(messageOf(err)) } finally { setBusy('') }
   }

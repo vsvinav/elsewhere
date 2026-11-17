@@ -68,7 +68,7 @@ describe.skipIf(!svc)('account service end to end', () => {
     expect(secondDevice.account.id).toBe(fin.account.id)
     b.session = secondDevice.session
     const body = (await b.client.getVault())!
-    expect(body.v).toBe(1)
+    if (body.v !== 1) throw new Error('expected a passphrase vault')
     const opened = await openVault(await deriveKey('correct horse battery', Buffer.from(body.salt, 'base64')), body)
     expect(opened.signPriv).toBe(plain.signPriv)
     expect(opened.kxPriv).toBe(plain.kxPriv)

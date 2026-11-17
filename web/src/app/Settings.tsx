@@ -228,6 +228,7 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
       const a = useAccount.getState()
       const body = await client.getVault()
       let salt: Uint8Array, key: Uint8Array
+      if (body?.v === 2) { setErr(ACCOUNT.wrong); return }
       if (body) {
         salt = unb64(body.salt); key = await deriveKey(pass, salt)
         try { await openVault(key, body) } catch { setErr(ACCOUNT.wrong); return }
@@ -241,12 +242,15 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
       if (await uploadVault({ client: () => client })) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection.")
     } catch (e) { setErr(messageOf(e)) } finally { setBusy(false) }
   }
+  const driveKeyed = useAccount((a) => a.driveKeyed)
+  const retry = async () => { setBusy(true); setErr(''); try { if (!(await uploadVault({ client: () => api(fetchFn) }))) setErr("The vault didn't go up. Check your connection.") } finally { setBusy(false) } }
   if (state === 'none') return null
   const line = state === 'fresh' ? ACCOUNT.fresh : state === 'empty' ? ACCOUNT.empty : ACCOUNT.stale
   return (
     <div className="st-vault">
       <span role="status" className={`st-status${state === 'stale' ? '' : ' ok'}`}>{line}</span>
-      {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} onClick={() => setAsking(true)}>{ACCOUNT.update}</button>}
+      {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} disabled={busy} onClick={() => (driveKeyed ? void retry() : setAsking(true))}>{ACCOUNT.update}</button>}
+      {driveKeyed && err && <span role="alert" className="dz-err">{err}</span>}
       {asking && (
         <form onSubmit={submit}>
           <input type="password" aria-label="Recovery passphrase" placeholder="Recovery passphrase" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} disabled={busy} autoFocus />
