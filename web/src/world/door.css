@@ -11,3 +11,4 @@
 .door.row { display: grid; grid-template-columns: 1fr auto; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: inherit; width: 100%; }
 .door.row:hover { text-decoration: none; }
 .door.row:hover .n, .door.row:hover .where, .door.row:hover > span:first-child { text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 0.08em; text-underline-offset: 0.12em; }
+@media (pointer: coarse) { .door.row { padding: 11px 0; margin: -11px 0; } }

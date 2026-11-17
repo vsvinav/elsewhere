@@ -142,9 +142,9 @@ export function App() {
     <div className="tray">
       {bar}
       <div className="tourline">
-        <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></button>
-        <button className="chip" onClick={() => useStore.getState().openSettings()} aria-current={settingsOpen ? 'page' : undefined}>Settings</button>
-        {!acct.session && <button className="chip" onClick={() => showWelcome(true)}>Log in</button>}
+        <button className="home" onClick={goHome} aria-label="Back to the tour"><span className="mark">E</span><span className="caps">Else<b>where</b><span className="who"> · {prof.name ? `${prof.name}'s record` : 'your record'}</span></span></button>
+        <button className="chip settings" onClick={() => useStore.getState().openSettings()} aria-current={settingsOpen ? 'page' : undefined}>Settings</button>
+        {!acct.session && <button className="chip login" onClick={() => showWelcome(true)}>Log in</button>}
         <details className="account">
           <summary aria-label="Account">▾</summary>
           <div className="menu">
