@@ -111,6 +111,8 @@ npx wrangler secret put RESEND_KEY && npx wrangler secret put MAIL_FROM && npx w
 npx wrangler deploy   # prints https://….workers.dev
 ```
 
+To offer **Continue with Google** as well, make OAuth client IDs in Google Cloud Console (a *Web application* one with your site and `http://localhost:5173` as authorised JavaScript origins), set `GOOGLE_CLIENT_ID` in `account/wrangler.toml` to the IDs, comma-separated, and build the web app with `VITE_GOOGLE_CLIENT_ID` set to the web one. Without it the button is simply not shown.
+
 Paste that URL into **Settings → Account → Account service URL**. For local work run `wrangler dev --var DEV_MAIL:1` and the code comes back in the response instead of a mail; that only happens on localhost, never on a deployed host.
 
 <p align="center">

@@ -33,6 +33,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
   const client: AccountClient = {
     start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456' } } },
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
+    google: async (idToken) => { calls.push(`google ${idToken}`); if (idToken !== 'good') throw new AccountError(401, 'unauthorized'); return { session: 'gsess', account } },
     peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'ada@example.com' } },
     me: async () => account,
     logout: async () => { calls.push('logout') },
@@ -57,6 +58,42 @@ const digit = (host: HTMLElement, i: number) => host.querySelector<HTMLInputElem
 beforeEach(() => { db.store.clear(); resetAccountForTest(); profile.set(null); setKeysForTest(undefined); document.body.innerHTML = ''; settings.set({ relayUrl: 'https://relay.elsewhere.app' }) })
 
 describe('AuthFlow', () => {
+  it('offers Continue with Google above the email field when a client ID is set, and not otherwise', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, google: async () => ({ idToken: 'good' }) })
+    const btn = host.querySelector<HTMLButtonElement>('.acct-google')!
+    expect(btn.textContent).toBe(COPY.google)
+    expect(COPY.google).toBe('Continue with Google')
+    expect(btn.querySelector('svg')).toBeTruthy()
+    expect(btn.compareDocumentPosition(host.querySelector('#acct-email')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(host.querySelector('.acct-google')!.closest('.ob')!.outerHTML.replace(/<svg[\s\S]*?<\/svg>/, '<svg/>').replace(/<figure[\s\S]*?<\/figure>/, '')).toMatchSnapshot()
+    const { host: without } = mount({ client: svc.client, google: null })
+    expect(without.querySelector('.acct-google')).toBeNull()
+  })
+  it('Continue with Google signs in through the service and lands on the passphrase step', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, google: async () => ({ idToken: 'good' }) })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(svc.calls).toEqual(['google good'])
+    expect(useAccount.getState().session).toEqual({ session: 'gsess', id: 'acct_1', email: 'ada@example.com' })
+    expect(text(host, '.ob-title')).toBe(COPY.setTitle)
+  })
+  it('a Google prompt that does not finish, or a token the service refuses, shows the Google line and stays put', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, google: async () => { throw new Error('dismissed') } })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(host, '[role=alert]')).toBe("Google sign-in didn't finish. Try again.")
+    expect(text(host, '.ob-title')).toBe(COPY.email)
+    expect(useAccount.getState().session).toBeNull()
+    const { host: refused } = mount({ client: svc.client, google: async () => ({ idToken: 'forged' }) })
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe(COPY.googleFail)
+    expect(svc.calls).toEqual(['google forged'])
+    // A limiter refusal keeps its own words.
+    svc.client.google = async () => { throw new AccountError(429, 'slow down') }
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe('Too many tries. Give it an hour.')
+  })
   it('email → code → set a passphrase for a new account, then hands back with the key in memory', async () => {
     const svc = fakeService(false)
     const { host, onDone } = mount({ client: svc.client })
