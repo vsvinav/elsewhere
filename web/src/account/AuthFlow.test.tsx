@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -20,6 +20,8 @@ import { AuthFlow, COPY, takeAuthToken } from './AuthFlow'
 import { AccountError, type AccountClient, type AccountInfo } from './client'
 import { resetAccountForTest, useAccount } from './store'
 import { encryptVault, type VaultBody, type VaultPlain } from './vault'
+import { fakeGis } from './google.fake'
+import type { GoogleIdentity } from './google'
 
 // A fast stand-in for PBKDF2 so the screens can be driven without a second of hashing per step.
 const derive = async (p: string, salt: Uint8Array) => sha256(concatBytes(utf8ToBytes(p.trim()), salt))
@@ -33,6 +35,7 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
   const client: AccountClient = {
     start: async (email) => { calls.push(`start ${email}`); if (startFails) throw startFails; return { dev: { code: '123456' } } },
     finish: async (body) => { calls.push(`finish ${JSON.stringify(body)}`); if ('token' in body ? body.token !== 't' : body.code !== '123456') throw new AccountError('token' in body ? 400 : 401, 'token' in body ? 'expired' : 'wrong code'); return { session: 'sess', account } },
+    google: async (idToken) => { calls.push(`google ${idToken}`); if (idToken !== 'good') throw new AccountError(401, 'unauthorized'); return { session: 'gsess', account } },
     peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'ada@example.com' } },
     me: async () => account,
     logout: async () => { calls.push('logout') },
@@ -54,9 +57,63 @@ const submit = (host: HTMLElement) => act(() => { host.querySelector('form')!.di
 const text = (host: HTMLElement, sel: string) => host.querySelector(sel)?.textContent ?? null
 const digit = (host: HTMLElement, i: number) => host.querySelector<HTMLInputElement>(`[aria-label="Digit ${i}"]`)!
 
+afterEach(() => { delete (window as { google?: unknown }).google; vi.unstubAllEnvs() })
 beforeEach(() => { db.store.clear(); resetAccountForTest(); profile.set(null); setKeysForTest(undefined); document.body.innerHTML = ''; settings.set({ relayUrl: 'https://relay.elsewhere.app' }) })
 
 describe('AuthFlow', () => {
+  it('offers Continue with Google above the email field when a client ID is set, and not otherwise', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, google: async () => ({ idToken: 'good' }) })
+    const btn = host.querySelector<HTMLButtonElement>('.acct-google')!
+    expect(btn.textContent).toBe(COPY.google)
+    expect(COPY.google).toBe('Continue with Google')
+    expect(btn.querySelector('svg')).toBeTruthy()
+    expect(btn.compareDocumentPosition(host.querySelector('#acct-email')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(host.querySelector('.acct-google')!.closest('.ob')!.outerHTML.replace(/<svg[\s\S]*?<\/svg>/, '<svg/>').replace(/<figure[\s\S]*?<\/figure>/, '')).toMatchSnapshot()
+    const { host: without } = mount({ client: svc.client, google: null })
+    expect(without.querySelector('.acct-google')).toBeNull()
+  })
+  it('Continue with Google clicks Google\'s own button, sends the credential to the service and lands on the passphrase step', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'web.apps.googleusercontent.com')
+    const g = fakeGis()
+    ;(window as { google?: GoogleIdentity }).google = g.gis
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client })
+    expect(host.querySelector('.acct-google')).toBeTruthy()
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(g.clicks).toBe(1)
+    expect(text(host, '.acct-busy')).toBe(COPY.finishing)
+    await act(() => { g.credential('good') }); await settle()
+    expect(svc.calls).toEqual(['google good'])
+    expect(useAccount.getState().session).toEqual({ session: 'gsess', id: 'acct_1', email: 'ada@example.com' })
+    expect(text(host, '.ob-title')).toBe(COPY.setTitle)
+  })
+  it('without a built-in client ID there is no Google button', () => {
+    const { host } = mount({ client: fakeService(false).client })
+    expect(host.querySelector('.acct-google')).toBeNull()
+  })
+  it('a Google prompt that does not finish, or a token the service refuses, shows the Google line and stays put', async () => {
+    const svc = fakeService(false)
+    const { host } = mount({ client: svc.client, google: async () => { throw new Error('dismissed') } })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(host, '[role=alert]')).toBe("Google sign-in didn't finish. Try again.")
+    expect(text(host, '.ob-title')).toBe(COPY.email)
+    expect(useAccount.getState().session).toBeNull()
+    const { host: refused } = mount({ client: svc.client, google: async () => ({ idToken: 'forged' }) })
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe(COPY.googleFail)
+    expect(svc.calls).toEqual(['google forged'])
+    // A limiter refusal and an unreachable service keep their own words; any other refusal is the Google line.
+    svc.client.google = async () => { throw new AccountError(429, 'slow down') }
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe('Too many tries. Give it an hour.')
+    svc.client.google = async () => { throw new AccountError(0, 'network') }
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe("Couldn't reach the account service. Check your connection.")
+    svc.client.google = async () => { throw new AccountError(400, 'expired') }
+    await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(refused, '[role=alert]')).toBe(COPY.googleFail)
+  })
   it('email → code → set a passphrase for a new account, then hands back with the key in memory', async () => {
     const svc = fakeService(false)
     const { host, onDone } = mount({ client: svc.client })

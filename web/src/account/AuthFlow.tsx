@@ -3,7 +3,8 @@ import { b64, fromHex, hasKeys, replaceKeys, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
-import { api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
+import { AccountError, api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
+import { clientId, signIn, warm } from './google'
 import { useAccount } from './store'
 import { markUploaded } from './sync'
 import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from './vault'
@@ -16,6 +17,8 @@ export const COPY = {
   email: 'Your email',
   emailSub: 'We send a six-digit code. No password, nothing to remember.',
   continue: 'Continue',
+  google: 'Continue with Google',
+  googleFail: "Google sign-in didn't finish. Try again.",
   codeTitle: 'Check your mail',
   sent: (email: string) => `We sent a code to ${email}`,
   linkToo: 'Open the link in the mail works too.',
@@ -51,6 +54,16 @@ export const COPY = {
 
 export type AuthResult = { restored: boolean }
 
+/** Google's four-colour G, as its brand guidelines draw it. */
+const GoogleMark = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden focusable="false">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+  </svg>
+)
+
 /** The mail link lands on `#auth=<token>`; take the token and clear it from the address bar so a reload does not retry it. */
 export function takeAuthToken(loc: { hash: string; pathname: string; search: string } = location, replace: (url: string) => void = (u) => history.replaceState(null, '', u)): string | null {
   const m = /^#auth=([0-9a-f]{64})$/i.exec(loc.hash)
@@ -70,10 +83,13 @@ interface Props {
   client?: AccountClient
   /** Tests skip the slow key derivation. */
   derive?: typeof deriveKey
+  /** Google's prompt; null hides the button. Defaults to the real one when a client ID is built in. */
+  google?: (() => Promise<{ idToken: string }>) | null
 }
+const defaultGoogle = () => (clientId() ? signIn : null)
 
 /** Email → code → passphrase (new account) or unlock (one with a vault). The same screens serve sign up and log in. */
-export function AuthFlow({ mode, token, onDone, onClose, current, client, derive = deriveKey }: Props) {
+export function AuthFlow({ mode, token, onDone, onClose, current, client, derive = deriveKey, google = defaultGoogle() }: Props) {
   const c = useRef(client ?? api()).current
   const [step, setStep] = useState<Step>(token ? 'token' : 'email')
   const [email, setEmail] = useState('')
@@ -107,6 +123,14 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     setError(''); setBusy(COPY.finishing)
     try { const r = await c.finish(body); await landed(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
   }
+  // Anything short of a session from Google reads as one line, unless the service was unreachable or said slow down.
+  const googleIn = async () => {
+    if (!google) return
+    setError(''); setBusy(COPY.finishing)
+    try { const { idToken } = await google(); const r = await c.google(idToken); await landed(r.session, r.account) }
+    catch (err) { setError(err instanceof AccountError && (err.status === 0 || err.status === 429) ? messageOf(err) : COPY.googleFail) }
+    finally { setBusy('') }
+  }
   // A link logs in whoever opens it, so the address behind it is shown first and nothing happens until Continue.
   // A device with a record or identity of its own is told that those follow the account.
   useEffect(() => {
@@ -116,6 +140,7 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     c.peek(token).then((r) => setLinkEmail(r.email), (err) => { setError(messageOf(err)); setStep('email') }).finally(() => setBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => { if (google === signIn) warm() }, [google])
   const linkYes = async () => {
     if (!token) return
     if (current) { setBusy(COPY.finishing); await logOut(c) }
@@ -176,6 +201,7 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
 
           {(step === 'email' || (step === 'token' && !linkEmail)) && (
             <Screen title={COPY.email} sub={COPY.emailSub}>
+              {google && step === 'email' && <button className="btn quiet acct-google" onClick={() => void googleIn()} disabled={!!busy}><GoogleMark />{COPY.google}</button>}
               <form className="acct-form" onSubmit={start}>
                 <input id="acct-email" className="ob-input" type="email" autoFocus autoComplete="email" inputMode="email" aria-label={COPY.email} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" disabled={step === 'token'} />
                 {error && <p className="acct-err" role="alert">{error}</p>}

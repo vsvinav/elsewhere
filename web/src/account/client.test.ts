@@ -34,6 +34,15 @@ describe('account client', () => {
     await c.finish({ token: 'tok' })
     expect(JSON.parse(String(f.calls[2].init.body))).toEqual({ token: 'tok' })
   })
+  it('google posts the ID token and returns the same shape as finish', async () => {
+    const f = fakeFetch(() => Response.json({ session: 's2', account: { id: 'acct_1', email: 'a@b.co', created: 1, hasVault: false } }))
+    const c = accountClient('https://acct.test', { fetchFn: f.fn })
+    expect((await c.google('eyJ.abc.def')).session).toBe('s2')
+    expect(f.calls[0].url).toBe('https://acct.test/auth/google')
+    expect(f.calls[0].init.method).toBe('POST')
+    expect(JSON.parse(String(f.calls[0].init.body))).toEqual({ idToken: 'eyJ.abc.def' })
+    await expect(accountClient('https://acct.test', { fetchFn: fakeFetch(() => Response.json({ error: 'unauthorized' }, { status: 401 })).fn }).google('x')).rejects.toMatchObject({ status: 401, code: 'unauthorized' })
+  })
   it('peek asks for the address behind a token', async () => {
     const f = fakeFetch(() => Response.json({ email: 'a***@b.co' }))
     expect(await accountClient('https://acct.test', { fetchFn: f.fn }).peek('ab'.repeat(32))).toEqual({ email: 'a***@b.co' })
