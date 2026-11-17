@@ -44,6 +44,8 @@ const track = <T>(p: Promise<T>): Promise<T> => { ask(); emit(); return p.finall
 /** Forget whatever is still waiting in the queue. */
 const dropQueue = () => { settle(queue.length); queue.forEach((q) => queued.delete(q)); queue.length = 0 }
 const canSpend = () => !!key && !stopped && settings.get().keyOk !== false
+/** Would `need` leave this place alone: home, or already named with a photo? */
+const skipped = (p: Place | undefined) => !p || isHome(p) || !!(p.name && p.photo)
 /** Only a refused key stops the pool; anything else is worth another try. */
 const fatal = (e: Error & { status?: number }) => e.status === 401 || e.status === 403 || /API key|PERMISSION_DENIED|billing|not enabled/i.test(e.message)
 
@@ -96,7 +98,7 @@ export function need(ids: string[], places?: Record<string, Place>): void {
   for (const id of ids) {
     if (id in cache || queued.has(id)) continue
     const p = places?.[id]
-    if (places && (!p || isHome(p) || (p.name && p.photo))) continue
+    if (places && skipped(p)) continue
     queued.add(id); queue.push(id); added++
   }
   if (!added) return
@@ -105,6 +107,14 @@ export function need(ids: string[], places?: Record<string, Place>): void {
     for (let i = queue.length - 1; i >= 0; i--) if (queue[i] in cache) { queued.delete(queue.splice(i, 1)[0]); settle() }
     emit(); pump()
   })
+}
+
+/**
+ * Has Places had its say on this id? True once a lookup has landed in `c` (pass the snapshot's cache so a component
+ * re-renders when it does), or when no lookup will ever run: no usable key, or a place `need` skips.
+ */
+export function isResolved(id: string, p: Place | undefined, c: Record<string, Cached> = cache): boolean {
+  return id in c || !canSpend() || skipped(p)
 }
 
 /** The key lookups pay with (empty: none). A new key clears a stopped pool and picks up whatever is still waiting. */

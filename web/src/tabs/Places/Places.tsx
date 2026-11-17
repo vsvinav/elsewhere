@@ -7,9 +7,11 @@ import { Barcode, CountUp, Field, Pass, PrintIn, Sticker } from '../../world'
 import { PlaceMap } from '../../world/PlaceMap'
 import { date, hours, n0 } from '../../world/fmt'
 import type { Place } from '../../data/types'
-import { need } from '../../ingest/places'
+import { isResolved, need, usePlaces } from '../../ingest/places'
 import { useInView } from '../../world/useInView'
 import { PhotoStrip, SnapButton } from '../../photos/Snap'
+import { useAddress } from '../../ingest/nominatim'
+import { stopAddress } from './address'
 
 type Sort = 'visits' | 'hours' | 'recent' | 'first'
 const SORT: Record<Sort, (a: Place, b: Place) => number> = {
@@ -106,16 +108,24 @@ export function Places() {
   )
 }
 
-/** One luggage tag; the place is looked up the first time the tag scrolls into view. */
+/**
+ * One luggage tag; the place is looked up the first time the tag scrolls into view. Nominatim is asked for the street
+ * only once Places has answered (or will never run) and still left the tag without an address, so its one-a-second
+ * queue is not filled with stops Google is about to name.
+ */
 function Tag({ id, p, places, pressed, onOpen }: { id: string; p: Place; places: Record<string, Place>; pressed: boolean; onOpen(): void }) {
-  const ref = useInView<HTMLButtonElement>(() => need([id], places))
+  const [seen, setSeen] = useState(false)
+  const ref = useInView<HTMLButtonElement>(() => { need([id], places); setSeen(true) })
+  const { cache } = usePlaces()
+  const osm = useAddress(p.lat, p.lng, seen && stopAddress(p, null) === null && isResolved(id, p, cache))
+  const addr = stopAddress(p, osm)
   return (
     <button ref={ref} className="tag" onClick={onOpen} aria-pressed={pressed}>
       <PlacePhoto place={p} />
       <div>
         <div className="lab">{kind(p) ?? (p.name ? 'place' : 'unnamed stop')}</div>
-        <div className="name">{placeName(p, id)}</div>
-        <div className="sub">{[p.city, p.country_code].filter(Boolean).join(', ') || 'city not on record'}</div>
+        <div className="name">{p.name ? p.name : addr ?? placeName(p, id)}</div>
+        <div className="sub">{addr ?? ([p.city, p.country_code].filter(Boolean).join(', ') || 'city not on record')}</div>
       </div>
       <div className="row">
         <div className="field"><div className="lab">Visits</div><div className="val">{n0(p.n_visits)}</div></div>
