@@ -89,6 +89,16 @@ describe('TripDeck', () => {
     expect(document.body.textContent).not.toMatch(/FLYING|IN_TRAIN|IN_PASSENGER_VEHICLE/)
   })
 
+  it('unmapped modes share a single Other bar', () => {
+    const odd: Trip = { ...lisbon, start: start + 30 * D, end: start + 32 * D, nights: 2, anchor_cities: ['Porto'], total_km_by_mode: { IN_VEHICLE: 50, UNKNOWN: 20, FLYING: 2_000, IN_TAXI: 10 } }
+    cleanup()
+    render(<DataContext.Provider value={{ ...data, trips: [...data.trips, odd] }}><Trips /></DataContext.Provider>)
+    fireEvent.click(screen.getByRole('button', { name: /^Open pass · Porto/ }))
+    const labs = [...document.querySelectorAll('.bars .lab')].map((el) => el.textContent)
+    expect(labs).toEqual(['Flight', 'Other'])
+    expect(document.querySelectorAll('.bars .num')[1].textContent).toBe('80 km')
+  })
+
   it('prints a live map only on the selected card and its neighbours; the rest wait on blank stock', () => {
     cleanup()
     const many = { ...base, trips: Array.from({ length: 20 }, (_, i) => ({ ...lisbon, start: start - i * 30 * D, end: start - i * 30 * D + 3 * D, anchor_cities: [`City ${i}`] })) }

@@ -1,4 +1,4 @@
-import { modeLabel } from './modes'
+import { kmByLabel, modeLabel } from './modes'
 
 test('every known mode has its short poster label', () => {
   expect(modeLabel('WALKING')).toBe('Walk')
@@ -19,4 +19,10 @@ test('anything unrecognised falls back to Other', () => {
   expect(modeLabel('UNKNOWN_ACTIVITY_TYPE')).toBe('Other')
   expect(modeLabel('IN_VEHICLE')).toBe('Other')
   expect(modeLabel('')).toBe('Other')
+})
+
+test('kmByLabel folds every unmapped mode into one Other bucket, biggest first', () => {
+  expect(kmByLabel({ IN_VEHICLE: 30, UNKNOWN: 20, FLYING: 500, IN_TAXI: 10, IN_PASSENGER_VEHICLE: 100 }))
+    .toEqual([['Flight', 500], ['Car', 100], ['Other', 60]])
+  expect(kmByLabel({})).toEqual([])
 })

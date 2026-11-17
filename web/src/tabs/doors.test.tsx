@@ -108,6 +108,17 @@ describe('Numbers', () => {
     expect(document.body.textContent).not.toMatch(/FLYING|IN_PASSENGER_VEHICLE|WALKING/)
   })
 
+  it('unmapped modes never take a colour and fold into the one grey Other', () => {
+    const t0 = data.meta.range[0]
+    const day = (i: number, km_by_mode: Record<string, number>) => ({ ...data.daily[0], date: new Date((t0 + i * 86400) * 1000).toISOString().slice(0, 10), km_by_mode })
+    const odd = { ...data, daily: [day(0, { IN_VEHICLE: 9_000, UNKNOWN: 8_000 }), day(1, { IN_TAXI: 7_000, FLYING: 100 })], activities: data.activities.filter((a) => a.mode === 'FLYING') }
+    cleanup()
+    render(<RecordContext.Provider value={rec}><DataContext.Provider value={odd}><Stats /></DataContext.Provider></RecordContext.Provider>)
+    const labs = [...document.querySelector('.legend')!.querySelectorAll('span')].map((el) => el.textContent)
+    expect(labs).toEqual(['Flight', 'Other'])
+    expect(document.querySelector('.legend .ghost')!.textContent).toBe('Other')
+  })
+
   it('the best month opens that month', () => {
     wrap(<Stats />)
     fireEvent.click(screen.getAllByRole('button', { name: /^Open on the map: Best month · / })[0])

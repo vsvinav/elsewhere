@@ -4,7 +4,8 @@ import { stats } from '../../analytics/stats'
 import { commuteStats } from '../../analytics/commute'
 import { explorationScore } from '../../analytics/explore'
 import { CountUp, Field, Pass, PrintIn } from '../../world'
-import { date, hours, label, month, n0, WEEKDAYS } from '../../world/fmt'
+import { date, hours, month, n0, WEEKDAYS } from '../../world/fmt'
+import { kmByLabel, modeLabel } from '../../data/modes'
 import { useUnits } from '../../profile/units'
 import { Door, doorProps } from '../../world/Door'
 import { cityIndex, monthRange } from '../../analytics/doors'
@@ -35,9 +36,11 @@ export function Stats() {
     }
   }, [data])
 
+  // Months stacked by label, so every unnamed mode is one grey Other and never takes a colour.
+  const months = s.months.map((m) => ({ ...m, byMode: Object.fromEntries(kmByLabel(m.byMode)) }))
   const totals: Record<string, number> = {}
-  for (const m of s.months) for (const [k, v] of Object.entries(m.byMode)) totals[k] = (totals[k] ?? 0) + v
-  const modes = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, TOP_MODES).map(([k]) => k)
+  for (const m of months) for (const [k, v] of Object.entries(m.byMode)) totals[k] = (totals[k] ?? 0) + v
+  const modes = Object.entries(totals).filter(([k]) => k !== 'Other').sort((a, b) => b[1] - a[1]).slice(0, TOP_MODES).map(([k]) => k)
   const maxMonth = Math.max(1, ...s.months.map((m) => m.total))
   const best = s.months.reduce((a, b) => (b.total > a.total ? b : a), s.months[0])
   const avg = s.months.reduce((a, m) => a + m.total, 0) / Math.max(1, s.months.length)
@@ -69,7 +72,7 @@ export function Stats() {
           <div className="fields"><Field label="Distance by month">Top three modes in colour, the rest in grey</Field></div>
           <div className="big">{best ? <Door target={d.month(best.key, `Peak month · ${month(best.key)} · ${n0(cv(maxMonth))} ${u}`)}><CountUp value={maxMonth} /><small>KM PEAK</small></Door> : <><CountUp value={maxMonth} /><small>KM PEAK</small></>}</div>
           <div className="columns" aria-label="Distance per month, stacked by mode">
-            {s.months.map((m) => {
+            {months.map((m) => {
               const other = m.total - modes.reduce((a, k) => a + (m.byMode[k] ?? 0), 0)
               return (
                 <div className="col" key={m.key} {...doorProps(d.month(m.key, `${month(m.key)} · ${n0(cv(m.total))} ${u}`))}>
@@ -81,7 +84,7 @@ export function Stats() {
             })}
           </div>
           <div className="axis"><span>{s.months[0] && month(s.months[0].key)}</span><span>{s.months.at(-1) && month(s.months.at(-1)!.key)}</span></div>
-          <div className="legend">{modes.map((k, i) => <span key={k} className={CLS[i]}>{label(k)}</span>)}<span className="ghost">Other</span></div>
+          <div className="legend">{modes.map((k, i) => <span key={k} className={CLS[i]}>{k}</span>)}<span className="ghost">Other</span></div>
         </PrintIn>
       </Pass>
 
@@ -136,7 +139,7 @@ export function Stats() {
         </PrintIn>
       }>
         <PrintIn>
-          <div className="fields"><Field label="Commute">Home ↔ work legs under 3 hours</Field><Field label="Usually by">{usualMode && label(usualMode)}</Field></div>
+          <div className="fields"><Field label="Commute">Home ↔ work legs under 3 hours</Field><Field label="Usually by">{usualMode && modeLabel(usualMode)}</Field></div>
           <div className="big">{commute.legs.length ? <Door target={d.commute(`${Math.round(commute.median_all)} min door to door`)}><CountUp value={commute.median_all} /><small>MIN DOOR TO DOOR</small></Door> : <span className="ghost">—</span>}</div>
           {commute.legs.length > 0 && (
             <>

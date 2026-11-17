@@ -7,7 +7,8 @@ import { Bill, CountUp, Field, Stamp, Sticker } from '../../world'
 import { TrailMap } from '../../world/TrailMap'
 import { Nights } from '../../world/Nights'
 import { YearWheel } from '../../world/YearWheel'
-import { date, dateISO, label, n0 } from '../../world/fmt'
+import { date, dateISO, n0 } from '../../world/fmt'
+import { modeLabel } from '../../data/modes'
 import { useStore } from '../../store/useStore'
 import { YourRecord } from '../../app/YourRecord'
 import { useProfile } from '../../profile/profile'
@@ -27,6 +28,15 @@ export function Home() {
   const data = useData()
   const raw = useRawData()
   const f = useMemo(() => homeFacts(data), [data])
+  // One row per label; an Other row takes the ink of its biggest raw mode.
+  const setlist = useMemo(() => {
+    const rows: [string, number, string][] = []
+    for (const [m, km] of f.kmByMode) {
+      const l = modeLabel(m), row = rows.find((r) => r[0] === l)
+      if (row) row[1] += km; else rows.push([l, km, INK[lensOf(m)] ?? ''])
+    }
+    return rows.sort((a, b) => b[1] - a[1])
+  }, [f])
   const t = useMemo(() => tour(data), [data])
   const prof = useProfile()
   const name = prof?.name ?? ''
@@ -119,10 +129,10 @@ export function Home() {
         <div className="caps">Setlist · {u === 'mi' ? 'miles' : 'kilometres'} by mode</div>
         <div className="num"><Door target={d.whole(`${n0(cv(f.totalKm))} ${u} on record`)}><CountUp value={cv(f.totalKm)} /><small>{u}</small></Door></div>
         <ol className="setlist" aria-label="Distance by mode">
-          {f.kmByMode.map(([m, km]) => (
-            <li key={m}><Door className="row" target={d.whole(`${label(m)} · ${n0(cv(km))} ${u}`)}>
-              <span>{label(m)}</span>
-              <span className="track"><i className={INK[lensOf(m)] ?? ''} style={{ width: `${(100 * km) / f.kmByMode[0][1]}%` }} /></span>
+          {setlist.map(([m, km, ink]) => (
+            <li key={m}><Door className="row" target={d.whole(`${m} · ${n0(cv(km))} ${u}`)}>
+              <span>{m}</span>
+              <span className="track"><i className={ink} style={{ width: `${(100 * km) / setlist[0][1]}%` }} /></span>
               <span className="n">{n0(cv(km))}<small>{u}</small></span>
             </Door></li>
           ))}
