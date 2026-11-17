@@ -253,3 +253,71 @@ describe('authenticated routes', () => {
     expect(fresh.account.hasVault).toBe(false)
   })
 })
+
+describe('sync blobs', () => {
+  const blob = (ts: number, ct = 'G0e66PVIthGHTpXPjBk29/2Nipg94l6I4g==') => ({ v: 1, ts, nonce: 'Dw4NDAsKCQgHBgUE', ct })
+  const KEY = 'i_ab12cd34ef56:2026-03'
+  it('a vault sealed under the Drive key (v:2, no salt) is accepted; v:2 with a salt or v:1 without one is not', async () => {
+    const s = await signIn('v2@example.com')
+    const v2 = { v: 2, iv: vault.iv, ct: vault.ct }
+    expect((await authed(s.session, 'PUT', '/vault', v2)).status).toBe(204)
+    expect(await (await authed(s.session, 'GET', '/vault')).json()).toEqual(v2)
+    expect((await authed(s.session, 'PUT', '/vault', { ...v2, salt: vault.salt })).status).toBe(400)
+    expect((await authed(s.session, 'PUT', '/vault', { v: 1, iv: vault.iv, ct: vault.ct })).status).toBe(400)
+    expect((await authed(s.session, 'PUT', '/vault', { v: 2, iv: 'not base64!', ct: vault.ct })).status).toBe(400)
+  })
+  it('lists, stores and reads back blobs for the account only', async () => {
+    const a = await signIn('syn-a@example.com'), b = await signIn('syn-b@example.com')
+    expect(await (await authed(a.session, 'GET', '/sync')).json()).toEqual([])
+    expect((await authed(a.session, 'PUT', `/sync/${KEY}`, blob(1000))).status).toBe(204)
+    expect((await authed(a.session, 'PUT', '/sync/profile', blob(2000))).status).toBe(204)
+    expect((await authed(b.session, 'PUT', `/sync/${KEY}`, blob(5))).status).toBe(204)
+    const list = (await (await authed(a.session, 'GET', '/sync')).json()) as { key: string; ts: number; size: number }[]
+    expect(list.map((e) => [e.key, e.ts])).toEqual([[KEY, 1000], ['profile', 2000]])
+    expect(list[0].size).toBe(JSON.stringify(blob(1000)).length)
+    const r = await authed(a.session, 'GET', `/sync/${KEY}`)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual(blob(1000))
+    expect(await (await authed(b.session, 'GET', `/sync/${KEY}`)).json()).toEqual(blob(5))
+    expect((await authed(a.session, 'GET', '/sync/d_phone1:2025-01')).status).toBe(404)
+    expect((await call('GET', '/sync')).status).toBe(401)
+  })
+  it('refuses keys outside the charset, oversized blobs and malformed bodies', async () => {
+    const s = await signIn('syn-c@example.com')
+    for (const bad of ['Profile', 'i_AB:2026-03', 'i_:2026-03', 'x_abc', 'i_abc:2026-3', `i_${'a'.repeat(17)}:2026-03`, 'i_abc:2026-03/x', 'vault']) {
+      expect((await authed(s.session, 'PUT', `/sync/${bad}`, blob(1))).status, bad).toBe(400)
+      expect((await authed(s.session, 'GET', `/sync/${bad}`)).status, bad).toBe(400)
+    }
+    expect((await authed(s.session, 'PUT', `/sync/${KEY}`, blob(1, 'A'.repeat(262_200)))).status).toBe(413)
+    for (const body of [{ ...blob(1), v: 2 }, { ...blob(1), ts: -1 }, { ...blob(1), ts: 1.5 }, { ...blob(1), ts: '1' }, { ...blob(1), nonce: '!!' }, { v: 1, ts: 1, ct: 'AA==' }, [], 'x']) {
+      expect((await authed(s.session, 'PUT', `/sync/${KEY}`, body)).status).toBe(400)
+    }
+    expect(await (await authed(s.session, 'GET', '/sync')).json()).toEqual([])
+  })
+  it('a blob older than the stored one is refused with 409; an equal or newer one replaces it', async () => {
+    const s = await signIn('syn-d@example.com')
+    expect((await authed(s.session, 'PUT', '/sync/profile', blob(500))).status).toBe(204)
+    const stale = await authed(s.session, 'PUT', '/sync/profile', blob(499))
+    expect(stale.status).toBe(409)
+    expect(await stale.json()).toEqual({ error: 'stale' })
+    expect((await authed(s.session, 'PUT', '/sync/profile', blob(500, 'AA=='))).status).toBe(204)
+    expect((await authed(s.session, 'PUT', '/sync/profile', blob(501))).status).toBe(204)
+    expect(await (await authed(s.session, 'GET', '/sync/profile')).json()).toEqual(blob(501))
+  })
+  it('DELETE /sync removes every blob of the account and nobody else\'s', async () => {
+    const a = await signIn('syn-e@example.com'), b = await signIn('syn-f@example.com')
+    await authed(a.session, 'PUT', `/sync/${KEY}`, blob(1)); await authed(a.session, 'PUT', '/sync/profile', blob(1))
+    await authed(b.session, 'PUT', '/sync/profile', blob(1))
+    expect((await authed(a.session, 'DELETE', '/sync')).status).toBe(204)
+    expect(await (await authed(a.session, 'GET', '/sync')).json()).toEqual([])
+    expect((await authed(a.session, 'GET', '/sync/profile')).status).toBe(404)
+    expect(await (await authed(b.session, 'GET', '/sync')).json()).toHaveLength(1)
+    expect((await authed(a.session, 'DELETE', '/sync')).status).toBe(204)
+  })
+  it('deleting the account takes its sync blobs with it', async () => {
+    const s = await signIn('syn-g@example.com')
+    await authed(s.session, 'PUT', `/sync/${KEY}`, blob(1)); await authed(s.session, 'PUT', '/sync/profile', blob(1))
+    expect((await authed(s.session, 'DELETE', '/me')).status).toBe(204)
+    expect((await env.ACCOUNTS.list({ prefix: `sync:${s.account.id}:` })).keys).toEqual([])
+  })
+})
