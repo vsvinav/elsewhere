@@ -49,7 +49,6 @@ export function App() {
   const [mine, setMine] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   // No sample shipped with this build (the data folder is not in git): the front door still takes an import.
-  const [noDemo, setNoDemo] = useState(false)
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
@@ -65,12 +64,15 @@ export function App() {
   const [needImport, setNeedImport] = useState(false)
   useEffect(() => { void useAccount.getState().load() }, [])
   useEffect(() => startVaultSync(), [])
-  // Sync runs against the record this device holds; a round starts once the account is known and after each import.
+  // Sync runs against the record this device holds; a round starts once the account is known and the record has loaded, and after each import.
   const recordRef = useRef<{ d: Data | null; mine: boolean }>({ d: null, mine: false })
   recordRef.current = { d: record, mine }
   useEffect(() => setRecordSource(() => (recordRef.current.mine ? recordRef.current.d : null)), [])
-  const syncReady = acct.loaded && !!acct.session && acct.driveKeyed
-  useEffect(() => { if (!acct.loaded) return; void loadSyncStatus().then(() => { if (syncReady) return syncNow() }) }, [acct.loaded, syncReady])
+  const [noDemo, setNoDemo] = useState(false)
+  const settled = !!record || noDemo
+  const syncReady = acct.loaded && !!acct.session && acct.driveKeyed && settled
+  useEffect(() => { if (!acct.loaded) return; void loadSyncStatus() }, [acct.loaded])
+  useEffect(() => { if (syncReady) void syncNow() }, [syncReady])
   const staysVersion = useSync((s) => s.staysVersion)
   const syncing = useSync((s) => s.status.kind === 'syncing')
   const authDone = (r: AuthResult) => { setAuth(null); const a = useAccount.getState(); void a.setWelcomed(true); a.setShowWelcome(false); if (r.restored) setNeedImport(true) }
@@ -81,7 +83,6 @@ export function App() {
   }, [adopt])
   // Nothing imported here but stays pulled from other devices: they are the record, and this device counts as having one.
   const derivedStays = useRef(0)
-  const settled = !!record || noDemo
   useEffect(() => {
     if (mine || !prof || !settled) return
     let live = true

@@ -15,10 +15,10 @@ vi.mock('../ingest/db', () => {
   const m = new Map<string, unknown>()
   return { kv: { get: async (k: string) => m.get(k), set: async (k: string, v: unknown) => { m.set(k, v) }, setAll: async (e: [string, unknown][]) => { for (const [k, v] of e) m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
 })
-const bundle = vi.hoisted(() => ({ missing: false }))
+const bundle = vi.hoisted(() => ({ missing: false, delay: 0 }))
 vi.mock('../data/load', async (orig) => {
   const real = await orig<typeof import('../data/load')>()
-  return { ...real, loadData: async () => { if (bundle.missing) throw new real.DataLoadError('/data/record.json', '404'); return sampleData() }, loadPaths: async () => [] }
+  return { ...real, loadData: async () => { if (bundle.delay) await new Promise((r) => setTimeout(r, bundle.delay)); const mine = await real.loadData().catch(() => null); if (mine) return mine; if (bundle.missing) throw new real.DataLoadError('/data/record.json', '404'); return sampleData() }, loadPaths: async () => [] }
 })
 // No worker under jsdom: derivation runs inline on the sample cities, through the same synced-stays merge the app uses.
 vi.mock('../ingest', async (orig) => {
@@ -49,7 +49,7 @@ import { clearRecord } from '../ingest'
 import { b64 } from '../crew/keys'
 import { SYNC_KEY_KV } from '../account/driveKey'
 import { resetSyncForTest, useSync } from '../sync/store'
-import { sealBlob, stayId } from '../sync/wire'
+import { importSource, monthOf, sealBlob, stayId } from '../sync/wire'
 
 const ses = { session: 's', id: 'acct_1', email: 'v@example.org' }
 const realFetch = globalThis.fetch
@@ -74,7 +74,7 @@ beforeEach(async () => {
   resetAccountForTest()
   resetSyncForTest()
   await clearRecord()
-  bundle.missing = false
+  bundle.missing = false; bundle.delay = 0
 })
 afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()); globalThis.fetch = realFetch })
 
@@ -107,6 +107,18 @@ describe('a second browser', () => {
     expect(host.querySelector('.tourline')).not.toBeNull()
     expect(host.textContent).not.toContain('Your phone keeps the record.')
     expect(host.textContent).toContain('Start over')
+  })
+  it('the first round waits for the record on this device, so what was not pushed last time goes up now', async () => {
+    bundle.delay = 40
+    await signedInWithKey()
+    const own = sampleData()
+    await kv.set('record', own)
+    const calls = service()
+    const host = await mount()
+    await act(() => new Promise((r) => setTimeout(r, 80)))
+    expect(host.textContent).toContain('Start over')
+    const src = importSource(own.meta.source_sha256)
+    expect(calls.filter((c) => c.startsWith('PUT /sync/'))).toContain(`PUT /sync/${encodeURIComponent(`${src}:${monthOf(own.visits[0].start)}`)}`)
   })
   it('a device that has never been welcomed goes straight through to its synced record, not to Welcome or onboarding', async () => {
     bundle.missing = true
