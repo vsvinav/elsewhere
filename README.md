@@ -1,10 +1,11 @@
 <h1 align="center">Elsewhere</h1>
 <p align="center"><strong>Your Google Maps Timeline, printed as a world-tour poster.</strong><br>
-Every city you slept in, every flight, every drive — replayed on a map. Runs entirely in your browser.</p>
+Every city you slept in, every flight, every drive — replayed on a map. Runs in your browser, or records as you go on Android.</p>
 
 <p align="center">
 <a href="#quick-start">Quick start</a> ·
 <a href="#what-you-get">What you get</a> ·
+<a href="#crew-and-sonar-step-by-step">Crew & Sonar</a> ·
 <a href="#your-data-and-what-it-costs">Privacy & cost</a> ·
 <a href="#deploy-your-own">Deploy</a> ·
 <a href="#android">Android</a> ·
@@ -55,51 +56,66 @@ Everything can be changed later from the ▾ menu by the masthead, which also st
 | **Tour** | Your years as one poster: cities ranked by nights slept, places, countries, a dotted route map. |
 | **Numbers** | Distance by month and mode, best month, the long-run averages. |
 | **Facts** | Eighteen things your record says about you, each with a figure, plus a turning card of shorter, ruder ones. |
-| **Stops** | The places you keep going back to, with photos and names. |
-| **Dates** | A calendar of where you were, night by night. |
+| **Stops** | The places you keep going back to, with photos, names and street addresses. |
+| **Dates** | A calendar of where you were, night by night, with a ticket per trip and the mode of every leg. |
 | **Flights** | A globe turned to show every route, airports labelled, distance totalled; pick an airport to see where it took you. |
 | **Map** | Every stop pinned, clustered as you zoom out, filtered by category, searchable, sized by visits or hours. |
 | **Replay** | Press play and move through time. Planes, cars, trains and walks each get their own colour and marker; the camera frames each leg whole. |
+| **Crew** | Friends who can see your city, and Sonar — see [Crew and Sonar, step by step](#crew-and-sonar-step-by-step). |
 
 Pick any range — a year, the last 90 days, two dates from the calendar — and every tab updates. Each card saves as a PNG, framed for a story or a post.
 
-## What's new in v2 (preview)
+## What's new in v3
 
-v2 is being built on the `v2` branch and published as a preview at **https://vsvinav.github.io/elsewhere/v2/** (the root URL stays on v1). Android gets a matching APK per release, tagged `v2.0.0-alpha.N`. Where to find each addition:
+v3 lives on the `v3` branch and is published at **https://vsvinav.github.io/elsewhere/v3/**. Android gets a matching APK per release, tagged `v3.0.0-alpha.N`, from [vsvinav/elsewhere-android](https://github.com/vsvinav/elsewhere-android/releases). Both clients share every feature and the same poster; the one deliberate difference is that the browser has no recorder, so it *views* Crew and Sonar while the phone *publishes*.
 
 | Feature | What it does | Web | Android |
 | --- | --- | --- | --- |
-| **Year wheel** | Spin a dial of years to re-range the whole record. | Tour, under the headline. | Tour hero. |
-| **Highlights** | A full-width "On this day" card: where you were on today's date in earlier years. | Facts, at the top. | Facts, at the top. |
-| **Fun Facts hero** | The rotating deck of shorter, ruder facts, with ←/→, Shuffle and kind chips. | Facts, below Highlights. | Facts — swipe the deck. |
-| **Play strip** | Five small games off your record (streaks, records, "earlier this year"…). | Facts, the PLAY strip. | Facts, the PLAY strip. |
-| **Passport** | Stamps per country, printed as a passport page. | Facts, bottom of the page (the deck's "Passport" card jumps there). | Facts, bottom. |
-| **Doors** | Tap any month or figure to open the Dates behind it; the back button returns you. | Numbers → month bars and *door to door*; Dates. | Same. |
-| **Trip deck** | Each trip as a card you can open, swipe and share. | Dates. | Dates. |
-| **Heat** | A density layer of where you go most. | Map → **HEAT** chip. | Map → **HEAT** chip. |
-| **Live now** | Your current position and a pulsing stamp while recording. | — (no recorder in the browser) | Map → **LIVE** chip while *Record on this phone* is running. |
-| **Snap a place** | Attach a photo to a stop; it shows on the stop's card. | Stops → open a stop → **Snap**. | Stops → open a stop → **SNAP** stamp. |
-| **Globe share** | Share the Flights globe as a card. | Flights → Save. | Flights → Save. |
-| **Settings** | One page for keys, units, Ask Elsewhere, Crew relay, and clearing data. | **Settings** chip by the masthead, or ▾ → Settings (`#settings`). | ▾ (the **E**) → Settings. |
-| **Crew** | Pair with friends by code or QR; opt in per friend to *Live · city*, *Live · precise* and *Sonar*. | ▾ → **Crew** (`#crew`). Friends' stamps appear on the Map. | ▾ → **Crew**; Map → **Share** to broadcast while recording. |
-| **Sonar** | Pings you both when you and a friend are within a mile and neither of you is usually there. | Rings and a tone on the Map. | Rings on the Map and a notification. |
-| **Accounts** | Sign up with an email code; a passphrase-sealed vault carries your profile and Crew identity to a new device. The record itself never leaves the device. | Welcome screen on first open; **Settings → Account**. | Welcome screen on first open; Settings → Account. |
+| **Record on this phone** | Keep the record going from today without another export: the phone logs stays and legs itself, in the background. | — (import an export instead) | Settings → **Record on this phone**; the Map shows a pulsing stamp while live. |
+| **Commute modes** | Every leg is named by how you travelled — Walk, Cycle, Car, Bus, Train, Metro, Tram, Ferry, Flight — and a long gap over a long distance becomes a flight. When the phone isn't sure, Dates asks *How did you get there?* with one-tap chips. | Numbers, Dates, Replay read the modes. | Same, plus the chips in Dates for recorded legs. |
+| **Streets on Stops** | Each stop carries its street address under the name, from Google Places when you have a key and OpenStreetMap otherwise. Home and Work keep their labels. | Stops. | Stops. |
+| **Crew tab** | Friends on the ticket, not in a menu. A passport-photo card per friend with their last city and a red dot while live; the tab itself gets a dot when anyone is. | **CREW** on the ticket (`#crew`). | **CREW** on the ticket. |
+| **Sonar** | Pings you both when you and a friend are within a mile and neither of you is usually there. A sheet opens — *Marta is within a mile* — with **Snap a photo together**. | Rings, a tone, and the sheet. | Rings, a notification, and the sheet. |
+| **Sonar rehearsal** | A switch for showing people: pings fire on nearness alone, even at home, for a day. | Settings → **Sonar rehearsal**. | Settings → **Sonar rehearsal**. |
+| **Accounts & sync** | Sign up with an email code or Google; a passphrase-sealed vault carries your profile, settings and Crew identity to a new device, and the record itself stays in step across your devices. | Welcome screen; Settings → Account. | Same. |
+| **Year wheel, Highlights, Passport, Play strip, Trip deck, Heat, Snap a place, Globe share** | Carried over from v2, all still here. | Tour · Facts · Dates · Map · Stops · Flights. | Same tabs. |
 
-### Setting up Crew and Sonar
+<p align="center">
+<img src="docs/screenshots/crew.png" width="800" alt="Crew: your share code, a slot for a friend's, and a card per friend">
+</p>
 
-Crew needs a relay — a tiny Cloudflare Worker in [`relay/`](relay/) that holds device ids and **encrypted** pings only (it can't read locations). Deploy it once on the free tier:
+### Crew and Sonar, step by step
 
-```bash
-cd relay && npm ci && npx wrangler login && npx wrangler deploy   # prints https://….workers.dev
-```
+Crew needs a relay — a tiny Cloudflare Worker in [`relay/`](relay/) that holds device ids and **encrypted** pings only; it cannot read anyone's location. The published builds already point at one, so the steps below work out of the box. (To run your own: `cd relay && npm ci && npx wrangler login && npx wrangler deploy`, then paste the printed URL into **Settings → Relay URL** on every device. Leaving the field empty uses the default; clearing it also fixes a stale URL from an older build.)
 
-Paste that URL into **Settings → Crew → Relay URL** on every device, then:
+**1. Pair two devices.**
+1. On the first device open the **CREW** tab. Under *Your share code* you'll see a code like `PT-LIS-7Q4K` (Android can also **Show QR**). It lasts a day; **New code** mints another.
+2. On the second device open **CREW**, type that code under *Enter a friend's code* (or **Scan** the QR on Android) and tap **Pair**.
+3. Both devices show *Pair with …?* with an 8-character fingerprint. Check the two fingerprints match, then **Confirm** on both.
+4. The friend appears as a card. Pairing turns on *Live · city* and *Sonar* for them straight away; *Live · precise* stays off until you switch it on.
 
-1. **Pair.** On one device open Crew and read the code (`PT-XXX-XXXX`; Android can also show a QR). On the other, type it under *Enter a friend's code* (or scan). Both see "Pair with *name*?" with an 8-character fingerprint — check they match, then confirm.
-2. **Share.** Toggle *Live · city* or *Live · precise* for that friend. Android broadcasts while **Record on this phone** is running (Map → **Share**); the browser only receives, since it has no recorder.
-3. **Sonar.** Toggle *Sonar* for the friend (it also turns on *Live · city*). It fires only when you are both within a mile, both away from the places you usually are, after at least 14 days away, once per 24 hours — so two phones on the same desk at home will stay quiet by design.
+**2. Start publishing (Android).** Sonar and live cities ride on the recorder, so on each phone turn on **Settings → Record on this phone**. Nothing else is needed: while recording, the phone sends a coarse, encrypted ping to each friend who has Sonar on. For exact positions for a while, tap **Share location** on the Crew tab, pick the friends and a length; **Stop** ends it early.
 
-Leaving the Relay URL empty turns Crew off. Removing a friend tells their device to remove you too.
+**3. Choose what each friend gets.** Tap a card to open it:
+- *Live · city* — which city you're in, roughly where.
+- *Live · precise* — exact fixes, only during a share session.
+- *Sonar* — the within-a-mile ping (turns *Live · city* on with it).
+- **Mute Sonar for today**, **Test Sonar** (rings on both devices now, whatever the distance; nothing is recorded), **Remove** (tells their device to forget you too).
+
+**4. Hear Sonar.** Sonar is deliberately quiet in daily life: it fires only when you're both within a mile, neither of you is usually there (fewer than four days in that spot over the last month) and whoever arrived later hasn't been near it for a fortnight — then once a day per friend. Two phones on the same desk at home stay silent. When it fires, both devices ring and a sheet opens: *Marta is within a mile. Neither of you is usually here. Say hi?* Tap **Snap a photo together** to take a picture that's filed against the moment (it shows up on Stops), or **Dismiss**.
+
+**5. Show it off.** For a demo you don't want to wait for a chance meeting. On both phones turn on **Settings → Sonar rehearsal**: a red **REHEARSAL** tag appears on Crew, and for the next 24 hours pings fire whenever a paired friend is within a mile, even at home. Stand near each other with both phones recording and the sheet comes up within a minute or two. The switch turns itself off after a day.
+
+The browser follows along: open **CREW** on the web and you'll see the same friends, their last city, the live dot and Sonar's ring and sheet — it just never publishes a position of its own.
+
+<p align="center">
+<img src="docs/screenshots/android-crew.png" width="260" alt="Android Crew tab: four friend cards, a share banner, the share code and a slot for a friend's">
+<img src="docs/screenshots/android-sonar.png" width="260" alt="Android Sonar sheet: Marta is within a mile, Snap a photo together, Dismiss">
+<img src="docs/screenshots/android-modes.png" width="260" alt="Android Dates: a trip card asking How did you get there? with Car, Bus, Train, Metro and Other chips">
+</p>
+<p align="center">
+<img src="docs/screenshots/sonar.png" width="800" alt="Web: the Sonar sheet over the Crew tab — Marta is within a mile">
+</p>
 
 ### Running the account service
 
@@ -121,7 +137,11 @@ Paste that URL into **Settings → Account → Account service URL**. For local 
 </p>
 <p align="center">
 <img src="docs/screenshots/facts.png" width="400" alt="Facts: 4 of 195 countries, with a ring figure">
-<img src="docs/screenshots/stops.png" width="400" alt="Stops: the places you return to">
+<img src="docs/screenshots/stops.png" width="400" alt="Stops: the places you return to, each with its street">
+</p>
+<p align="center">
+<img src="docs/screenshots/numbers.png" width="400" alt="Numbers: distance by month, split by Flight, Train and Walk">
+<img src="docs/screenshots/map.png" width="400" alt="Map: every stop pinned and clustered">
 </p>
 
 Screenshots show the demo record: Ada, eighteen months in Lisbon with four trips out. Build it with `python3 scripts/make_sample.py --out web/public/data` (see [Pre-bake with Python](#optional-pre-bake-a-record-with-python)).
@@ -155,7 +175,7 @@ Host `dist/` on Netlify, Vercel, S3 — anything static. To ship a default key f
 
 ## Android
 
-A native Android app with the same tabs and the same poster is being built in its own repository: [vsvinav/elsewhere-android](https://github.com/vsvinav/elsewhere-android).
+A native Android app with the same tabs, the same poster and the same features lives in its own repository: [vsvinav/elsewhere-android](https://github.com/vsvinav/elsewhere-android). Grab the latest `elsewhere-v3.0.0-alpha.N.apk` from its [Releases](https://github.com/vsvinav/elsewhere-android/releases). It's also the only client that records: turn on **Settings → Record on this phone** and the record grows from today without another export.
 
 ## Optional: pre-bake a record with Python
 
