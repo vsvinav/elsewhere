@@ -102,6 +102,19 @@ describe('debounce and decide', () => {
     expect(decide(side({ habitat: true }), side({ fix: fix(NOW - 2 * HOUR, LIS.lat, east(5000)) }), PAIR, NOW, d, 'abcd1234', true)).toEqual({ kind: 'echo', hitId: 'abcd1234', test: true })
     expect(decide(side(), side(), PAIR, NOW, none, null, true)).toEqual({ kind: 'quiet' })
   })
+  describe('rehearsal', () => {
+    const fire = { kind: 'fire', hitId: `${PAIR}:${NOW}` }
+    it('habitat → Fire', () => expect(decide(side({ habitat: true }), side({ habitat: true }), PAIR, NOW, none, null, false, true)).toEqual(fire))
+    it('newcomer absence 3 days → Fire', () => expect(decide(side({ absenceDays: 3 }), side({ absenceDays: 3 }), PAIR, NOW, none, null, false, true)).toEqual(fire))
+    it('debounced → Fire', () => expect(decide(side(), side(), PAIR, NOW, recordHit(none, PAIR, NOW - HOUR), null, false, true)).toEqual(fire))
+    it('stale fix 11 min → Quiet', () => expect(decide(side(), side({ fix: fix(NOW - 11 * 60_000) }), PAIR, NOW, none, null, false, true)).toEqual({ kind: 'quiet' }))
+    it('1700 m → Quiet', () => expect(decide(side(), side({ fix: fix(NOW - 60_000, LIS.lat, east(1700)) }), PAIR, NOW, none, null, false, true)).toEqual({ kind: 'quiet' }))
+    it('incoming hit → Echo', () => expect(decide(side({ habitat: true }), side(), PAIR, NOW, none, `${PAIR}:1`, false, true)).toEqual({ kind: 'echo', hitId: `${PAIR}:1` }))
+    it('off: the same rows keep their usual answers', () => {
+      expect(decide(side({ habitat: true }), side(), PAIR, NOW, none, null, false, false)).toEqual({ kind: 'quiet' })
+      expect(decide(side(), side(), PAIR, NOW, recordHit(none, PAIR, NOW - HOUR), null, false, false)).toEqual({ kind: 'quiet' })
+    })
+  })
   it('settle remembers a real fire or echo for the pair and leaves a test or quiet alone', () => {
     expect(settle(none, PAIR, NOW, { kind: 'fire', hitId: 'x' }).lastHitByPair).toEqual({ [PAIR]: NOW })
     expect(settle(none, PAIR, NOW, { kind: 'echo', hitId: 'x' }).lastHitByPair).toEqual({ [PAIR]: NOW })

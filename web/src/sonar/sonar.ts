@@ -78,9 +78,12 @@ export function newcomerAbsence(me: Side, friend: Side): number {
   return later.absenceDays ?? Infinity
 }
 
+/** Both fixes fresh and within the mile: the part of eligibility that even a rehearsal keeps. */
+export const nearAndFresh = (me: Side, friend: Side, now: number) =>
+  now - me.fix.ts <= FRESH_MS && now - friend.fix.ts <= FRESH_MS && within(me.fix, friend.fix)
+
 export const eligible = (me: Side, friend: Side, now: number) =>
-  now - me.fix.ts <= FRESH_MS && now - friend.fix.ts <= FRESH_MS &&
-  within(me.fix, friend.fix) && !me.habitat && !friend.habitat &&
+  nearAndFresh(me, friend, now) && !me.habitat && !friend.habitat &&
   newcomerAbsence(me, friend) >= ABSENCE_MIN_DAYS
 
 export const debounced = (d: Debounce, pairId: string, now: number) => (d.lastHitByPair[pairId] ?? -Infinity) > now - DEBOUNCE_MS
@@ -89,12 +92,13 @@ export const recordHit = (d: Debounce, pairId: string, now: number): Debounce =>
 /**
  * The one entry point. `incomingHit` is the friend's `hit.id`, if any: the friend fired first, mirror it.
  * A `test` ping is a friend pressing Test Sonar: echo its hit whatever the distance or debounce, and never fire on it.
+ * `rehearsal` drops habitat, absence and the debounce, so a ping can fire at home; fresh and within a mile still hold.
  */
-export function decide(me: Side, friend: Side, pairId: string, now: number, d: Debounce, incomingHit: string | null, test = false): Decision {
+export function decide(me: Side, friend: Side, pairId: string, now: number, d: Debounce, incomingHit: string | null, test = false, rehearsal = false): Decision {
   if (test) return incomingHit != null ? { kind: 'echo', hitId: incomingHit, test: true } : { kind: 'quiet' }
-  if (debounced(d, pairId, now)) return { kind: 'quiet' }
+  if (!rehearsal && debounced(d, pairId, now)) return { kind: 'quiet' }
   if (incomingHit != null) return { kind: 'echo', hitId: incomingHit }
-  if (eligible(me, friend, now)) return { kind: 'fire', hitId: `${pairId}:${now}` }
+  if (rehearsal ? nearAndFresh(me, friend, now) : eligible(me, friend, now)) return { kind: 'fire', hitId: `${pairId}:${now}` }
   return { kind: 'quiet' }
 }
 
