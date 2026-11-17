@@ -3,7 +3,7 @@ import { b64, fromHex, hasKeys, replaceKeys, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
-import { AccountError, api, logOut, messageOf, MESSAGES, type AccountClient, type AccountInfo } from './client'
+import { AccountError, api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
 import { clientId, signIn } from './google'
 import { useAccount } from './store'
 import { markUploaded } from './sync'
@@ -123,12 +123,12 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     setError(''); setBusy(COPY.finishing)
     try { const r = await c.finish(body); await landed(r.session, r.account); return true } catch (err) { setError(messageOf(err)); return false } finally { setBusy('') }
   }
-  // Anything short of a session from Google reads as one line; only the limiter's refusal keeps its own words.
+  // Anything short of a session from Google reads as one line, unless the service was unreachable or said slow down.
   const googleIn = async () => {
     if (!google) return
     setError(''); setBusy(COPY.finishing)
     try { const { idToken } = await google(); const r = await c.google(idToken); await landed(r.session, r.account) }
-    catch (err) { setError(err instanceof AccountError && MESSAGES[err.code] ? messageOf(err) : COPY.googleFail) }
+    catch (err) { setError(err instanceof AccountError && (err.status === 0 || err.status === 429) ? messageOf(err) : COPY.googleFail) }
     finally { setBusy('') }
   }
   // A link logs in whoever opens it, so the address behind it is shown first and nothing happens until Continue.

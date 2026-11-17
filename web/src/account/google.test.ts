@@ -1,23 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fakeGis } from './google.fake'
 import { GSI_SRC, signIn, type GoogleIdentity } from './google'
 
-type Init = { client_id: string; callback(r: { credential: string }): void }
-type Moment = { isNotDisplayed(): boolean; isSkippedMoment(): boolean; isDismissedMoment(): boolean; getDismissedReason(): string }
 const tick = () => new Promise((r) => setTimeout(r, 0))
-const moment = (over: Partial<Moment> = {}): Moment => ({ isNotDisplayed: () => false, isSkippedMoment: () => false, isDismissedMoment: () => false, getDismissedReason: () => '', ...over })
-
-/** A stand-in for the GIS library: remembers the init and lets the test play the prompt's outcome. */
-function fakeGis() {
-  let init: Init | null = null
-  let onMoment: ((m: Moment) => void) | null = null
-  const gis = { accounts: { id: { initialize: (c: Init) => { init = c }, prompt: (cb: (m: Moment) => void) => { onMoment = cb } } } } as unknown as GoogleIdentity
-  return { gis, get init() { return init! }, play: (m: Moment) => onMoment!(m) }
-}
-afterEach(() => { delete (window as { google?: unknown }).google; document.head.innerHTML = ''; vi.unstubAllEnvs() })
+afterEach(() => { delete (window as { google?: unknown }).google; document.head.innerHTML = ''; document.body.innerHTML = ''; vi.unstubAllEnvs() })
 
 describe('google sign-in', () => {
-  it('injects the GIS script once, then resolves with the credential the prompt hands back', async () => {
+  it('injects the GIS script once, renders Google\'s button offscreen, clicks it, and resolves with the credential', async () => {
     vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'web.apps.googleusercontent.com')
     const g = fakeGis()
     const p = signIn()
@@ -27,34 +17,31 @@ describe('google sign-in', () => {
     script.dispatchEvent(new Event('load'))
     await tick()
     expect(g.init.client_id).toBe('web.apps.googleusercontent.com')
-    g.init.callback({ credential: 'id.token.here' })
+    expect(g.clicks).toBe(1)
+    expect(g.prompts).toBe(0)
+    // Google's own button lives off screen; ours is the one the eye sees.
+    const host = g.host!
+    expect(document.body.contains(host)).toBe(true)
+    expect(host.getAttribute('aria-hidden')).toBe('true')
+    g.credential('id.token.here')
     expect(await p).toEqual({ idToken: 'id.token.here' })
-    // The library is already here: no second script.
     const p2 = signIn()
     await tick()
     expect(document.head.querySelectorAll('script').length).toBe(1)
-    g.init.callback({ credential: 'second' })
+    expect(document.querySelectorAll('[aria-hidden] div[role=button]').length).toBe(1)
+    expect(g.clicks).toBe(2)
+    g.credential('second')
     expect(await p2).toEqual({ idToken: 'second' })
   })
-  it('rejects when the prompt is skipped, dismissed or never shown, and when the script fails to load', async () => {
-    const g = fakeGis()
-    ;(window as { google?: GoogleIdentity }).google = g.gis
-    for (const m of [moment({ isNotDisplayed: () => true }), moment({ isSkippedMoment: () => true }), moment({ isDismissedMoment: () => true, getDismissedReason: () => 'cancel_called' })]) {
-      const p = signIn()
-      await tick()
-      g.play(m)
-      await expect(p).rejects.toThrow()
-    }
-    // A dismissal because the credential came back is not a failure; the callback settles it.
-    const p = signIn()
-    await tick()
-    g.play(moment({ isDismissedMoment: () => true, getDismissedReason: () => 'credential_returned' }))
-    g.init.callback({ credential: 'ok' })
-    expect(await p).toEqual({ idToken: 'ok' })
-
-    delete (window as { google?: unknown }).google
+  it('rejects when the script fails to load or Google never calls back with a credential', async () => {
     const failing = signIn()
     document.head.querySelector('script')!.dispatchEvent(new Event('error'))
     await expect(failing).rejects.toThrow()
+    const g = fakeGis()
+    ;(window as { google?: GoogleIdentity }).google = g.gis
+    const p = signIn()
+    await tick()
+    g.credential('')
+    await expect(p).rejects.toThrow()
   })
 })

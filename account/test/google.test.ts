@@ -109,6 +109,28 @@ describe('POST /auth/google', () => {
     for (let i = 0; i < 10; i++) await google(await g.sign(claims({ email: 'cy@example.com' })), `10.5.0.${i}`)
     expect((await google(await g.sign(claims({ email: 'cy@example.com' })), '10.5.0.99')).status).toBe(429)
   })
+  it('a kid missing from the cached keys fetches them once more before giving up', async () => {
+    const old = await issuer('k1'), fresh = await issuer('k2')
+    const fetched = serve(old.jwks)
+    expect((await google(await old.sign(claims()))).status).toBe(200)
+    // Google rotated: the token is signed with a key the cache has not seen.
+    fetched.mockImplementation(async () => Response.json(fresh.jwks))
+    expect((await google(await fresh.sign(claims()), '203.0.113.2'))).toHaveProperty('status', 200)
+    expect(fetched).toHaveBeenCalledTimes(2)
+    // A kid nobody has refetches once, then fails; it does not hammer Google.
+    const stranger = await issuer('k9')
+    expect((await google(await stranger.sign(claims()), '203.0.113.3')).status).toBe(401)
+    expect(fetched).toHaveBeenCalledTimes(3)
+  })
+  it('keeps using stale keys when Google cannot be reached', async () => {
+    const g = await issuer()
+    const fetched = serve(g.jwks)
+    expect((await google(await g.sign(claims()))).status).toBe(200)
+    vi.setSystemTime(T0 + 2 * 3600_000)
+    fetched.mockImplementation(async () => { throw new Error('offline') })
+    expect((await google(await g.sign(claims({ exp: T0 / 1000 + 3 * 3600 })), '203.0.113.2')).status).toBe(200)
+    expect(fetched).toHaveBeenCalledTimes(2)
+  })
   it('answers 401 when the JWKS cannot be fetched', async () => {
     const g = await issuer()
     setJwksFetch((async () => new Response('down', { status: 503 })) as unknown as typeof fetch)

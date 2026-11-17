@@ -25,17 +25,24 @@ export function claimedEmail(token: unknown): unknown {
   return parts.length === 3 ? decode<Claims>(parts[1])?.email : undefined
 }
 
-async function keys(now: number): Promise<Map<string, JsonWebKey> | null> {
-  if (cache && cache.until > now) return cache.keys
+/** Google's current keys; a fetch that fails leaves whatever was cached in place, stale or not. */
+async function keys(now: number, force = false): Promise<Map<string, JsonWebKey> | null> {
+  if (cache && cache.until > now && !force) return cache.keys
   try {
     const r = await jwksFetch(JWKS_URL)
-    if (!r.ok) return null
+    if (!r.ok) throw new Error(String(r.status))
     const body = (await r.json()) as { keys?: Array<JsonWebKey & { kid?: string }> }
     const map = new Map<string, JsonWebKey>()
     for (const k of body.keys ?? []) if (k.kid) map.set(k.kid, k)
     cache = { keys: map, until: now + JWKS_TTL_MS }
     return map
-  } catch { return null }
+  } catch { return cache?.keys ?? null }
+}
+/** A kid the cache does not know is most likely a rotation, so the keys are fetched once more before the token is refused. */
+async function keyFor(kid: string, now: number): Promise<JsonWebKey | null> {
+  const known = (await keys(now))?.get(kid)
+  if (known) return known
+  return (await keys(now, true))?.get(kid) ?? null
 }
 
 /** The verified email of a Google ID token meant for one of `audiences`, or null when anything about it is off. */
@@ -48,7 +55,7 @@ export async function verifyIdToken(token: string, audiences: string[], now: num
   if (typeof claims.aud !== 'string' || !audiences.includes(claims.aud)) return null
   if (typeof claims.exp !== 'number' || claims.exp * 1000 <= now) return null
   if (claims.email_verified !== true || typeof claims.email !== 'string') return null
-  const jwk = (await keys(now))?.get(header.kid)
+  const jwk = await keyFor(header.kid, now)
   if (!jwk) return null
   try {
     const key = await crypto.subtle.importKey('jwk', jwk, RSA, false, ['verify'])

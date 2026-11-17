@@ -3,12 +3,11 @@ export const GSI_SRC = 'https://accounts.google.com/gsi/client'
 export const clientId = () => (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? ''
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 
-interface Moment { isNotDisplayed(): boolean; isSkippedMoment(): boolean; isDismissedMoment(): boolean; getDismissedReason(): string }
 export interface GoogleIdentity {
   accounts: {
     id: {
-      initialize(c: { client_id: string; callback(r: { credential: string }): void; cancel_on_tap_outside?: boolean; use_fedcm_for_prompt?: boolean }): void
-      prompt(onMoment?: (m: Moment) => void): void
+      initialize(c: { client_id: string; callback(r: { credential: string }): void; ux_mode?: 'popup' | 'redirect' }): void
+      renderButton(host: HTMLElement, opts: { type: 'standard' | 'icon'; size?: 'large' | 'medium' | 'small' }): void
     }
   }
 }
@@ -29,14 +28,27 @@ function load(): Promise<GoogleIdentity> {
   return p
 }
 
-/** Asks Google who this is; resolves with an ID token for the account service, rejects when the prompt closes without one. */
+/** Google's own button, drawn off screen: the only thing that opens Google's sign-in popup is a click on it. */
+let hidden: HTMLElement | null = null
+function googleButton(g: GoogleIdentity): HTMLElement | null {
+  if (!hidden || !document.body.contains(hidden)) {
+    hidden = document.createElement('div')
+    hidden.setAttribute('aria-hidden', 'true')
+    hidden.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none'
+    document.body.appendChild(hidden)
+    g.accounts.id.renderButton(hidden, { type: 'standard', size: 'large' })
+  }
+  return hidden.querySelector<HTMLElement>('div[role=button]')
+}
+
+/** Asks Google who this is; resolves with an ID token for the account service, rejects when no credential comes back. */
 export async function signIn(): Promise<{ idToken: string }> {
   const g = await load()
   return new Promise((resolve, reject) => {
-    g.accounts.id.initialize({ client_id: clientId(), callback: (r) => resolve({ idToken: r.credential }), cancel_on_tap_outside: true, use_fedcm_for_prompt: true })
-    g.accounts.id.prompt((m) => {
-      if (m.isNotDisplayed() || m.isSkippedMoment() || (m.isDismissedMoment() && m.getDismissedReason() !== 'credential_returned')) reject(new Error('google'))
-    })
+    g.accounts.id.initialize({ client_id: clientId(), ux_mode: 'popup', callback: (r) => (r.credential ? resolve({ idToken: r.credential }) : reject(new Error('google'))) })
+    const b = googleButton(g)
+    if (!b) return reject(new Error('google'))
+    b.click()
   })
 }
 
