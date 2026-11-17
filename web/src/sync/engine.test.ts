@@ -2,22 +2,29 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 
 const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
-vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
+vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, setAll: async (e: [string, unknown][]) => { for (const [k, v] of e) db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 vi.hoisted(() => {
   const mem = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
+  vi.stubGlobal('location', { origin: 'http://localhost' })
 })
-const drive = vi.hoisted(() => ({ deleted: 0, created: 0 }))
-vi.mock('../account/driveKey', () => ({
-  loadLocalKey: async () => db.store.get('sync:key') ?? null,
-  deleteKey: async () => { drive.deleted++ },
-  fetchOrCreateKey: async () => { drive.created++; const k = new Uint8Array(32).fill(9); db.store.set('sync:key', k); return k },
-}))
+const drive = vi.hoisted(() => ({ deleted: 0, created: 0, next: new Uint8Array(32).fill(9), fail: false }))
+vi.mock('../account/driveKey', async () => {
+  const { clearSyncBookkeeping } = await import('./local')
+  return {
+    loadLocalKey: async () => db.store.get('sync:key') ?? null,
+    deleteKey: async () => { drive.deleted++ },
+    // What the real one does: a key other than the one held here drops the push bookkeeping.
+    fetchOrCreateKey: async () => { if (drive.fail) throw new Error('auth'); drive.created++; const cur = db.store.get('sync:key') as Uint8Array | undefined; if (!cur || cur.join() !== drive.next.join()) await clearSyncBookkeeping(); db.store.set('sync:key', drive.next); return drive.next },
+  }
+})
 
 import { AccountError, type AccountClient } from '../account/client'
 import { resetAccountForTest, useAccount } from '../account/store'
 import type { Data, Visit } from '../data/types'
-import { emptyRecord, parsedFromData, withSyncedStays } from '../ingest'
+import { emptyRecord, ingestFile, parsedFromData, withSyncedStays, type Runner } from '../ingest'
+import { parseTimeline } from '../ingest/parse'
+import { sampleTimeline } from '../test/sample'
 import { buildData } from '../ingest/derive'
 import type { Parsed } from '../ingest/parse'
 import { profile } from '../profile/profile'
@@ -55,7 +62,7 @@ function fakeClient(fail?: () => Error | null) {
 }
 
 beforeEach(async () => {
-  db.store.clear(); resetAccountForTest(); resetSyncForTest(); profile.set(null); drive.deleted = drive.created = 0
+  db.store.clear(); resetAccountForTest(); resetSyncForTest(); profile.set(null); drive.deleted = drive.created = 0; drive.next = new Uint8Array(32).fill(9); drive.fail = false
   await useAccount.getState().setSession({ session: 'f'.repeat(64), id: 'acct_1', email: 'a@b.co' })
   await useAccount.getState().setDriveKeyed(true)
   db.store.set('sync:key', KEY)
@@ -102,6 +109,27 @@ describe('a record from pulled stays alone', () => {
   })
 })
 
+describe('an import on a device holding pulled stays', () => {
+  it('keeps both in the record it saves', async () => {
+    const stay = { id: 'a'.repeat(64), lat: 41.9, lng: 12.5, name: 'Café', start: 1700000000, end: 1700003600 }
+    await upsertSyncedStays([stay])
+    const cities = { lat: [48.86], lng: [2.35], name: ['Paris'], cc: ['FR'] }
+    const prof = { name: null, units: 'km' as const, homes: [{ lat: 48.86, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] }
+    const runner: Runner = async (job) => {
+      if ('parsed' in job) return { data: buildData(job.parsed, cities, job.source, job.profile) }
+      const parsed = parseTimeline(job.text)
+      return { data: buildData(parsed, cities, { file: job.name, sha256: 'abc' }, job.profile), parsed }
+    }
+    const d = await ingestFile({ name: 'x.json', text: async () => sampleTimeline() } as File, prof, () => {}, runner)
+    expect(d.visits.some((v) => v.place_id === `sync:${stay.id}`)).toBe(true)
+    expect(d.visits.filter((v) => v.type !== 'SYNC').length).toBeGreaterThan(0)
+    expect(d.places[`sync:${stay.id}`]?.label).toBe('Café')
+    const saved = db.store.get('record') as Data
+    expect(saved.visits.some((v) => v.place_id === `sync:${stay.id}`)).toBe(true)
+    expect((db.store.get('parsed') as Parsed).visits.some((v) => v.type === 'SYNC')).toBe(false)
+  })
+})
+
 describe('profile on the wire', () => {
   it('maps homes both ways, with dates as yyyy-mm-dd and works kept local', () => {
     const local = { name: 'Ada', units: 'mi' as const, homes: [{ lat: 1, lng: 2, city: 'Paris', cc: 'FR', from: Date.UTC(2020, 0, 15) / 1000, to: null }], works: [{ lat: 0, lng: 0, place_id: 'w1', from: 0, to: null }] }
@@ -118,7 +146,7 @@ describe('push and pull', () => {
   const t = 1700000000
   it('pushes changed chunks and the profile once, then nothing until they change', async () => {
     const f = fakeClient()
-    profile.set({ name: 'Ada', units: 'km', homes: [], works: [] })
+    profile.set({ name: 'Ada', units: 'km', homes: [], works: [] }, 1000)
     const rec = data([visit(1, t, t + 60)])
     await push(KEY, { client: () => f.c, record: () => rec, now: () => 1000 })
     expect(f.calls).toEqual([`put ${SRC}:2023-11`, 'put profile'])
@@ -126,10 +154,24 @@ describe('push and pull', () => {
     f.calls.length = 0
     await push(KEY, { client: () => f.c, record: () => rec, now: () => 2000 })
     expect(f.calls).toEqual([])
-    profile.set({ name: 'Ada L.', units: 'km', homes: [], works: [] })
-    await push(KEY, { client: () => f.c, record: () => rec, now: () => 3000 })
+    profile.set({ name: 'Ada L.', units: 'km', homes: [], works: [] }, 3000)
+    await push(KEY, { client: () => f.c, record: () => rec, now: () => 4000 })
     expect(f.calls).toEqual(['put profile'])
     expect(f.blobs.get(PROFILE_KEY)!.ts).toBe(3000)
+  })
+  it('a chunk the service already holds newer is taken as pushed and the round goes on', async () => {
+    const f = fakeClient()
+    const t2 = Date.UTC(2024, 0, 5) / 1000
+    f.blobs.set(`${SRC}:2023-11`, sealBlob(KEY, `${SRC}:2023-11`, { v: 1, stays: [] }, 5000))
+    const rec = data([visit(1, t, t + 60), visit(2, t2, t2 + 60)])
+    const deps = { client: () => f.c, record: () => rec, now: () => 1000 }
+    await push(KEY, deps)
+    expect(f.calls).toEqual([`put ${SRC}:2023-11`, `get ${SRC}:2023-11`, `put ${SRC}:2024-01`])
+    expect(f.blobs.get(`${SRC}:2023-11`)!.ts).toBe(5000)
+    expect(db.store.get(SYNC_KV.remote)).toMatchObject({ [`${SRC}:2023-11`]: 5000, [`${SRC}:2024-01`]: 1000 })
+    f.calls.length = 0
+    await push(KEY, deps)
+    expect(f.calls).toEqual([])
   })
   it('pulls other sources, merges stays by id idempotently and never pushes them back', async () => {
     const f = fakeClient()
@@ -151,7 +193,7 @@ describe('push and pull', () => {
   })
   it('applies the profile only when the remote one is newer, and keeps the local one on a 409', async () => {
     const f = fakeClient()
-    profile.set({ name: 'Local', units: 'km', homes: [], works: [] })
+    profile.set({ name: 'Local', units: 'km', homes: [], works: [] }, 1000)
     f.blobs.set(PROFILE_KEY, sealBlob(KEY, PROFILE_KEY, { v: 1, ts: 5000, name: 'Remote', homes: [], units: 'mi' }, 5000))
     const deps = { client: () => f.c, record: () => null, now: () => 1000 }
     await pull(KEY, deps)
@@ -161,11 +203,26 @@ describe('push and pull', () => {
     f.blobs.set(PROFILE_KEY, sealBlob(KEY, PROFILE_KEY, { v: 1, ts: 4000, name: 'Older', homes: [], units: 'km' }, 6000))
     await pull(KEY, deps)
     expect(profile.get()!.name).toBe('Remote')
-    profile.set({ name: 'Newer here', units: 'km', homes: [], works: [] })
+    profile.set({ name: 'Newer here', units: 'km', homes: [], works: [] }, 7000)
     f.blobs.set(PROFILE_KEY, sealBlob(KEY, PROFILE_KEY, { v: 1, ts: 9000, name: 'Winner', homes: [], units: 'km' }, 9000))
-    await push(KEY, { ...deps, now: () => 7000 })
+    await push(KEY, deps)
     expect(f.blobs.get(PROFILE_KEY)!.ts).toBe(9000)
     expect(profile.get()!.name).toBe('Newer here')
+    await pull(KEY, deps)
+    expect(profile.get()!.name).toBe('Winner')
+  })
+  it('a profile edited here since the last round beats an older remote one and goes up with its edit time', async () => {
+    const f = fakeClient()
+    profile.set({ name: 'Edited', units: 'km', homes: [], works: [] }, 100_000)
+    f.blobs.set(PROFILE_KEY, sealBlob(KEY, PROFILE_KEY, { v: 1, ts: 50_000, name: 'Older remote', homes: [], units: 'mi' }, 50_000))
+    const deps = { client: () => f.c, record: () => null, now: () => 200_000 }
+    await pull(KEY, deps)
+    expect(profile.get()!.name).toBe('Edited')
+    await push(KEY, deps)
+    expect(f.blobs.get(PROFILE_KEY)!.ts).toBe(100_000)
+    expect(openBlob(KEY, PROFILE_KEY, f.blobs.get(PROFILE_KEY)!)).toMatchObject({ name: 'Edited', ts: 100_000 })
+    await pull(KEY, deps)
+    expect(profile.get()!.name).toBe('Edited')
   })
   it('skips blobs with keys the engine does not know', async () => {
     const f = fakeClient()
@@ -186,8 +243,10 @@ describe('state machine', () => {
     db.store.delete('sync:key')
     await loadSyncStatus()
     expect(useSync.getState().status).toEqual({ kind: 'error', error: 'locked', lastTs: null })
+    drive.fail = true
     await syncNow()
     expect(useSync.getState().status).toEqual({ kind: 'error', error: 'locked', lastTs: null })
+    drive.fail = false
     db.store.set('sync:key', KEY)
     await loadSyncStatus()
     expect(useSync.getState().status).toEqual({ kind: 'idle', lastTs: null })
@@ -204,8 +263,35 @@ describe('state machine', () => {
     await syncNow({ client: () => fakeClient(() => new AccountError(500, 'boom')).c })
     expect(useSync.getState().status).toMatchObject({ kind: 'error', error: 'http' })
     f.blobs.set('d_x:2023-11', sealBlob(OTHER, 'd_x:2023-11', { v: 1, stays: [] }, 9))
+    drive.next = KEY
     await syncNow({ client: () => f.c })
     expect(useSync.getState().status).toMatchObject({ kind: 'error', error: 'locked' })
+  })
+  it('another device re-keyed: the missing or stale key is fetched from Drive once and everything is pushed again under it', async () => {
+    const f = fakeClient()
+    const rec = data([visit(1, 1700000000, 1700000060)])
+    const deps = { client: () => f.c, record: () => rec, now: () => 1000, drive: async () => 'tok' }
+    await syncNow(deps)
+    expect(f.calls.filter((x) => x.startsWith('put'))).toHaveLength(1)
+    // Elsewhere: Start fresh wiped the service and put a new key in Drive.
+    f.blobs.clear(); f.calls.length = 0
+    drive.next = OTHER
+    db.store.delete('sync:key')
+    await syncNow(deps)
+    expect(drive.created).toBe(1)
+    expect(f.calls.filter((x) => x.startsWith('put'))).toEqual([`put ${SRC}:2023-11`])
+    expect(openBlob(OTHER, `${SRC}:2023-11`, f.blobs.get(`${SRC}:2023-11`)!)).toMatchObject({ v: 1 })
+    expect(useSync.getState().status).toEqual({ kind: 'idle', lastTs: 1000 })
+    // The key is still here but the service now holds blobs under a newer one: same recovery, from the unseal failure.
+    const THIRD = new Uint8Array(32).fill(3)
+    f.blobs.clear(); f.calls.length = 0
+    f.blobs.set('d_x:2023-11', sealBlob(THIRD, 'd_x:2023-11', { v: 1, stays: [{ id: 'd'.repeat(64), lat: 1, lng: 1, name: 'x', start: 1, end: 2 }] }, 9))
+    drive.next = THIRD
+    await syncNow(deps)
+    expect(drive.created).toBe(2)
+    expect(Object.keys(await loadSyncedStays())).toEqual(['d'.repeat(64)])
+    expect(openBlob(THIRD, `${SRC}:2023-11`, f.blobs.get(`${SRC}:2023-11`)!)).toMatchObject({ v: 1 })
+    expect(useSync.getState().status).toEqual({ kind: 'idle', lastTs: 1000 })
   })
   it('shares one round between overlapping calls', async () => {
     const f = fakeClient()
@@ -227,7 +313,7 @@ describe('start fresh', () => {
     await upsertSyncedStays([{ id: 'c'.repeat(64), lat: 1, lng: 1, name: 'x', start: 1, end: 2 }])
     await startFresh(deps)
     expect(f.calls.slice(0, 2)).toEqual(['deleteAll', 'putVault'])
-    expect(drive).toEqual({ deleted: 1, created: 1 })
+    expect(drive).toMatchObject({ deleted: 1, created: 1 })
     expect(f.blobs.size).toBe(2)
     expect(openBlob(new Uint8Array(32).fill(9), `${SRC}:2023-11`, f.blobs.get(`${SRC}:2023-11`)!)).toMatchObject({ v: 1 })
     expect(Object.keys(await loadSyncedStays())).toHaveLength(1)

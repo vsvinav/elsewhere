@@ -24,11 +24,16 @@ function run(job: Job, onStage: (stage: string) => void): Promise<{ data: Data; 
   })
 }
 
-/** Parse a Timeline export off the main thread and keep the result (and its parsed form) in this browser. */
-export async function ingestFile(file: File, profile: Profile, onStage: (stage: string) => void): Promise<Data> {
+export type Runner = typeof run
+/**
+ * Parse a Timeline export off the main thread and keep the result (and its parsed form) in this browser. Stays pulled
+ * from other devices are derived in alongside, so an import never pushes them out of view; the stored Parsed is the import alone.
+ */
+export async function ingestFile(file: File, profile: Profile, onStage: (stage: string) => void, runner: Runner = run): Promise<Data> {
   onStage('reading')
   const text = await file.text()
-  const { data, parsed } = await run({ text, name: file.name, citiesUrl: CITIES(), profile }, onStage)
+  let { data, parsed } = await runner({ text, name: file.name, citiesUrl: CITIES(), profile }, onStage)
+  if (await hasSyncedStays().catch(() => false)) data = (await runner({ parsed: await withSyncedStays({ ...parsed!, paths: data.paths }), source: { file: data.meta.source_file, sha256: data.meta.source_sha256 }, citiesUrl: CITIES(), profile }, onStage)).data
   await saveRecord(data, parsed!)
   return data
 }
