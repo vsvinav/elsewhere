@@ -1,5 +1,5 @@
-// The account service: email magic codes, 90-day sessions and one client-encrypted recovery vault per account.
-// It holds no plaintext beyond the email address; the vault is bytes it cannot read.
+// The account service: email magic codes, 90-day sessions, one client-encrypted recovery vault per account and the
+// sealed sync blobs behind it. It holds no plaintext beyond the email address; vault and blobs are bytes it cannot read.
 import type { Limiter } from './limiter'
 import { claimedEmail, verifyIdToken } from './google'
 export { Limiter } from './limiter'
@@ -32,12 +32,17 @@ const FINISH_WINDOW_S = 600
 const FINISHES_PER_IP = 20
 const FINISHES_PER_EMAIL = 10
 const VAULT_MAX_BYTES = 64 * 1024
+const SYNC_MAX_BYTES = 256 * 1024
+/** `<source>:<yyyy-mm>` month chunks (source `d_<device>` or `i_<export hash>`) and the one profile blob. */
+const SYNC_KEY_RE = /^[a-z]_[a-z0-9]{1,16}:\d{4}-\d{2}$|^profile$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const B64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 
 interface Account { email: string; created: number }
 interface Session { acct: string; exp: number }
-interface Vault { v: 1; salt: string; iv: string; ct: string }
+type Vault = { v: 1; salt: string; iv: string; ct: string } | { v: 2; iv: string; ct: string }
+/** A sealed sync blob; `ts` orders writes, everything else is opaque. */
+interface SyncBlob { v: 1; ts: number; nonce: string; ct: string }
 
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
 const randomHex = (bytes: number) => hex(crypto.getRandomValues(new Uint8Array(bytes)))
@@ -177,14 +182,36 @@ async function sessionOf(req: Request, env: Env, now: number): Promise<{ token: 
   return ses && ses.exp > now ? { token: m[1], acct: ses.acct } : null
 }
 
-function parseVault(text: string): Vault | null {
+function parseJsonObject(text: string): Record<string, unknown> | null {
   let b: unknown
   try { b = JSON.parse(text) } catch { return null }
-  if (!b || typeof b !== 'object' || Array.isArray(b)) return null
-  const v = b as Record<string, unknown>
-  if (v.v !== 1) return null
-  for (const k of ['salt', 'iv', 'ct'] as const) if (typeof v[k] !== 'string' || !B64_RE.test(v[k] as string)) return null
-  return { v: 1, salt: v.salt as string, iv: v.iv as string, ct: v.ct as string }
+  return b && typeof b === 'object' && !Array.isArray(b) ? (b as Record<string, unknown>) : null
+}
+const isB64 = (x: unknown): x is string => typeof x === 'string' && B64_RE.test(x)
+
+/** v:1 is sealed under a passphrase and carries its salt; v:2 is sealed under the Drive key and has none. */
+function parseVault(text: string): Vault | null {
+  const v = parseJsonObject(text)
+  if (!v || !isB64(v.iv) || !isB64(v.ct)) return null
+  if (v.v === 1 && isB64(v.salt)) return { v: 1, salt: v.salt, iv: v.iv, ct: v.ct }
+  if (v.v === 2 && !('salt' in v)) return { v: 2, iv: v.iv, ct: v.ct }
+  return null
+}
+function parseSyncBlob(text: string): SyncBlob | null {
+  const b = parseJsonObject(text)
+  if (!b || b.v !== 1 || !isB64(b.nonce) || !isB64(b.ct)) return null
+  if (typeof b.ts !== 'number' || !Number.isSafeInteger(b.ts) || b.ts < 0) return null
+  return { v: 1, ts: b.ts, nonce: b.nonce, ct: b.ct }
+}
+const syncPrefix = (acct: string) => `sync:${acct}:`
+async function deleteSync(env: Env, acct: string): Promise<void> {
+  const prefix = syncPrefix(acct)
+  let cursor: string | undefined
+  do {
+    const page = await env.ACCOUNTS.list<unknown>({ prefix, cursor })
+    await Promise.all(page.keys.map((k) => env.ACCOUNTS.delete(k.name)))
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
 }
 
 export default {
@@ -204,7 +231,10 @@ async function handle(req: Request, env: Env): Promise<Response> {
   if (path === '/auth/google' && req.method === 'POST') return authGoogle(req, env, now)
 
   const route = `${req.method} ${path}`
-  if (!['GET /me', 'DELETE /me', 'DELETE /session', 'PUT /vault', 'GET /vault'].includes(route)) return fail('not found', 404)
+  let syncKey: string | null = null
+  if (path.startsWith('/sync/')) { try { syncKey = decodeURIComponent(path.slice('/sync/'.length)) } catch { return fail('bad key', 400) } }
+  const syncRoute = syncKey !== null && (req.method === 'GET' || req.method === 'PUT')
+  if (!syncRoute && !['GET /me', 'DELETE /me', 'DELETE /session', 'PUT /vault', 'GET /vault', 'GET /sync', 'DELETE /sync'].includes(route)) return fail('not found', 404)
   const ses = await sessionOf(req, env, now)
   if (!ses) return fail('unauthorized', 401)
   const acct = await env.ACCOUNTS.get<Account>(`acct:${ses.acct}`, 'json')
@@ -224,8 +254,37 @@ async function handle(req: Request, env: Env): Promise<Response> {
     const v = await env.ACCOUNTS.get(`vault:${ses.acct}`)
     return v === null ? fail('not found', 404) : new Response(v, { status: 200, headers: { 'content-type': 'application/json' } })
   }
+  if (path === '/sync' && req.method === 'GET') {
+    const prefix = syncPrefix(ses.acct)
+    const out: { key: string; ts: number; size: number }[] = []
+    let cursor: string | undefined
+    do {
+      const page = await env.ACCOUNTS.list<{ ts: number; size: number }>({ prefix, cursor })
+      for (const k of page.keys) out.push({ key: k.name.slice(prefix.length), ts: k.metadata?.ts ?? 0, size: k.metadata?.size ?? 0 })
+      cursor = page.list_complete ? undefined : page.cursor
+    } while (cursor)
+    return json(out)
+  }
+  if (path === '/sync' && req.method === 'DELETE') { await deleteSync(env, ses.acct); return noContent() }
+  if (syncKey !== null) {
+    if (!SYNC_KEY_RE.test(syncKey)) return fail('bad key', 400)
+    const name = syncPrefix(ses.acct) + syncKey
+    if (req.method === 'GET') {
+      const v = await env.ACCOUNTS.get(name)
+      return v === null ? fail('not found', 404) : new Response(v, { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    const text = await req.text()
+    if (new TextEncoder().encode(text).byteLength > SYNC_MAX_BYTES) return fail('too large', 413)
+    const blob = parseSyncBlob(text)
+    if (!blob) return fail('bad blob', 400)
+    const stored = await env.ACCOUNTS.getWithMetadata<{ ts: number }>(name)
+    if (stored.value !== null && (stored.metadata?.ts ?? 0) > blob.ts) return fail('stale', 409)
+    const body = JSON.stringify(blob)
+    await env.ACCOUNTS.put(name, body, { metadata: { ts: blob.ts, size: body.length } })
+    return noContent()
+  }
   if (path === '/me' && req.method === 'DELETE') {
-    await Promise.all([env.ACCOUNTS.delete(`vault:${ses.acct}`), env.ACCOUNTS.delete(`acct:${ses.acct}`), env.ACCOUNTS.delete(`email:${acct.email}`), env.ACCOUNTS.delete(`ses:${ses.token}`)])
+    await Promise.all([deleteSync(env, ses.acct), env.ACCOUNTS.delete(`vault:${ses.acct}`), env.ACCOUNTS.delete(`acct:${ses.acct}`), env.ACCOUNTS.delete(`email:${acct.email}`), env.ACCOUNTS.delete(`ses:${ses.token}`)])
     return noContent()
   }
   return fail('not found', 404)

@@ -9,8 +9,12 @@ export interface GoogleIdentity {
       initialize(c: { client_id: string; callback(r: { credential: string }): void; ux_mode?: 'popup' | 'redirect' }): void
       renderButton(host: HTMLElement, opts: { type: 'standard' | 'icon'; size?: 'large' | 'medium' | 'small' }): void
     }
+    oauth2: {
+      initTokenClient(c: { client_id: string; scope: string; callback(r: TokenResponse): void; error_callback?(e: { type: string }): void }): { requestAccessToken(o?: { prompt?: string }): void }
+    }
   }
 }
+export interface TokenResponse { access_token?: string; error?: string }
 declare global { interface Window { google?: GoogleIdentity } }
 
 let loading: Promise<GoogleIdentity> | null = null
@@ -66,8 +70,18 @@ export async function signIn(): Promise<{ idToken: string }> {
   })
 }
 
-/** An access token for the hidden Drive app folder; the key to the synced record will travel through it. */
+/**
+ * An access token for the hidden Drive app folder, where the key to the synced record lives. Kept in memory only, by
+ * whoever asked; a closed or dismissed consent screen rejects.
+ */
 export async function driveToken(): Promise<string> {
-  await load()
-  throw new Error(`not yet: ${DRIVE_SCOPE}`)
+  const g = await load()
+  return new Promise((resolve, reject) => {
+    const client = g.accounts.oauth2.initTokenClient({
+      client_id: clientId(), scope: DRIVE_SCOPE,
+      callback: (r) => (r.access_token && !r.error ? resolve(r.access_token) : reject(new Error('drive'))),
+      error_callback: () => reject(new Error('drive')),
+    })
+    client.requestAccessToken({ prompt: '' })
+  })
 }

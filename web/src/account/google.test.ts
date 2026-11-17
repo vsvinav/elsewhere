@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeGis } from './google.fake'
-import { GSI_SRC, resetGoogleForTest, signIn, warm, type GoogleIdentity } from './google'
+import { DRIVE_SCOPE, driveToken, GSI_SRC, resetGoogleForTest, signIn, warm, type GoogleIdentity } from './google'
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
 afterEach(() => { resetGoogleForTest(); delete (window as { google?: unknown }).google; document.head.innerHTML = ''; document.body.innerHTML = ''; vi.unstubAllEnvs() })
@@ -56,5 +56,21 @@ describe('google sign-in', () => {
     await tick()
     g.credential('')
     await expect(p).rejects.toThrow()
+  })
+  it('asks the token client for the Drive app-folder scope and resolves with the access token; a closed popup rejects', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'web.apps.googleusercontent.com')
+    const g = fakeGis()
+    ;(window as { google?: GoogleIdentity }).google = g.gis
+    const p = driveToken()
+    await tick()
+    expect(g.tokenScope).toBe(DRIVE_SCOPE)
+    expect(DRIVE_SCOPE).toBe('https://www.googleapis.com/auth/drive.appdata')
+    expect(g.tokenRequests).toBe(1)
+    g.token({ access_token: 'ya29.x' })
+    expect(await p).toBe('ya29.x')
+    const denied = driveToken(); await tick(); g.token({ error: 'access_denied' })
+    await expect(denied).rejects.toThrow()
+    const closed = driveToken(); await tick(); g.tokenError()
+    await expect(closed).rejects.toThrow()
   })
 })

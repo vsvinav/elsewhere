@@ -8,6 +8,9 @@ import { uploadVault, vaultStatus, type VaultStatus } from '../account/sync'
 import { b64, unb64 } from '../crew/keys'
 import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from '../account/vault'
 import { profile, useProfile } from '../profile/profile'
+import { ageLabel } from '../crew/friends'
+import { startFresh, syncNow } from '../sync/engine'
+import { useSync } from '../sync/store'
 import { KeyCheck } from '../profile/KeyCheck'
 import { ImportButton } from '../profile/Viewer'
 import { useStore } from '../store/useStore'
@@ -16,7 +19,7 @@ import { Field } from '../world'
 import './settings.css'
 
 export const SETTINGS_TITLE = 'SETTINGS'
-export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', account: 'ACCOUNT', units: 'UNITS', data: 'DATA' } as const
+export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', account: 'ACCOUNT', sync: 'SYNC', units: 'UNITS', data: 'DATA' } as const
 export const RELAY_CAPTION = 'Friends pair and share through this relay. It holds only device ids and encrypted pings; leave it empty to turn Crew off.'
 export const ACCOUNT = {
   signIn: 'Log in or sign up',
@@ -34,6 +37,17 @@ export const ACCOUNT = {
   del: 'Delete account',
   delConfirm: 'Delete your account? The vault on the service goes with it. Your record and profile stay in this browser.',
   url: 'Account service URL',
+} as const
+export const SYNC = {
+  off: 'Sync is off — sign in with Google to turn it on.',
+  ok: (ago: string) => `Synced · ${ago}`,
+  never: 'Not synced yet',
+  busy: 'Syncing…',
+  err: "Couldn't sync. We'll try again.",
+  locked: "Can't unlock your synced record.",
+  now: 'Sync now',
+  fresh: 'Start fresh',
+  freshBody: "This removes your synced copy from the cloud. What's on this device stays.",
 } as const
 export const PROVIDER_LABEL: Record<LlmProvider, string> = { openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini', custom: 'Ollama / custom' }
 export const LLM_CAPTION = 'Your key is stored in this browser only and is sent straight to the provider you choose.'
@@ -53,6 +67,7 @@ export function Settings({ fetchFn = fetch }: { fetchFn?: typeof fetch }) {
       <AskSection fetchFn={fetchFn} />
       <CrewSection />
       <AccountSection onSignIn={() => useAccount.getState().setShowWelcome(true)} fetchFn={fetchFn} />
+      <SyncSection fetchFn={fetchFn} />
       <UnitsSection />
       <DataSection />
     </main>
@@ -211,6 +226,26 @@ function AccountSection({ onSignIn, fetchFn }: { onSignIn(): void; fetchFn: type
   )
 }
 
+/** One line on where sync stands, with the two things a person can do about it. Off until a Google sign-in has keyed it. */
+function SyncSection({ fetchFn }: { fetchFn: typeof fetch }) {
+  const status = useSync((s) => s.status)
+  const busy = status.kind === 'syncing'
+  const line = status.kind === 'off' ? SYNC.off : busy ? SYNC.busy : status.kind === 'error' ? (status.error === 'locked' ? SYNC.locked : SYNC.err) : status.lastTs ? SYNC.ok(ageLabel(Math.floor(status.lastTs / 1000), Date.now())) : SYNC.never
+  const ok = status.kind === 'idle' && !!status.lastTs
+  const locked = status.kind === 'error' && status.error === 'locked'
+  const fresh = () => { if (window.confirm(SYNC.freshBody)) void startFresh({ client: () => api(fetchFn) }) }
+  return (
+    <section className="setting st-sync">
+      <h2>{SECTION.sync}</h2>
+      <div className="st-actions">
+        {status.kind !== 'off' && !locked && <button className="btn" disabled={busy} onClick={() => void syncNow({ client: () => api(fetchFn) })}>{SYNC.now}</button>}
+        {status.kind !== 'off' && <button className="btn danger" disabled={busy} onClick={fresh}>{SYNC.fresh}</button>}
+        <span role="status" className={`st-status${ok ? ' ok' : ''}`}>{line}</span>
+      </div>
+    </section>
+  )
+}
+
 /**
  * "Up to date" or "out of date · Update". Update asks for the passphrase, since the key does not outlive the page, and
  * proves it against the vault already on the service before anything is re-sealed; only a missing vault takes a new one.
@@ -228,6 +263,7 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
       const a = useAccount.getState()
       const body = await client.getVault()
       let salt: Uint8Array, key: Uint8Array
+      if (body?.v === 2) { setErr(ACCOUNT.wrong); return }
       if (body) {
         salt = unb64(body.salt); key = await deriveKey(pass, salt)
         try { await openVault(key, body) } catch { setErr(ACCOUNT.wrong); return }
@@ -241,12 +277,15 @@ function VaultLine({ state, fetchFn }: { state: VaultStatus; fetchFn: typeof fet
       if (await uploadVault({ client: () => client })) { setAsking(false); setPass('') } else setErr("The vault didn't go up. Check your connection.")
     } catch (e) { setErr(messageOf(e)) } finally { setBusy(false) }
   }
+  const driveKeyed = useAccount((a) => a.driveKeyed)
+  const retry = async () => { setBusy(true); setErr(''); try { if (!(await uploadVault({ client: () => api(fetchFn) }))) setErr("The vault didn't go up. Check your connection.") } finally { setBusy(false) } }
   if (state === 'none') return null
   const line = state === 'fresh' ? ACCOUNT.fresh : state === 'empty' ? ACCOUNT.empty : ACCOUNT.stale
   return (
     <div className="st-vault">
       <span role="status" className={`st-status${state === 'stale' ? '' : ' ok'}`}>{line}</span>
-      {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} onClick={() => setAsking(true)}>{ACCOUNT.update}</button>}
+      {state === 'stale' && !asking && <button className="btn quiet" style={{ margin: 0 }} disabled={busy} onClick={() => (driveKeyed ? void retry() : setAsking(true))}>{ACCOUNT.update}</button>}
+      {driveKeyed && err && <span role="alert" className="dz-err">{err}</span>}
       {asking && (
         <form onSubmit={submit}>
           <input type="password" aria-label="Recovery passphrase" placeholder="Recovery passphrase" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} disabled={busy} autoFocus />

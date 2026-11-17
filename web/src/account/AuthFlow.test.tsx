@@ -6,6 +6,11 @@ import { createRoot } from 'react-dom/client'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
+// Drive answers with one fixed key; the real module's listing and reading are covered in driveKey.test.ts.
+vi.mock('./driveKey', async (orig) => {
+  const m = await orig<typeof import('./driveKey')>()
+  return { ...m, fetchOrCreateKey: async (token: string) => { if (token !== 'ya29.fake') throw new m.DriveError('auth'); const k = Uint8Array.from({ length: 32 }, (_, i) => 100 + i); await db.store.set(m.SYNC_KEY_KV, btoa(String.fromCharCode(...k))); return k } }
+})
 vi.hoisted(() => {
   const mem = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
@@ -13,19 +18,27 @@ vi.hoisted(() => {
 
 import { sha256 } from '@noble/hashes/sha2.js'
 import { concatBytes, utf8ToBytes } from '@noble/hashes/utils.js'
-import { fromHex, loadKeys, setKeysForTest, toHex, unb64 } from '../crew/keys'
+import { b64, fromHex, loadKeys, setKeysForTest, toHex, unb64 } from '../crew/keys'
 import { settings } from '../ingest/settings'
 import { profile, type Profile } from '../profile/profile'
 import { AuthFlow, COPY, takeAuthToken } from './AuthFlow'
 import { AccountError, type AccountClient, type AccountInfo } from './client'
 import { resetAccountForTest, useAccount } from './store'
-import { encryptVault, type VaultBody, type VaultPlain } from './vault'
+import { encryptVault, openVault, type VaultBody, type VaultPlain } from './vault'
+import { sealVaultWithDriveKey } from './vault'
+import { SYNC_KEY_KV } from './driveKey'
 import { fakeGis } from './google.fake'
 import type { GoogleIdentity } from './google'
 
 // A fast stand-in for PBKDF2 so the screens can be driven without a second of hashing per step.
 const derive = async (p: string, salt: Uint8Array) => sha256(concatBytes(utf8ToBytes(p.trim()), salt))
 const ADA: Profile = { name: 'Ada', units: 'km', homes: [{ lat: 51.5, lng: -0.12, city: 'London', cc: 'GB', from: 0, to: null }], works: [] }
+const DRIVE_KEY = Uint8Array.from({ length: 32 }, (_, i) => 100 + i)
+/** Stands in for the GIS token client plus Drive: hands back a token and counts the asks; the key fetch is faked at the fetch layer. */
+function fakeDrive() {
+  const f = Object.assign(async () => { f.tokens++; return 'ya29.fake' }, { tokens: 0 })
+  return f
+}
 const SIGN = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60', KX = '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
 
 function fakeService(hasVault = false, vault: VaultBody | null = null) {
@@ -39,11 +52,12 @@ function fakeService(hasVault = false, vault: VaultBody | null = null) {
     peek: async (token) => { calls.push(`peek ${token}`); if (token !== 't') throw new AccountError(400, 'expired'); return { email: 'ada@example.com' } },
     me: async () => account,
     logout: async () => { calls.push('logout') },
-    putVault: async () => {},
+    putVault: async (b) => { calls.push(`putVault v${b.v}`); vault = b; account.hasVault = true },
     getVault: async () => vault,
     deleteMe: async () => {},
+    listSync: async () => [], getSync: async () => null, putSync: async () => {}, deleteSync: async () => {},
   }
-  return { client, calls, failStart: (e: AccountError | null) => { startFails = e } }
+  return { client, calls, failStart: (e: AccountError | null) => { startFails = e }, get vault() { return vault } }
 }
 const mount = (props: Partial<Parameters<typeof AuthFlow>[0]> & { client: AccountClient }) => {
   const host = document.body.appendChild(document.createElement('div'))
@@ -73,12 +87,12 @@ describe('AuthFlow', () => {
     const { host: without } = mount({ client: svc.client, google: null })
     expect(without.querySelector('.acct-google')).toBeNull()
   })
-  it('Continue with Google clicks Google\'s own button, sends the credential to the service and lands on the passphrase step', async () => {
+  it('Continue with Google clicks Google\'s own button, sends the credential to the service and never shows a passphrase screen', async () => {
     vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'web.apps.googleusercontent.com')
     const g = fakeGis()
     ;(window as { google?: GoogleIdentity }).google = g.gis
     const svc = fakeService(false)
-    const { host } = mount({ client: svc.client })
+    const { host, onDone } = mount({ client: svc.client, drive: fakeDrive() })
     expect(host.querySelector('.acct-google')).toBeTruthy()
     await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
     expect(g.clicks).toBe(1)
@@ -86,7 +100,8 @@ describe('AuthFlow', () => {
     await act(() => { g.credential('good') }); await settle()
     expect(svc.calls).toEqual(['google good'])
     expect(useAccount.getState().session).toEqual({ session: 'gsess', id: 'acct_1', email: 'ada@example.com' })
-    expect(text(host, '.ob-title')).toBe(COPY.setTitle)
+    expect(onDone).toHaveBeenCalledWith({ restored: false })
+    expect(host.querySelector('#acct-pass')).toBeNull()
   })
   it('without a built-in client ID there is no Google button', () => {
     const { host } = mount({ client: fakeService(false).client })
@@ -94,12 +109,12 @@ describe('AuthFlow', () => {
   })
   it('a Google prompt that does not finish, or a token the service refuses, shows the Google line and stays put', async () => {
     const svc = fakeService(false)
-    const { host } = mount({ client: svc.client, google: async () => { throw new Error('dismissed') } })
+    const { host } = mount({ client: svc.client, google: async () => { throw new Error('dismissed') }, drive: fakeDrive() })
     await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
     expect(text(host, '[role=alert]')).toBe("Google sign-in didn't finish. Try again.")
     expect(text(host, '.ob-title')).toBe(COPY.email)
     expect(useAccount.getState().session).toBeNull()
-    const { host: refused } = mount({ client: svc.client, google: async () => ({ idToken: 'forged' }) })
+    const { host: refused } = mount({ client: svc.client, google: async () => ({ idToken: 'forged' }), drive: fakeDrive() })
     await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
     expect(text(refused, '[role=alert]')).toBe(COPY.googleFail)
     expect(svc.calls).toEqual(['google forged'])
@@ -113,6 +128,65 @@ describe('AuthFlow', () => {
     svc.client.google = async () => { throw new AccountError(400, 'expired') }
     await act(() => { refused.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
     expect(text(refused, '[role=alert]')).toBe(COPY.googleFail)
+  })
+  it('Google login to an account without a vault: the Drive key becomes the vault key and the vault goes up as v:2', async () => {
+    const svc = fakeService(false)
+    const drive = fakeDrive()
+    profile.set(ADA)
+    const { onDone } = mount({ client: svc.client, google: async () => ({ idToken: 'good' }), drive })
+    await act(() => { document.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(drive.tokens).toBe(1)
+    expect(onDone).toHaveBeenCalledWith({ restored: false })
+    const a = useAccount.getState()
+    expect(a.driveKeyed).toBe(true)
+    expect(a.salt).toBeNull()
+    expect(a.key).toBeNull()
+    expect(db.store.get('account:driveKeyed')).toBe(true)
+    expect(db.store.get(SYNC_KEY_KV)).toBe(b64(DRIVE_KEY))
+    // The vault is created straight away, sealed under the Drive key, so a second device finds it.
+    expect(svc.calls).toEqual(['google good', 'putVault v2'])
+    expect(await openVault(DRIVE_KEY, svc.vault!)).toMatchObject({ v: 1, profile: ADA })
+  })
+  it('Google login to an account whose vault is already v:2 opens it with the Drive key, no passphrase asked', async () => {
+    const plain: VaultPlain = { v: 1, signPriv: SIGN, kxPriv: KX, profile: ADA, settings: { units: 'km', relayUrl: 'https://relay.example.org' } }
+    const svc = fakeService(true, sealVaultWithDriveKey(DRIVE_KEY, plain))
+    const { host, onDone } = mount({ client: svc.client, mode: 'login', google: async () => ({ idToken: 'good' }), drive: fakeDrive() })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(host.querySelector('#acct-unlock')).toBeNull()
+    expect(onDone).toHaveBeenCalledWith({ restored: true })
+    expect(profile.get()).toEqual(ADA)
+    expect(settings.get().relayUrl).toBe('https://relay.example.org')
+    expect(toHex((await loadKeys()).signPriv)).toBe(SIGN)
+    expect(useAccount.getState().driveKeyed).toBe(true)
+    expect(svc.calls).toEqual(['google good'])
+  })
+  it('Google login to a passphrase account asks for the passphrase once, then re-seals the vault under the Drive key', async () => {
+    const salt = new Uint8Array(16).fill(3)
+    const plain: VaultPlain = { v: 1, signPriv: SIGN, kxPriv: KX, profile: ADA, settings: { units: 'km', relayUrl: '' } }
+    const svc = fakeService(true, await encryptVault(await derive('open sesame', salt), salt, JSON.stringify(plain)))
+    const { host, onDone } = mount({ client: svc.client, mode: 'login', google: async () => ({ idToken: 'good' }), drive: fakeDrive() })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(host, '.ob-title')).toBe(COPY.unlockTitle)
+    const pass = host.querySelector<HTMLInputElement>('#acct-unlock')!
+    type(pass, 'wrong one'); submit(host); await settle()
+    expect(text(host, '[role=alert]')).toBe(COPY.wrong)
+    type(pass, 'open sesame'); submit(host); await settle()
+    expect(onDone).toHaveBeenCalledWith({ restored: true })
+    expect(svc.calls).toEqual(['google good', 'putVault v2'])
+    expect(svc.vault!.v).toBe(2)
+    expect(await openVault(DRIVE_KEY, svc.vault!)).toEqual(plain)
+    const a = useAccount.getState()
+    expect([a.driveKeyed, a.salt, a.key]).toEqual([true, null, null])
+    expect(profile.get()).toEqual(ADA)
+  })
+  it('a Drive consent that does not finish names the problem and leaves the account signed out', async () => {
+    const svc = fakeService(false)
+    const { host, onDone } = mount({ client: svc.client, google: async () => ({ idToken: 'good' }), drive: async () => { throw new Error('popup_closed') } })
+    await act(() => { host.querySelector<HTMLButtonElement>('.acct-google')!.click() }); await settle()
+    expect(text(host, '[role=alert]')).toBe(COPY.driveFail)
+    expect(onDone).not.toHaveBeenCalled()
+    expect(useAccount.getState().session).toBeNull()
+    expect(svc.calls).toEqual(['google good', 'logout'])
   })
   it('email → code → set a passphrase for a new account, then hands back with the key in memory', async () => {
     const svc = fakeService(false)

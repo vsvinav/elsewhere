@@ -16,6 +16,7 @@ export function homeAt(homes: Home[], ts: number): Home {
 }
 
 const LS = 'elsewhere.profile'
+const LS_AT = 'elsewhere.profileAt'
 /** Older profiles carried one undated `work`. */
 export const migrate = (p: (Partial<Profile> & { work?: Omit<Work, 'from' | 'to'> | null }) | null): Profile | null =>
   p ? { name: p.name ?? null, units: p.units ?? 'km', homes: p.homes ?? [], works: p.works ?? (p.work ? [{ ...p.work, from: 0, to: null }] : []) } : null
@@ -24,7 +25,9 @@ let cur: Profile | null = typeof localStorage === 'undefined' ? null : read()
 const subs = new Set<() => void>()
 export const profile = {
   get: () => cur,
-  set: (p: Profile | null) => { cur = p; if (p) localStorage.setItem(LS, JSON.stringify(p)); else localStorage.removeItem(LS); subs.forEach((f) => f()) },
+  /** `at` is when this version was written, in ms: now for an edit here, the remote time when sync applies one from elsewhere. */
+  set: (p: Profile | null, at = Date.now()) => { cur = p; if (p) { localStorage.setItem(LS, JSON.stringify(p)); localStorage.setItem(LS_AT, String(at)) } else { localStorage.removeItem(LS); localStorage.removeItem(LS_AT) } subs.forEach((f) => f()) },
+  editedAt: (): number => { const n = Number(localStorage.getItem(LS_AT)); return Number.isFinite(n) ? n : 0 },
   subscribe: (f: () => void) => { subs.add(f); return () => { subs.delete(f) } },
 }
 export const useProfile = () => useSyncExternalStore(profile.subscribe, profile.get)

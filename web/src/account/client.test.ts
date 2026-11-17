@@ -7,6 +7,9 @@ vi.hoisted(() => {
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
 })
 
+const driveCalls = vi.hoisted(() => ({ deleted: [] as string[] }))
+vi.mock('./driveKey', async (orig) => ({ ...(await orig<typeof import('./driveKey')>()), deleteKey: async (token: string) => { if (token === 'bad') throw new Error('auth'); driveCalls.deleted.push(token) } }))
+
 import { AccountError, accountClient, api, deleteAccount, logOut, messageOf } from './client'
 import { ACCOUNT_KV, resetAccountForTest, useAccount } from './store'
 
@@ -21,6 +24,25 @@ const vault = { v: 1 as const, salt: 'c2FsdA==', iv: 'aXY=', ct: 'Y3Q=' }
 beforeEach(() => { db.store.clear(); resetAccountForTest() })
 
 describe('account client', () => {
+  it('sync routes carry the session; a missing blob is null and a stale one is its own error', async () => {
+    await useAccount.getState().setSession({ session: 'f'.repeat(64), id: 'acct_1', email: 'a@b.co' })
+    const blob = { v: 1 as const, ts: 5, nonce: 'AAECAwQFBgcICQoL', ct: 'AA==' }
+    const f = fakeFetch(({ url, init }) => {
+      if (url.endsWith('/sync') && init.method === 'GET') return Response.json([{ key: 'profile', ts: 5, size: 40 }])
+      if (url.endsWith('/sync/profile') && init.method === 'GET') return Response.json(blob)
+      if (url.endsWith('/sync/i_abc%3A2026-01') && init.method === 'GET') return Response.json({ error: 'not found' }, { status: 404 })
+      if (url.endsWith('/sync/profile') && init.method === 'PUT') return Response.json({ error: 'stale' }, { status: 409 })
+      return new Response(null, { status: 204 })
+    })
+    const c = api(f.fn)
+    expect(await c.listSync()).toEqual([{ key: 'profile', ts: 5, size: 40 }])
+    expect(await c.getSync('profile')).toEqual(blob)
+    expect(await c.getSync('i_abc:2026-01')).toBeNull()
+    await expect(c.putSync('profile', blob)).rejects.toMatchObject({ status: 409, code: 'stale' })
+    await c.deleteSync()
+    expect(f.calls.every((x) => (x.init.headers as Record<string, string>).Authorization === `Bearer ${'f'.repeat(64)}`)).toBe(true)
+    expect(f.calls[4].init.method).toBe('DELETE')
+  })
   it('start and finish post JSON and return the bodies', async () => {
     const f = fakeFetch(({ url }) => Response.json(url.endsWith('/auth/start') ? { ok: true, dev: { code: '123456' } } : { session: 's1', account: { id: 'acct_1', email: 'a@b.co', created: 1, hasVault: false } }))
     const c = accountClient('https://acct.test/', { fetchFn: f.fn })
@@ -114,6 +136,19 @@ describe('account client', () => {
     await expect(deleteAccount(api(fakeFetch(() => Response.json({ error: 'nope' }, { status: 500 })).fn))).rejects.toMatchObject({ status: 500 })
     expect(useAccount.getState().session?.session).toBe('s')
     await deleteAccount(api(fakeFetch(() => new Response(null, { status: 204 })).fn))
+    expect(useAccount.getState().session).toBeNull()
+    expect(driveCalls.deleted).toEqual([])
+  })
+  it('deleteAccount on a Google account also removes the sync key from Drive, and goes ahead when Drive will not answer', async () => {
+    await useAccount.getState().setSession({ session: 's', id: 'acct_1', email: 'a@b.co' })
+    await useAccount.getState().setDriveKeyed(true)
+    const ok = api(fakeFetch(() => new Response(null, { status: 204 })).fn)
+    await deleteAccount(ok, async () => 'tok')
+    expect(driveCalls.deleted).toEqual(['tok'])
+    expect(useAccount.getState().session).toBeNull()
+    await useAccount.getState().setSession({ session: 's', id: 'acct_1', email: 'a@b.co' })
+    await useAccount.getState().setDriveKeyed(true)
+    await deleteAccount(ok, async () => 'bad')
     expect(useAccount.getState().session).toBeNull()
   })
 })

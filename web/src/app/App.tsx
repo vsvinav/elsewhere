@@ -2,7 +2,7 @@ import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useM
 import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data } from '../data/types'
-import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
+import { clearRecord, ingestFile, loadRecord, recordFromSyncedStays, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
 import { Viewer } from '../profile/Viewer'
@@ -29,6 +29,8 @@ import { Welcome } from '../account/Welcome'
 import { AuthFlow, takeAuthToken, type AuthResult } from '../account/AuthFlow'
 import { useAccount } from '../account/store'
 import { startVaultSync } from '../account/sync'
+import { loadSyncStatus, setRecordSource, syncNow } from '../sync/engine'
+import { useSync } from '../sync/store'
 import { frontDoor } from '../account/frontDoor'
 
 // deck.gl and Google Maps only ship when the map opens.
@@ -47,7 +49,6 @@ export function App() {
   const [mine, setMine] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   // No sample shipped with this build (the data folder is not in git): the front door still takes an import.
-  const [noDemo, setNoDemo] = useState(false)
   const [stage, setStage] = useState<string | null>(null)
   const [importError, setImportError] = useState<Error | null>(null)
   const [enrichError, setEnrichError] = useState<Error | null>(null)
@@ -63,23 +64,45 @@ export function App() {
   const [needImport, setNeedImport] = useState(false)
   useEffect(() => { void useAccount.getState().load() }, [])
   useEffect(() => startVaultSync(), [])
+  // Sync runs against the record this device holds; a round starts once the account is known and the record has loaded, and after each import.
+  const recordRef = useRef<{ d: Data | null; mine: boolean }>({ d: null, mine: false })
+  recordRef.current = { d: record, mine }
+  useEffect(() => setRecordSource(() => (recordRef.current.mine ? recordRef.current.d : null)), [])
+  const [noDemo, setNoDemo] = useState(false)
+  const settled = !!record || noDemo
+  const syncReady = acct.loaded && !!acct.session && acct.driveKeyed && settled
+  useEffect(() => { if (!acct.loaded) return; void loadSyncStatus() }, [acct.loaded])
+  useEffect(() => { if (syncReady) void syncNow() }, [syncReady])
+  const staysVersion = useSync((s) => s.staysVersion)
+  const syncing = useSync((s) => s.status.kind === 'syncing')
   const authDone = (r: AuthResult) => { setAuth(null); const a = useAccount.getState(); void a.setWelcomed(true); a.setShowWelcome(false); if (r.restored) setNeedImport(true) }
   const showWelcome = (v: boolean) => useAccount.getState().setShowWelcome(v)
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
   }, [adopt])
+  // Nothing imported here but stays pulled from other devices: they are the record, and this device counts as having one.
+  const derivedStays = useRef(0)
+  useEffect(() => {
+    if (mine || !prof || !settled) return
+    let live = true
+    const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'rederive')) }
+    recordFromSyncedStays(prof, onStage).then((d) => { if (!live) return; setStage(null); if (d) { derivedStays.current = useSync.getState().staysVersion; adopt(d, true) } }).catch((e) => { if (live) { setStage(null); setReady(null); setImportError(e) } })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, !!prof, settled, staysVersion])
   // The record follows the profile: when home or work moves, trips and days are worked out again.
   const homesKey = JSON.stringify([prof?.homes ?? null, prof?.works ?? null])
   useEffect(() => {
     if (!record || !prof) return
-    if (JSON.stringify([record.profile.homes ?? null, record.profile.works ?? null]) === homesKey) return
+    if (staysVersion === derivedStays.current && JSON.stringify([record.profile.homes ?? null, record.profile.works ?? null]) === homesKey) return
+    derivedStays.current = staysVersion
     let live = true
     const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'rederive')) }
     rederive(record, prof, onStage).then((d) => { if (!live) return; setStage(null); setRecord({ ...d, paths: record.paths }) }).catch((e) => { if (live) { setStage(null); setReady(null); setImportError(e) } })
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [record?.meta.source_sha256, homesKey])
+  }, [record?.meta.source_sha256, homesKey, staysVersion])
   const tab = useStore((s) => s.tab)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const crewOpen = useStore((s) => s.crewOpen)
@@ -104,7 +127,7 @@ export function App() {
   const data = useMemo(() => (record ? { ...record, places: apply(record.places, cache, mapsKey) } : null), [record, cache, mapsKey])
   const ctx = useMemo<Record_>(() => ({
     mine, stage, importError, enrichError,
-    importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); if (profileStore.get()) useStore.getState().setTab('home') }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
+    importFile: (f) => { setImportError(null); const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'import')) }; ingestFile(f, profileStore.get() ?? PROVISIONAL, onStage).then((d) => { setStage(null); adopt(d, true); recordRef.current = { d, mine: true }; if (profileStore.get()) useStore.getState().setTab('home'); if (useAccount.getState().driveKeyed) void syncNow() }).catch((e) => { setStage(null); setReady(null); setImportError(e) }) },
     // Without a bundled sample, starting over lands on the front door, same as a first visit.
     reset: () => { profileStore.set(null); setRecord(null); clearRecord().then(() => loadData()).then((d) => adopt(d, false)).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e))) },
     editProfile: () => setEditing(true),
@@ -129,6 +152,8 @@ export function App() {
   if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
   if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => showWelcome(false)} />
   // The web cannot record: with nothing bundled and nothing imported, point at the phone or take an export.
+  // A pull in flight on a device with no record of its own: the record may be about to arrive.
+  if (!mine && syncing && (needImport || !record)) return <div className="tray">{bar}<Printing /></div>
   if (!record && noDemo) return <>{bar}<Viewer stage={stage} importError={importError} importFile={ctx.importFile} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
   // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.

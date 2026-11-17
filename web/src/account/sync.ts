@@ -1,5 +1,6 @@
-// Keeps the recovery vault on the service current: whenever the profile or the settings subset changes and the
-// passphrase key is in memory, the vault is sealed and uploaded two seconds later. Offline or keyless, it waits.
+// Keeps the recovery vault on the service current: whenever the profile or the settings subset changes and the key is at
+// hand (passphrase key in memory, or the Drive key on disk), the vault is sealed and uploaded two seconds later. Offline
+// or keyless, it waits.
 import { sha256 } from '@noble/hashes/sha2.js'
 import { utf8ToBytes } from '@noble/hashes/utils.js'
 import { loadKeys, toHex, unb64, type DeviceKeys } from '../crew/keys'
@@ -7,7 +8,8 @@ import { settings, type Settings } from '../ingest/settings'
 import { profile, type Profile } from '../profile/profile'
 import { api, type AccountClient } from './client'
 import { useAccount, type AccountState } from './store'
-import { sealVault, type VaultPlain } from './vault'
+import { loadLocalKey } from './driveKey'
+import { sealVault, sealVaultWithDriveKey, type VaultBody, type VaultPlain } from './vault'
 
 export const SYNC_DEBOUNCE_MS = 2000
 
@@ -32,13 +34,20 @@ export async function uploadVault(deps: SyncDeps = {}): Promise<boolean> {
     const plain = vaultPlain(await d.keys(), prof, settings.get())
     const hash = vaultHashOf(plain)
     if (hash === a.vaultHash && a.vaultAt) { a.setPending(false); return true }
-    if (!a.key || !a.salt || !d.online()) { a.setPending(true); return false }
-    await d.client().putVault(await sealVault(a.key, unb64(a.salt), plain))
+    const body = await sealFor(a, plain)
+    if (!body || !d.online()) { a.setPending(true); return false }
+    await d.client().putVault(body)
     useAccount.getState().setPending(false)
     await useAccount.getState().setVaultHash(hash)
     await useAccount.getState().setVaultAt(d.now())
     return true
   } catch { useAccount.getState().setPending(true); return false }
+}
+
+/** v:2 under the Drive key for a Google account, v:1 under the passphrase key otherwise; null when the key is not at hand. */
+async function sealFor(a: AccountState, plain: VaultPlain): Promise<VaultBody | null> {
+  if (a.driveKeyed) { const k = await loadLocalKey(); return k ? sealVaultWithDriveKey(k, plain) : null }
+  return a.key && a.salt ? sealVault(a.key, unb64(a.salt), plain) : null
 }
 
 /** Watches the profile, the settings subset and the account; returns a stop function. */
@@ -47,7 +56,7 @@ export function startVaultSync(deps: SyncDeps = {}): () => void {
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { void uploadVault(deps) }, SYNC_DEBOUNCE_MS) }
   let lastSettings = JSON.stringify([settings.get().relayUrl, settings.get().accountUrl])
   const onSettings = () => { const k = JSON.stringify([settings.get().relayUrl, settings.get().accountUrl]); if (k !== lastSettings) { lastSettings = k; schedule() } }
-  const onAccount = (s: AccountState, prev: AccountState) => { if ((s.key && !prev.key) || (s.session && !prev.session)) schedule() }
+  const onAccount = (s: AccountState, prev: AccountState) => { if ((s.key && !prev.key) || (s.session && !prev.session) || (s.driveKeyed && !prev.driveKeyed)) schedule() }
   const stops = [profile.subscribe(schedule), settings.subscribe(onSettings), useAccount.subscribe(onAccount)]
   // A change made while the last upload failed, or a vault never uploaded, goes up on start if the key is at hand.
   schedule()

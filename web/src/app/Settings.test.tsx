@@ -12,6 +12,7 @@ vi.hoisted(() => {
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
 })
 vi.mock('../ingest/keycheck', async (orig) => ({ ...(await orig<typeof import('../ingest/keycheck')>()), checkKey: async () => ({ ok: true }) }))
+vi.mock('../account/google', async (orig) => ({ ...(await orig<typeof import('../account/google')>()), driveToken: async () => { throw new Error('no drive here') } }))
 vi.mock('@vis.gl/react-google-maps', () => ({ APIProvider: ({ children }: { children: unknown }) => children, Map: () => null, useMap: () => null }))
 vi.mock('../ingest/db', () => {
   const m = new Map<string, unknown>()
@@ -23,7 +24,8 @@ import { RecordContext, type Record_ } from './App'
 import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
 import { resetAccountForTest, useAccount } from '../account/store'
-import { ACCOUNT } from './Settings'
+import { ACCOUNT, SYNC } from './Settings'
+import { resetSyncForTest, useSync } from '../sync/store'
 import { deriveKey, encryptVault, openVault, type VaultBody } from '../account/vault'
 
 const rec: Record_ = { mine: true, stage: null, importError: null, enrichError: null, importFile() {}, reset: vi.fn(), editProfile() {} }
@@ -46,14 +48,74 @@ beforeEach(() => {
   settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://elsewhere-relay.vinav.workers.dev' })
   profile.set({ name: 'V', units: 'km', homes: [], works: [] })
   resetAccountForTest()
+  resetSyncForTest()
   document.body.innerHTML = ''
 })
 
+const buttons = (host: HTMLElement) => [...host.querySelectorAll('.st-sync button')].map((b) => [b.textContent, (b as HTMLButtonElement).disabled] as const)
+const syncLine = (host: HTMLElement) => host.querySelector('.st-sync [role=status]')!
+
+describe('Sync section', () => {
+  it('off: says how to turn it on and offers nothing else', () => {
+    const { host, unmount } = mount()
+    expect(syncLine(host).textContent).toBe(SYNC.off)
+    expect(buttons(host)).toEqual([])
+    expect(host.querySelector('.st-sync')).toMatchSnapshot()
+    unmount()
+  })
+  it('idle: Synced · ago, or not yet, with both buttons live', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(10 * 60_000)
+    useSync.setState({ status: { kind: 'idle', lastTs: 7 * 60_000 } })
+    const { host, unmount } = mount()
+    expect(syncLine(host).textContent).toBe('Synced · 3 min ago')
+    expect(syncLine(host).className).toContain('ok')
+    expect(buttons(host)).toEqual([[SYNC.now, false], [SYNC.fresh, false]])
+    act(() => useSync.setState({ status: { kind: 'idle', lastTs: null } }))
+    expect(syncLine(host).textContent).toBe(SYNC.never)
+    vi.restoreAllMocks()
+    unmount()
+  })
+  it('syncing: says so and holds the buttons', () => {
+    useSync.setState({ status: { kind: 'syncing' } })
+    const { host, unmount } = mount()
+    expect(syncLine(host).textContent).toBe(SYNC.busy)
+    expect(buttons(host)).toEqual([[SYNC.now, true], [SYNC.fresh, true]])
+    unmount()
+  })
+  it('error: a plain retry line; locked: the key is missing, so only Start fresh remains', () => {
+    useSync.setState({ status: { kind: 'error', error: 'network', lastTs: 1 } })
+    const { host, unmount } = mount()
+    expect(syncLine(host).textContent).toBe(SYNC.err)
+    expect(buttons(host).map(([t]) => t)).toEqual([SYNC.now, SYNC.fresh])
+    act(() => useSync.setState({ status: { kind: 'error', error: 'locked', lastTs: 1 } }))
+    expect(syncLine(host).textContent).toBe(SYNC.locked)
+    expect(buttons(host)).toEqual([[SYNC.fresh, false]])
+    unmount()
+  })
+  it('Sync now runs a round against the service; Start fresh asks first', async () => {
+    useAccount.setState({ loaded: true, session: { session: 'x', id: 'acct_1', email: 'v@example.org' }, driveKeyed: true })
+    useSync.setState({ status: { kind: 'idle', lastTs: null } })
+    const calls: string[] = []
+    const f = (async (url: string, init: RequestInit = {}) => { calls.push(`${init.method} ${new URL(url).pathname}`); return init.method === 'GET' ? Response.json([]) : new Response(null, { status: 204 }) }) as unknown as typeof fetch
+    const { host, flush, unmount } = mount(f)
+    act(() => [...host.querySelectorAll<HTMLButtonElement>('.st-sync button')].find((b) => b.textContent === SYNC.now)!.click())
+    await flush()
+    expect(useSync.getState().status).toMatchObject({ kind: 'error', error: 'locked' })
+    expect(calls).toEqual([])
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    act(() => [...host.querySelectorAll<HTMLButtonElement>('.st-sync button')].find((b) => b.textContent === SYNC.fresh)!.click())
+    expect(confirm).toHaveBeenCalledWith(SYNC.freshBody)
+    expect(calls).toEqual([])
+    confirm.mockRestore()
+    unmount()
+  })
+})
+
 describe('Settings', () => {
-  it('prints the six sections under the title', () => {
+  it('prints the seven sections under the title', () => {
     const { host, unmount } = mount()
     expect(host.querySelector('h1')?.textContent).toBe('SETTINGS')
-    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'CREW', 'ACCOUNT', 'UNITS', 'DATA'])
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual(['GOOGLE MAPS', 'ASK ELSEWHERE', 'CREW', 'ACCOUNT', 'SYNC', 'UNITS', 'DATA'])
     expect(host.querySelector('label[for=st-map-id]')?.textContent).toBe('Map ID · optional')
     expect(host.querySelector('label[for=st-map-tiles]')?.textContent).toBe('Map provider')
     expect([...host.querySelectorAll('#st-map-tiles option')].map((o) => o.textContent)).toEqual(['Auto', 'Google', 'OpenStreetMap'])
@@ -146,7 +208,7 @@ describe('Settings', () => {
     await askUpdate(host, flush, 'correct horse battery')
     expect(svc.puts).toHaveLength(1)
     const a = useAccount.getState()
-    expect(a.salt).toBe(svc.puts[0].salt)
+    expect(a.salt).toBe((svc.puts[0] as { salt: string }).salt)
     expect(a.vaultAt).not.toBeNull()
     expect(host.textContent).toContain(ACCOUNT.fresh)
     unmount()

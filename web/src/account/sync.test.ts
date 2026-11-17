@@ -47,6 +47,25 @@ const signedIn = async () => {
 }
 
 describe('vault sync', () => {
+  it('a Drive-keyed account seals v:2 under the key kept on disk, with no passphrase key in memory', async () => {
+    const f = fakeClient()
+    const drive = Uint8Array.from({ length: 32 }, (_, i) => 200 - i)
+    db.store.set('sync:key', b64(drive))
+    const a = useAccount.getState()
+    await a.setSession({ session: 's', id: 'acct_1', email: 'ada@example.com' })
+    profile.set(ADA)
+    expect(await uploadVault({ client: () => f.client, keys: async () => KEYS })).toBe(false)
+    await a.setDriveKeyed(true)
+    expect(await uploadVault({ client: () => f.client, keys: async () => KEYS })).toBe(true)
+    expect(f.puts).toHaveLength(1)
+    expect(f.puts[0].v).toBe(2)
+    expect((await openVault(drive, f.puts[0])).profile).toEqual(ADA)
+    await expect(openVault(key, f.puts[0])).rejects.toThrow()
+    // Signing out forgets the key copy along with the session.
+    await useAccount.getState().signOut()
+    expect(db.store.has('sync:key')).toBe(false)
+    expect(db.store.has('account:driveKeyed')).toBe(false)
+  })
   it('uploads two seconds after identity and profile both exist, then again only when something changes', async () => {
     const f = fakeClient()
     const stop = startVaultSync({ client: () => f.client, keys: async () => KEYS, now: () => 1234 })

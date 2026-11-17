@@ -13,14 +13,23 @@ vi.hoisted(() => {
 })
 vi.mock('../ingest/db', () => {
   const m = new Map<string, unknown>()
-  return { kv: { get: async (k: string) => m.get(k), set: async (k: string, v: unknown) => { m.set(k, v) }, setAll: async (e: Record<string, unknown>) => { for (const [k, v] of Object.entries(e)) m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
+  return { kv: { get: async (k: string) => m.get(k), set: async (k: string, v: unknown) => { m.set(k, v) }, setAll: async (e: [string, unknown][]) => { for (const [k, v] of e) m.set(k, v) }, del: async (k: string) => { m.delete(k) } } }
 })
-const bundle = vi.hoisted(() => ({ missing: false }))
+const bundle = vi.hoisted(() => ({ missing: false, delay: 0 }))
 vi.mock('../data/load', async (orig) => {
   const real = await orig<typeof import('../data/load')>()
-  return { ...real, loadData: async () => { if (bundle.missing) throw new real.DataLoadError('/data/record.json', '404'); return sampleData() }, loadPaths: async () => [] }
+  return { ...real, loadData: async () => { if (bundle.delay) await new Promise((r) => setTimeout(r, bundle.delay)); const mine = await real.loadData().catch(() => null); if (mine) return mine; if (bundle.missing) throw new real.DataLoadError('/data/record.json', '404'); return sampleData() }, loadPaths: async () => [] }
 })
-vi.mock('../ingest', () => ({ clearRecord: async () => {}, ingestFile: async () => { throw new Error('no') }, loadRecord: async () => undefined, rederive: async (d: unknown) => d }))
+// No worker under jsdom: derivation runs inline on the sample cities, through the same synced-stays merge the app uses.
+vi.mock('../ingest', async (orig) => {
+  const real = await orig<typeof import('../ingest')>()
+  const { buildData } = await import('../ingest/derive')
+  const { sampleCities } = await import('../test/sample')
+  const { hasSyncedStays } = await import('../sync/local')
+  const rederive: typeof real.rederive = async (d, prof) => buildData(await real.withSyncedStays(real.parsedFromData(d)), sampleCities, { file: d.meta.source_file, sha256: d.meta.source_sha256 }, prof)
+  const recordFromSyncedStays: typeof real.recordFromSyncedStays = async (prof, onStage) => { if (!(await hasSyncedStays())) return null; const base = real.emptyRecord(); const d = await rederive(base, prof, onStage); await real.saveRecord(d, real.parsedFromData(base)); return d }
+  return { ...real, ingestFile: async () => { throw new Error('no') }, rederive, recordFromSyncedStays }
+})
 vi.mock('../account/sync', async (orig) => ({ ...(await orig<typeof import('../account/sync')>()), startVaultSync: () => () => {} }))
 vi.mock('../world/FlightMap', () => ({ FlightMap: () => createElement('div') }))
 vi.mock('../world/PlaceMap', () => ({ PlaceMap: () => createElement('div') }))
@@ -36,8 +45,14 @@ import { ACCOUNT_KV, resetAccountForTest, useAccount } from '../account/store'
 import { kv } from '../ingest/db'
 import { settings } from '../ingest/settings'
 import { WELCOME_LINE } from '../account/Welcome'
+import { clearRecord } from '../ingest'
+import { b64 } from '../crew/keys'
+import { SYNC_KEY_KV } from '../account/driveKey'
+import { resetSyncForTest, useSync } from '../sync/store'
+import { importSource, monthOf, sealBlob, stayId } from '../sync/wire'
 
 const ses = { session: 's', id: 'acct_1', email: 'v@example.org' }
+const realFetch = globalThis.fetch
 const roots: Root[] = []
 const mount = async () => {
   const host = document.body.appendChild(document.createElement('div'))
@@ -57,9 +72,70 @@ beforeEach(async () => {
   // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
   settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
-  bundle.missing = false
+  resetSyncForTest()
+  await clearRecord()
+  bundle.missing = false; bundle.delay = 0
 })
-afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()) })
+afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()); globalThis.fetch = realFetch })
+
+describe('a second browser', () => {
+  const KEY = new Uint8Array(32).fill(7)
+  const stay = { id: stayId('d_phone', 1700000000), lat: 48.86, lng: 2.35, name: 'Café de Flore', start: 1700000000, end: 1700003600 }
+  const service = (slow = 0) => {
+    const blob = sealBlob(KEY, 'd_phone:2023-11', { v: 1, stays: [stay] }, 500)
+    const calls: string[] = []
+    globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url).pathname; calls.push(`${init.method ?? 'GET'} ${path}`)
+      if (slow) await new Promise((r) => setTimeout(r, slow))
+      if (path === '/sync') return Response.json([{ key: 'd_phone:2023-11', ts: 500, size: 1 }])
+      if (path === '/sync/d_phone%3A2023-11') return Response.json(blob)
+      return new Response(null, { status: 204 })
+    }) as unknown as typeof fetch
+    return calls
+  }
+  const signedInWithKey = async () => { await kv.set(ACCOUNT_KV.session, ses); await kv.set(ACCOUNT_KV.driveKeyed, true); await kv.set(SYNC_KEY_KV, b64(KEY)) }
+
+  it('with nothing imported, the stays pulled on sign-in become the record and the tour prints on them, with no import door on the way', async () => {
+    bundle.missing = true
+    await signedInWithKey()
+    const calls = service(30)
+    const host = await mount()
+    for (let i = 0; i < 6; i++) {
+      expect(host.textContent).not.toContain('Your phone keeps the record.')
+      await act(() => new Promise((r) => setTimeout(r, 15)))
+    }
+    expect(calls).toContain('GET /sync/d_phone%3A2023-11')
+    expect(useSync.getState().status).toMatchObject({ kind: 'idle' })
+    const saved = await kv.get<{ visits: { place_id: string }[]; places: Record<string, { label: string | null }> }>('record')
+    expect(saved?.visits.map((v) => v.place_id)).toEqual([`sync:${stay.id}`])
+    expect(saved?.places[`sync:${stay.id}`].label).toBe('Café de Flore')
+    expect(host.querySelector('.tourline')).not.toBeNull()
+    expect(host.textContent).not.toContain('Your phone keeps the record.')
+    expect(host.textContent).toContain('Start over')
+  })
+  it('the first round waits for the record on this device, so what was not pushed last time goes up now', async () => {
+    bundle.delay = 40
+    await signedInWithKey()
+    const own = sampleData()
+    await kv.set('record', own)
+    const calls = service()
+    const host = await mount()
+    await act(() => new Promise((r) => setTimeout(r, 80)))
+    expect(host.textContent).toContain('Start over')
+    const src = importSource(own.meta.source_sha256)
+    expect(calls.filter((c) => c.startsWith('PUT /sync/'))).toContain(`PUT /sync/${encodeURIComponent(`${src}:${monthOf(own.visits[0].start)}`)}`)
+  })
+  it('a device that has never been welcomed goes straight through to its synced record, not to Welcome or onboarding', async () => {
+    bundle.missing = true
+    await kv.del(ACCOUNT_KV.welcomed)
+    await signedInWithKey()
+    service()
+    const host = await mount()
+    expect(host.textContent).not.toContain(WELCOME_LINE)
+    expect(host.querySelector('.ob-drop, .ob-actions')).toBeNull()
+    expect(host.querySelector('.tourline')).not.toBeNull()
+  })
+})
 
 describe('the way back to Welcome', () => {
   it('signed out, the header carries a Log in chip that opens the welcome screen; Not now returns to the tour', async () => {

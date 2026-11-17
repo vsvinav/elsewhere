@@ -1,6 +1,9 @@
 // Plain HTTPS calls to the account service. A 401 on an authenticated call means the session is gone; the device forgets it.
 import { settings } from '../ingest/settings'
+import { deleteKey } from './driveKey'
+import { driveToken } from './google'
 import { useAccount } from './store'
+import type { SyncBlob } from '../sync/wire'
 import type { VaultBody } from './vault'
 
 export interface AccountInfo { id: string; email: string; created: number; hasVault: boolean }
@@ -32,6 +35,11 @@ export interface AccountClient {
   putVault(body: VaultBody): Promise<void>
   getVault(): Promise<VaultBody | null>
   deleteMe(): Promise<void>
+  /** The sealed sync blobs: what is there, one of them, store one (409 → `stale`), or drop them all. */
+  listSync(): Promise<{ key: string; ts: number; size: number }[]>
+  getSync(key: string): Promise<SyncBlob | null>
+  putSync(key: string, blob: SyncBlob): Promise<void>
+  deleteSync(): Promise<void>
 }
 export interface ClientOpts { fetchFn?: typeof fetch; session?: () => string | null; onUnauthorized?: () => void }
 
@@ -67,6 +75,13 @@ export function accountClient(base: string, opts: ClientOpts = {}): AccountClien
       catch (e) { if (e instanceof AccountError && e.status === 404) return null; throw e }
     },
     deleteMe: async () => { await call('DELETE', '/me', undefined, true) },
+    listSync: async () => (await call('GET', '/sync', undefined, true)).json(),
+    getSync: async (key) => {
+      try { return await (await call('GET', `/sync/${encodeURIComponent(key)}`, undefined, true)).json() }
+      catch (e) { if (e instanceof AccountError && e.status === 404) return null; throw e }
+    },
+    putSync: async (key, blob) => { await call('PUT', `/sync/${encodeURIComponent(key)}`, blob, true) },
+    deleteSync: async () => { await call('DELETE', '/sync', undefined, true) },
   }
 }
 
@@ -82,8 +97,9 @@ export async function logOut(c: AccountClient = api()): Promise<void> {
   try { await c.logout() } catch { /* the session may already be gone; forgetting it locally is what matters */ }
   await useAccount.getState().signOut()
 }
-/** Delete the account on the service, then log out locally. */
-export async function deleteAccount(c: AccountClient = api()): Promise<void> {
+/** Delete the account on the service and, for a Google account, the sync key in Drive (best effort), then log out locally. */
+export async function deleteAccount(c: AccountClient = api(), drive: () => Promise<string> = driveToken): Promise<void> {
   await c.deleteMe()
+  if (useAccount.getState().driveKeyed) { try { await deleteKey(await drive()) } catch { /* the account is gone either way; the key alone opens nothing */ } }
   await useAccount.getState().signOut()
 }
