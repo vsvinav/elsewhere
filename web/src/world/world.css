@@ -492,7 +492,9 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
   .hud-where { border-left: 0; padding-left: 0; }
   .hud-controls { grid-column: 1 / span 2; }
   .hud-controls button:not(.play):not(.on) { display: none; }
-  .hud-scrub { height: 32px; min-height: 0; border-top: 3px solid var(--ink); }
+  .hud-scrub { height: 32px; min-height: 0; border-top: 3px solid var(--ink); overflow: hidden; }
+  .hud-scrub input::-webkit-slider-thumb { height: 32px; width: 10px; }
+  .hud-scrub input::-moz-range-thumb { height: 32px; width: 10px; }
   .hud-scrub .year { padding-top: 9px; font-size: 11px; }
 }
 /* On phones the range bar moves to the bottom; the HUDs sit on top of it (44px + 2px borders + 12px gap). */
