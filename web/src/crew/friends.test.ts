@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 
-import { DROP_MS, SEEN_HITS, STALE_MS, ageLabel, resetSeenHitsForTest, sonarHooks, useCrew, visibleFixes, type Friend, type Ping } from './friends'
+import { DROP_MS, SEEN_HITS, SHEET_QUIET_MS, SHEET_SEEN_LS, STALE_MS, ageLabel, resetSeenHitsForTest, resetSheetSeenForTest, sonarHooks, useCrew, visibleFixes, type Friend, type Ping } from './friends'
 import { deviceIdOf, fromHex, keysFromSeeds, pairIdOf, pairKeyOf, seal, setKeysForTest, toHex } from './keys'
 import vectors from './vectors.json'
 
@@ -16,11 +16,14 @@ const fromMarta = (m: unknown) => seal(key, pid, marta.deviceId, m)
 const NOW = Date.UTC(2025, 10, 15, 16, 0, 0)
 const ping = (p: Partial<Ping> = {}): Ping => ({ type: 'ping', t: Math.floor(NOW / 1000) - 60, grade: 'city', lat: 38.72, lng: -9.14, city: 'Lisbon', habitat: false, absenceDays: 212, hit: null, ...p })
 
+const ls = new Map<string, string>()
+vi.stubGlobal('localStorage', { getItem: (k: string) => ls.get(k) ?? null, setItem: (k: string, v: string) => ls.set(k, v), removeItem: (k: string) => ls.delete(k), clear: () => ls.clear() })
+
 beforeEach(async () => {
-  db.store.clear()
-  resetSeenHitsForTest()
+  db.store.clear(); ls.clear()
+  resetSeenHitsForTest(); resetSheetSeenForTest()
   setKeysForTest(A)
-  useCrew.setState({ loaded: false, friends: [], fixes: {}, hit: null, tag: null })
+  useCrew.setState({ loaded: false, friends: [], fixes: {}, hit: null, sheetHit: null, sheetQuiet: {}, tag: null })
   await useCrew.getState().load()
 })
 
@@ -110,6 +113,55 @@ describe('receive', () => {
     useCrew.getState().receive(fromMarta(ping({ t: Math.floor(NOW / 1000) - 50, grade: 'sonar', hit: { id: `${pid}:2`, t: 2 } })), NOW + 6000)
     expect(heard).toHaveBeenCalledTimes(1)
     expect(useCrew.getState().hit?.id).toBe(`${pid}:1`)
+  })
+})
+
+describe('sonar sheet slot', () => {
+  const sec = (ms: number) => Math.floor(ms / 1000)
+  it('a hit fills the sheet slot as well, carrying the rehearsal flag; clearing the map note leaves the sheet alone', () => {
+    sonarHooks.heard = vi.fn()
+    useCrew.setState({ friends: [marta] })
+    useCrew.getState().receive(fromMarta(ping({ grade: 'sonar', hit: { id: 'h1', t: 1, rehearsal: true } })), NOW)
+    expect(useCrew.getState().hit).toEqual({ pairId: pid, id: 'h1', at: NOW, rehearsal: true })
+    expect(useCrew.getState().sheetHit).toEqual({ pairId: pid, id: 'h1', at: NOW, rehearsal: true })
+    useCrew.getState().clearHit()
+    expect(useCrew.getState().hit).toBeNull()
+    expect(useCrew.getState().sheetHit?.id).toBe('h1')
+  })
+  it('a showing sheet is never swapped for a newer hit; the map note still moves on', () => {
+    sonarHooks.heard = vi.fn()
+    useCrew.setState({ friends: [marta] })
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) - 60, grade: 'sonar', hit: { id: 'h1', t: 1 } })), NOW)
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) - 50, grade: 'sonar', hit: { id: 'h2', t: 2 } })), NOW + 1000)
+    expect(useCrew.getState().hit?.id).toBe('h2')
+    expect(useCrew.getState().sheetHit?.id).toBe('h1')
+  })
+  it('Dismiss empties the slot, remembers the id across reloads, and keeps that friend quiet for five minutes', () => {
+    sonarHooks.heard = vi.fn()
+    useCrew.setState({ friends: [marta] })
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) - 60, grade: 'sonar', hit: { id: 'h1', t: 1 } })), NOW)
+    useCrew.getState().dismissSheet(NOW)
+    expect(useCrew.getState().sheetHit).toBeNull()
+    expect(JSON.parse(ls.get(SHEET_SEEN_LS)!)).toEqual(['h1'])
+    // Same id again after a reload: the ring guard is empty but the sheet still stays down.
+    resetSeenHitsForTest()
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) - 55, grade: 'sonar', hit: { id: 'h1', t: 1 } })), NOW + 1000)
+    expect(useCrew.getState().sheetHit).toBeNull()
+    // A fresh hit from the same friend inside the quiet window: note and ring, no sheet.
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) - 50, grade: 'sonar', hit: { id: 'h2', t: 2 } })), NOW + 2000)
+    expect(useCrew.getState().hit?.id).toBe('h2')
+    expect(useCrew.getState().sheetHit).toBeNull()
+    // Once the window passes the sheet may rise again.
+    useCrew.getState().receive(fromMarta(ping({ t: sec(NOW) + 310, grade: 'sonar', hit: { id: 'h3', t: 3 } })), NOW + SHEET_QUIET_MS + 1)
+    expect(useCrew.getState().sheetHit?.id).toBe('h3')
+  })
+  it('a test echo fills the slot too, and removing the friend empties it', async () => {
+    sonarHooks.heard = vi.fn()
+    useCrew.setState({ friends: [marta] })
+    useCrew.getState().receive(fromMarta({ type: 'ping', t: sec(NOW), grade: 'sonar', lat: null, lng: null, city: null, habitat: false, absenceDays: 0, hit: { id: 'ab12cd34', t: sec(NOW), test: true }, test: true }), NOW)
+    expect(useCrew.getState().sheetHit).toEqual({ pairId: pid, id: 'ab12cd34', at: NOW, test: true })
+    await useCrew.getState().remove(pid)
+    expect(useCrew.getState().sheetHit).toBeNull()
   })
 })
 

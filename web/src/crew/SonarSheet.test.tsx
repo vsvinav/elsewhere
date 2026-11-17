@@ -19,13 +19,13 @@ vi.mock('../ingest/db', () => ({
 }))
 
 import { SHEET_SEEN_LS, SNAP_TOGETHER, SonarSheet, resetSheetSeenForTest, sheetLine, sheetTitle } from './SonarSheet'
-import { useCrew, type Friend } from './friends'
+import { useCrew, type Friend, type Hit } from './friends'
 import { usePhotos } from '../photos/store'
-import { settings } from '../ingest/settings'
 
 const marta: Friend = { deviceId: 'dev-b', name: 'Marta', signPub: '00', kxPub: '00', pairId: 'pair-1', pairKey: '00', addedAt: 0, grants: { liveCity: true, livePrecise: false, sonar: true } }
 const t = Math.floor(Date.now() / 1000)
 const fix = { pairId: 'pair-1', t, lat: 38.7223, lng: -9.1393, city: 'Lisbon', grade: 'sonar' as const, at: Date.now() }
+const hitOf = (id: string, extra: Partial<Hit> = {}): Hit => ({ pairId: 'pair-1', id, at: Date.now(), ...extra })
 
 const roots: Root[] = []
 const mount = () => {
@@ -37,13 +37,13 @@ const mount = () => {
 const click = (el: Element) => act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 const flush = () => act(() => new Promise((r) => setTimeout(r, 0)))
 const sheet = () => screen.queryByRole('dialog', { name: 'Sonar' })
+const raise = (h: Hit) => act(() => useCrew.setState({ hit: h, sheetHit: h }))
 
 beforeEach(() => {
   mem.clear(); ls.clear(); resetSheetSeenForTest()
   document.body.innerHTML = ''
-  settings.set({ rehearsalUntil: 0 })
   usePhotos.setState({ photos: null })
-  useCrew.setState({ friends: [marta], fixes: { 'pair-1': fix }, hit: null, tag: null })
+  useCrew.setState({ friends: [marta], fixes: { 'pair-1': fix }, hit: null, sheetHit: null, sheetQuiet: {}, tag: null })
 })
 afterEach(() => { for (const r of roots.splice(0)) act(() => r.unmount()) })
 
@@ -54,51 +54,51 @@ describe('SonarSheet', () => {
     expect(sheetLine('Marta', true)).toBe('Rehearsal ping — Marta is within a mile.')
   })
 
-  it('rises over the app on a real hit, with the two actions, and not on a test ping', () => {
+  it('rises over the app from the sheet slot with the two actions, and for a test echo too', () => {
     mount()
     expect(sheet()).toBeNull()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h-test', at: Date.now(), test: true } }))
-    expect(sheet()).toBeNull()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h1', at: Date.now() } }))
+    raise(hitOf('h1'))
     const s = sheet()!
     expect(s.querySelector('h2')?.textContent).toBe('Marta is within a mile')
+    expect(s.querySelector('.rehearsal')).toBeNull()
     expect(s.textContent).toContain('Neither of you is usually here. Say hi?')
     expect(within(s).getByRole('button', { name: SNAP_TOGETHER })).toBeTruthy()
     expect(within(s).getByRole('button', { name: 'Dismiss' })).toBeTruthy()
-  })
-
-  it('under rehearsal the line says so', () => {
-    settings.set({ rehearsalUntil: Date.now() + 3600_000 })
-    mount()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h2', at: Date.now() } }))
-    expect(sheet()!.textContent).toContain('Rehearsal ping — Marta is within a mile.')
-  })
-
-  it('Dismiss puts the sheet away and remembers the hit, so the same id never shows again, even after a remount', () => {
-    mount()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h3', at: Date.now() } }))
-    click(within(sheet()!).getByRole('button', { name: 'Dismiss' }))
-    expect(sheet()).toBeNull()
-    expect(JSON.parse(ls.get(SHEET_SEEN_LS)!)).toEqual(['h3'])
-    // The note on the map keeps its own clock; dismissing the sheet does not clear the hit.
-    expect(useCrew.getState().hit?.id).toBe('h3')
-    for (const r of roots.splice(0)) act(() => r.unmount())
-    mount()
-    expect(sheet()).toBeNull()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h4', at: Date.now() } }))
+    act(() => useCrew.setState({ sheetHit: null }))
+    raise(hitOf('h-test', { test: true }))
     expect(sheet()!.querySelector('h2')?.textContent).toBe('Marta is within a mile')
   })
 
-  it('Snap a photo together opens the camera and files the photo under the friend\'s fix with the caption prefilled', async () => {
+  it('a rehearsal hit carries its own flag: the tag sits by the title and the line says so', () => {
+    mount()
+    raise(hitOf('h2', { rehearsal: true }))
+    const s = sheet()!
+    expect(s.querySelector('h2 .rehearsal')?.textContent).toBe('REHEARSAL')
+    expect(s.textContent).toContain('Rehearsal ping — Marta is within a mile.')
+  })
+
+  it('the sheet is not tied to the map note: clearing the hit leaves it up, Dismiss puts it away and remembers the id', () => {
+    mount()
+    raise(hitOf('h3'))
+    act(() => useCrew.getState().clearHit())
+    expect(sheet()).not.toBeNull()
+    click(within(sheet()!).getByRole('button', { name: 'Dismiss' }))
+    expect(sheet()).toBeNull()
+    expect(useCrew.getState().sheetHit).toBeNull()
+    expect(JSON.parse(ls.get(SHEET_SEEN_LS)!)).toEqual(['h3'])
+  })
+
+  it('Snap a photo together opens the camera, files the photo under the hit at the friend\'s fix with the caption prefilled, and the sheet waits for Dismiss', async () => {
     ls.set('photos:privacy', '1')
     const host = mount()
-    act(() => useCrew.setState({ hit: { pairId: 'pair-1', id: 'h5', at: Date.now() } }))
+    raise(hitOf('h5'))
     const s = sheet()!
     const input = host.querySelector<HTMLInputElement>('input[type=file]') ?? document.body.querySelector<HTMLInputElement>('input[type=file]')!
     const picker = vi.spyOn(input, 'click').mockImplementation(() => {})
     click(within(s).getByRole('button', { name: SNAP_TOGETHER }))
     expect(picker).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(ls.get(SHEET_SEEN_LS)!)).toEqual(['h5'])
+    // The map note timing out mid-photo must not pull the camera away.
+    act(() => useCrew.getState().clearHit())
     const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], 'shot.jpg', { type: 'image/jpeg' })
     Object.defineProperty(input, 'files', { value: [file], configurable: true })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)) })
@@ -106,10 +106,10 @@ describe('SonarSheet', () => {
     const modal = screen.getByRole('dialog', { name: 'Your photo' })
     expect(modal.querySelector<HTMLInputElement>('.snap-caption input')!.value).toBe('with Marta')
     const photo = usePhotos.getState().photos![0]
-    expect(photo).toMatchObject({ caption: 'with Marta', city: 'Lisbon', lat: fix.lat, lng: fix.lng, placeId: 'crew:pair-1' })
+    expect(photo).toMatchObject({ caption: 'with Marta', city: 'Lisbon', lat: fix.lat, lng: fix.lng, placeId: 'sonar:h5' })
     expect(modal.querySelector('.photo-card .name')!.textContent).toBe('Lisbon')
-    // The sheet held still for the camera; Dismiss puts it away.
     click(within(modal).getByText('Done'))
+    expect(sheet()).not.toBeNull()
     click(within(sheet()!).getByRole('button', { name: 'Dismiss' }))
     expect(sheet()).toBeNull()
   })

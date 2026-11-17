@@ -72,7 +72,7 @@ beforeEach(async () => {
   await kv.set(ACCOUNT_KV.welcomed, true); await kv.del(ACCOUNT_KV.session)
   profile.set({ name: 'V', units: 'km', homes: [{ lat: 48.85, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] })
   useStore.setState({ tab: 'home', settingsOpen: false })
-  useCrew.setState({ friends: [], fixes: {}, hit: null })
+  useCrew.setState({ friends: [], fixes: {}, hit: null, sheetHit: null })
   // A developer's .env.local may carry a Maps key; the key gate must not stand in for the tour here.
   settings.set({ mapsKey: '', keyOk: null, mapsOk: null })
   resetAccountForTest()
@@ -209,7 +209,7 @@ describe('Crew tab', () => {
     const marta: Friend = { deviceId: 'd', name: 'Marta', signPub: '00', kxPub: '00', pairId: 'p1', pairKey: '00', addedAt: 0, grants: { liveCity: true, livePrecise: false, sonar: true } }
     await mount()
     const t = Math.floor(Date.now() / 1000)
-    await act(async () => useCrew.setState({ friends: [marta], fixes: { p1: { pairId: 'p1', t, lat: 48.85, lng: 2.35, city: 'Paris', grade: 'sonar', at: Date.now() } }, hit: { pairId: 'p1', id: `app:${Date.now()}`, at: Date.now() } }))
+    await act(async () => useCrew.setState({ friends: [marta], fixes: { p1: { pairId: 'p1', t, lat: 48.85, lng: 2.35, city: 'Paris', grade: 'sonar', at: Date.now() } }, sheetHit: { pairId: 'p1', id: `app:${Date.now()}`, at: Date.now() } }))
     const sheet = document.querySelector('[role=dialog][aria-label=Sonar]')!
     expect(sheet.querySelector('h2')?.textContent).toBe('Marta is within a mile')
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent)).toEqual([SNAP_TOGETHER, 'Dismiss'])
