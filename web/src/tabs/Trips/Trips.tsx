@@ -7,7 +7,8 @@ import { Beds } from '../../world/figures/Figures'
 import { placeName } from '../../analytics/home'
 import { Barcode, CountUp, Field, Pass, PrintIn } from '../../world'
 import { TripMap } from '../../world/TripMap'
-import { date, label, n0 } from '../../world/fmt'
+import { date, n0 } from '../../world/fmt'
+import { kmByLabel } from '../../data/modes'
 import { useUnits } from '../../profile/units'
 import { PlaceRow } from '../../world/PlaceRow'
 import { tripId } from '../../analytics/doors'
@@ -63,7 +64,7 @@ export function Trips() {
         const id = tripId(t)
         const card = byId.get(id)!
         const isOpen = open === id
-        const km = Object.entries(t.total_km_by_mode).sort((a, b) => b[1] - a[1])
+        const km = kmByLabel(t.total_km_by_mode)
         const total = card.km
         const dest = t.anchor_cities.slice(0, 3)
         const strip = () => bedStrip(raw, [t.start, t.end])
@@ -93,7 +94,7 @@ export function Trips() {
                     <Beds nights={strip()} className="trip" />
                     <div className="bars">
                       {km.slice(0, 4).map(([m, v], j) => (
-                        <div className="bar" key={m}><span className="lab">{label(m)}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(cv(v))} {u}</span></div>
+                        <div className="bar" key={m}><span className="lab">{m}</span><span className="track"><i className={j === 0 ? 'orange' : j === 1 ? 'blue' : ''} style={{ width: `${(100 * v) / km[0][1]}%` }} /></span><span className="num">{n0(cv(v))} {u}</span></div>
                       ))}
                     </div>
                     <ol className="plist">

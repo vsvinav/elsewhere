@@ -70,6 +70,14 @@ test('facts: fires on a small record, converts to miles, and stays silent on an 
   expect(facts({ ...data, visits: [], activities: [], places: {} } as Data, 'km')).toEqual([])
 })
 
+test('facts: the fastest leg names its mode, or says road when the mode is not one we name', () => {
+  const leg = (mode: string) => ({ start: JAN + 12 * H, end: JAN + 13 * H, mode, m: 100_000, s_lat: 42.36, s_lng: -71.06, e_lat: 43.0, e_lng: -71.06, tz: 0, id: 0, p: 1 })
+  const fastest = (mode: string) => facts({ ...data, activities: [...data.activities, leg(mode)] }).find((f) => f.id === 'fastest')!.detail
+  expect(fastest('IN_TRAIN')).toContain('by train.')
+  expect(fastest('IN_VEHICLE')).toContain('by road.')
+  expect(fastest('IN_VEHICLE')).not.toContain('other')
+})
+
 test('facts: a cut range only counts what happened inside it, but keeps firsts from the whole record', () => {
   const cut = filterData(data, [JAN + 7 * D, JAN + 10 * D])
   const f = facts(cut, 'km', data)

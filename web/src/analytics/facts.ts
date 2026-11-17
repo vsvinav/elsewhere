@@ -1,4 +1,5 @@
 import type { Data, Visit } from '../data/types'
+import { modeLabel } from '../data/modes'
 import type { Door } from '../store/useStore'
 import { bedStrip, longestRun, type Night } from './beds'
 import { dateRange, dayRange, monthRange, onePerCountry, placesInCity } from './doors'
@@ -119,7 +120,7 @@ const GEN: ((c: Ctx) => Draft | null)[] = [
     }
     if (best.kmh < 60) return null
     const v = u === 'mi' ? best.kmh * MI : best.kmh
-    return { id: 'fastest', door: { kind: 'range', from: best.ts, to: best.end }, kind: 'record', headline: `${n0(v)} ${u === 'mi' ? 'mph' : 'km/h'} door to door`, detail: `Your quickest leg over land, ${longTs(best.ts)}, by ${best.mode.replace(/^IN_/, '').replace(/_/g, ' ').toLowerCase()}. Averaged over the whole leg, stops included.` }
+    return { id: 'fastest', door: { kind: 'range', from: best.ts, to: best.end }, kind: 'record', headline: `${n0(v)} ${u === 'mi' ? 'mph' : 'km/h'} door to door`, detail: `Your quickest leg over land, ${longTs(best.ts)}, by ${modeLabel(best.mode) === 'Other' ? 'road' : modeLabel(best.mode).toLowerCase()}. Averaged over the whole leg, stops included.` }
   },
   // Earliest departure from home
   ({ d }) => {
