@@ -8,6 +8,7 @@ import { nextMidnight, useCrew, type Friend, type Grants } from './friends'
 import { fingerprint, fromHex, loadKeys, type DeviceKeys } from './keys'
 import { KeyError, POLL_MS, claim, friendOf, offer, poll, type Proposal } from './pairing'
 import { RelayError, relayClient, type RelayClient } from './relay'
+import { rehearsalOn } from '../sonar/rehearsal'
 import './crew.css'
 
 export const EMPTY_RELAY = 'Set a relay in Settings to pair.'
@@ -34,7 +35,9 @@ const countWord = (n: number) => (n === 0 ? 'no friends yet' : n === 1 ? '1 frie
 const dateOf = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 
 export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof fetch; pollMs?: number }) {
-  const { relayUrl } = useSettings()
+  const st = useSettings()
+  const { relayUrl } = st
+  const rehearsing = rehearsalOn(st, Date.now())
   const friends = useCrew((s) => s.friends)
   const [keys, setKeys] = useState<DeviceKeys | null>(null)
   const [proposal, setProposal] = useState<Proposal | null>(null)
@@ -44,7 +47,7 @@ export function Crew({ fetchFn = fetch, pollMs = POLL_MS }: { fetchFn?: typeof f
   const accept = async () => { if (!keys || !proposal) return; await useCrew.getState().add(friendOf(keys, proposal)); setProposal(null) }
   return (
     <main className="strip crew">
-      <div className="caps crew-head">CREW · {countWord(friends.length)}</div>
+      <div className="caps crew-head">CREW · {countWord(friends.length)}{rehearsing && <span className="rehearsal">REHEARSAL</span>}</div>
       <h1>CREW</h1>
       <p className="fine lede">People who can see where you are. Each card shows exactly what that person gets. {VIEWER_NOTE}</p>
       {relayUrl ? (client && keys ? <PairBill client={client} keys={keys} pollMs={pollMs} onProposal={setProposal} /> : null) : <p className="fine crew-status">{EMPTY_RELAY}</p>}

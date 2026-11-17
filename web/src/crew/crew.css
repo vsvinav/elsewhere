@@ -2,6 +2,7 @@
 .crew { display: grid; gap: 28px; }
 .crew .crew-head { color: var(--ink-3); }
 .crew .crew-head b { color: var(--red); }
+.crew .crew-head .rehearsal { display: inline-block; margin-left: 12px; padding: 4px 7px 3px; background: var(--red); color: var(--stock); font: 800 11px/1 var(--body); letter-spacing: 0.18em; vertical-align: 1px; }
 .crew h1 { margin: -16px 0 0; font: 900 clamp(64px, 11vw, 160px)/0.82 var(--display); text-transform: uppercase; letter-spacing: -0.01em; }
 .crew .lede { margin: 0; max-width: 62ch; color: var(--ink-2); font-size: 15px; }
 .crew .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

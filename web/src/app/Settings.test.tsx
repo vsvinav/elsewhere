@@ -24,7 +24,8 @@ import { RecordContext, type Record_ } from './App'
 import { settings } from '../ingest/settings'
 import { profile } from '../profile/profile'
 import { resetAccountForTest, useAccount } from '../account/store'
-import { ACCOUNT, SYNC } from './Settings'
+import { ACCOUNT, REHEARSAL, SYNC } from './Settings'
+import { REHEARSAL_MS, rehearsalOn } from '../sonar/rehearsal'
 import { resetSyncForTest, useSync } from '../sync/store'
 import { deriveKey, encryptVault, openVault, type VaultBody } from '../account/vault'
 
@@ -45,7 +46,7 @@ const setValue = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
 const okFetch = (async () => Response.json({ choices: [{ message: { content: 'OK' } }] })) as unknown as typeof fetch
 
 beforeEach(() => {
-  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://elsewhere-relay.vinav.workers.dev' })
+  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://elsewhere-relay.vinav.workers.dev', rehearsalUntil: 0 })
   profile.set({ name: 'V', units: 'km', homes: [], works: [] })
   resetAccountForTest()
   resetSyncForTest()
@@ -133,6 +134,32 @@ describe('Settings', () => {
     unmount()
   })
 
+  it('the Sonar rehearsal switch keeps rehearsalUntil a day out, prints its help line, and clears on the way off', () => {
+    const { host, unmount } = mount()
+    const el = input(host, 'st-rehearsal')!
+    expect(el.type).toBe('checkbox')
+    expect(host.querySelector('label[for=st-rehearsal]')?.textContent).toBe(REHEARSAL.label)
+    expect(host.textContent).toContain(REHEARSAL.help)
+    expect(el.checked).toBe(false)
+    const before = Date.now()
+    act(() => el.click())
+    const until = settings.get().rehearsalUntil
+    expect(until).toBeGreaterThanOrEqual(before + REHEARSAL_MS)
+    expect(until).toBeLessThan(before + REHEARSAL_MS + 5000)
+    expect(input(host, 'st-rehearsal')!.checked).toBe(true)
+    expect(rehearsalOn(settings.get(), Date.now())).toBe(true)
+    act(() => input(host, 'st-rehearsal')!.click())
+    expect(settings.get().rehearsalUntil).toBe(0)
+    expect(input(host, 'st-rehearsal')!.checked).toBe(false)
+    unmount()
+  })
+  it('a rehearsal that ran past its day reads as off', () => {
+    settings.set({ rehearsalUntil: Date.now() - 1 })
+    const { host, unmount } = mount()
+    expect(input(host, 'st-rehearsal')!.checked).toBe(false)
+    expect(rehearsalOn(settings.get(), Date.now())).toBe(false)
+    unmount()
+  })
   it('Account service URL edits land in settings and fall back to the default when cleared', () => {
     const { host, unmount } = mount()
     const el = input(host, 'st-account')!

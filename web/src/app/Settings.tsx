@@ -14,6 +14,7 @@ import { useSync } from '../sync/store'
 import { KeyCheck } from '../profile/KeyCheck'
 import { ImportButton } from '../profile/Viewer'
 import { useStore } from '../store/useStore'
+import { rehearsalDeadline, rehearsalOn } from '../sonar/rehearsal'
 import { UsageRow } from '../usage/Meter'
 import { Field } from '../world'
 import './settings.css'
@@ -21,6 +22,7 @@ import './settings.css'
 export const SETTINGS_TITLE = 'SETTINGS'
 export const SECTION = { maps: 'GOOGLE MAPS', ask: 'ASK ELSEWHERE', crew: 'CREW', account: 'ACCOUNT', sync: 'SYNC', units: 'UNITS', data: 'DATA' } as const
 export const RELAY_CAPTION = 'Friends pair and share through this relay. It holds only device ids and encrypted pings; leave it empty to turn Crew off.'
+export const REHEARSAL = { label: 'Sonar rehearsal', help: 'Pings fire whenever a friend is within a mile — even at home. Turns itself off after a day.' } as const
 export const ACCOUNT = {
   signIn: 'Log in or sign up',
   signedOut: 'An account keeps a sealed copy of your profile and identity, so a new device can pick up where this one left off.',
@@ -165,9 +167,10 @@ function AskSection({ fetchFn }: { fetchFn: typeof fetch }) {
 }
 
 function CrewSection() {
-  const { relayUrl } = useSettings()
-  const [url, setUrl] = useState(relayUrl)
+  const st = useSettings()
+  const [url, setUrl] = useState(st.relayUrl)
   const save = () => settings.set({ relayUrl: url.trim().replace(/\/+$/, '') })
+  const rehearsing = rehearsalOn(st, Date.now())
   return (
     <section className="setting">
       <h2>{SECTION.crew}</h2>
@@ -178,6 +181,11 @@ function CrewSection() {
         </div>
       </div>
       <p className="fine">{RELAY_CAPTION}</p>
+      <div className={`st-switch${rehearsing ? ' on' : ''}`}>
+        <input id="st-rehearsal" type="checkbox" role="switch" checked={rehearsing} onChange={(e) => settings.set({ rehearsalUntil: e.target.checked ? rehearsalDeadline(Date.now()) : 0 })} />
+        <label htmlFor="st-rehearsal"><span className="toggle" aria-hidden="true" />{REHEARSAL.label}</label>
+      </div>
+      <p className="fine">{REHEARSAL.help}</p>
     </section>
   )
 }

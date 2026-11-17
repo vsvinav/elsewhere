@@ -55,7 +55,7 @@ const setValue = (el: HTMLInputElement, value: string) => {
 beforeEach(async () => {
   db.store.clear()
   setKeysForTest(A)
-  settings.set({ relayUrl: 'https://relay.test' })
+  settings.set({ relayUrl: 'https://relay.test', rehearsalUntil: 0 })
   profile.set({ name: 'Ana', units: 'km', homes: [], works: [] })
   useStore.setState({ tab: 'crew' })
   useCrew.setState({ loaded: false, friends: [], fixes: {}, hit: null, tag: null })
@@ -125,6 +125,17 @@ describe('Crew', () => {
     expect(third.host.querySelector('.code')!.textContent).not.toBe(minted)
     third.unmount()
     expect(calls.filter((c) => c.method === 'POST').map((c) => c.path.slice(-11))).toEqual([shown, minted, expect.not.stringMatching(minted)])
+  })
+  it('wears a red REHEARSAL tag in the header while the rehearsal is on', async () => {
+    const { fetchFn } = fakeRelay({ 'POST /pair/.*': () => new Response('created', { status: 201 }), 'GET /pair/.*': () => new Response(null, { status: 204 }) })
+    const { host, flush, unmount } = mount(fetchFn)
+    await flush()
+    expect(host.querySelector('.crew-head .rehearsal')).toBeNull()
+    act(() => settings.set({ rehearsalUntil: Date.now() + 3600_000 }))
+    expect(host.querySelector('.crew-head .rehearsal')?.textContent).toBe('REHEARSAL')
+    act(() => settings.set({ rehearsalUntil: 0 }))
+    expect(host.querySelector('.crew-head .rehearsal')).toBeNull()
+    unmount()
   })
   it('without a relay it only says where to set one', async () => {
     settings.set({ relayUrl: '' })
