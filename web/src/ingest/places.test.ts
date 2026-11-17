@@ -8,7 +8,7 @@ vi.mock('../usage/usage', () => ({ tally: () => { usage.details++ } }))
 const st = vi.hoisted(() => ({ keyOk: null as boolean | null }))
 vi.mock('./settings', () => ({ settings: { get: () => ({ mapsKey: 'k', keyOk: st.keyOk }) } }))
 
-import { apply, clusterName, lookup, need, onError, properName, reset, setKey, snapshot, subscribe } from './places'
+import { apply, clusterName, isResolved, lookup, need, onError, properName, reset, setKey, snapshot, subscribe } from './places'
 import type { Place } from '../data/types'
 
 const place = (id: string, n = 2, extra: Partial<Place> = {}): Place => ({ place_id: id, lat: 0, lng: 0, name: null, address: null, types: [], primary_type: null, photo: null, n_visits: n, role: null, label: null, ...extra } as unknown as Place)
@@ -92,6 +92,21 @@ describe('need', () => {
     need(['z'], { z: place('z') })
     await settle()
     expect(calls).toBeLessThanOrEqual(4)
+  })
+})
+
+describe('isResolved', () => {
+  it('is true once cached, when there is no usable key, or for a place need would skip', () => {
+    setKey('k')
+    expect(isResolved('a', place('a'), {})).toBe(false)
+    expect(isResolved('a', place('a'), { a: { name: null, address: null, types: [], primary_type: null, photo: null } })).toBe(true)
+    expect(isResolved('home', place('home', 9, { role: 'home' }), {})).toBe(true)
+    expect(isResolved('n', place('n', 2, { name: 'Cafe', photo: 'p' }), {})).toBe(true)
+    st.keyOk = false
+    expect(isResolved('a', place('a'), {})).toBe(true)
+    st.keyOk = null
+    setKey('')
+    expect(isResolved('a', place('a'), {})).toBe(true)
   })
 })
 
