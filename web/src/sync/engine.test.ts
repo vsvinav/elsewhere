@@ -17,7 +17,8 @@ vi.mock('../account/driveKey', () => ({
 import { AccountError, type AccountClient } from '../account/client'
 import { resetAccountForTest, useAccount } from '../account/store'
 import type { Data, Visit } from '../data/types'
-import { withSyncedStays } from '../ingest'
+import { emptyRecord, parsedFromData, withSyncedStays } from '../ingest'
+import { buildData } from '../ingest/derive'
 import type { Parsed } from '../ingest/parse'
 import { profile } from '../profile/profile'
 import { localChunks, loadSyncStatus, profileFromWire, profileToWire, pull, push, startFresh, syncNow } from './engine'
@@ -85,6 +86,19 @@ describe('pulled stays in the record', () => {
     expect(twice.visits[1]).toMatchObject({ type: 'SYNC', place_id: `sync:${stay.id}`, lat: 1, lng: 2 })
     expect(twice.frequent_places).toEqual([{ place_id: `sync:${stay.id}`, lat: 1, lng: 2, label: 'Rome' }])
     expect(localChunks(data(twice.visits as Visit[])).get(`${SRC}:1970-01`)!.stays).toHaveLength(2)
+  })
+})
+
+describe('a record from pulled stays alone', () => {
+  it('derives from the empty base and pushes nothing of its own', async () => {
+    const stay = { id: 'a'.repeat(64), lat: 48.86, lng: 2.35, name: 'Café', start: 1700000000, end: 1700003600 }
+    await upsertSyncedStays([stay])
+    const base = emptyRecord()
+    const d = buildData(await withSyncedStays(parsedFromData(base)), { lat: [48.86], lng: [2.35], name: ['Paris'], cc: ['FR'] }, { file: base.meta.source_file, sha256: base.meta.source_sha256 }, { name: null, units: 'km', homes: [{ lat: 48.86, lng: 2.35, city: 'Paris', cc: 'FR', from: 0, to: null }], works: [] })
+    expect(d.visits).toHaveLength(1)
+    expect(d.places[`sync:${stay.id}`]).toMatchObject({ label: 'Café', city: 'Paris' })
+    expect(d.meta.range).toEqual([stay.start, stay.end])
+    expect(localChunks(d).size).toBe(0)
   })
 })
 

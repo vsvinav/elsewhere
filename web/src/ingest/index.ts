@@ -1,6 +1,6 @@
 import type { Data, Path } from '../data/types'
 import type { Profile } from '../profile/profile'
-import { isSyncVisit, loadSyncedStays, SYNC_PLACE, toPVisit } from '../sync/local'
+import { hasSyncedStays, isSyncVisit, loadSyncedStays, SYNC_KV, SYNC_PLACE, toPVisit } from '../sync/local'
 import { kv } from './db'
 import { usePhotos } from '../photos/store'
 import type { Parsed } from './parse'
@@ -57,10 +57,26 @@ export async function rederive(current: Data, profile: Profile, onStage: (stage:
   return data
 }
 
+/** The record a device gets from sync alone, before any import: nothing of its own, under this source name. */
+export const SYNC_SOURCE = 'sync'
+export const emptyRecord = (): Data => ({
+  visits: [], activities: [], strokes: [], paths: [], places: {}, daily: [], trips: [],
+  profile: { home: { lat: 0, lng: 0 }, frequent_places: [], frequent_trips: [], persona: null },
+  meta: { source_file: SYNC_SOURCE, source_sha256: SYNC_SOURCE, built_at: 0, range: [0, 0], import_report: { segments_total: 0, parsed: 0, skipped_by_reason: {} } },
+})
+/** With nothing imported here, the pulled stays are the record: derived from an empty base and kept like an import. Null when there are none. */
+export async function recordFromSyncedStays(profile: Profile, onStage: (stage: string) => void): Promise<Data | null> {
+  if (!(await hasSyncedStays().catch(() => false))) return null
+  const base = emptyRecord()
+  const data = await rederive(base, profile, onStage)
+  await saveRecord(data, parsedFromData(base))
+  return data
+}
+
 export async function saveRecord(data: Data, parsed: Parsed): Promise<void> {
   const { paths, ...rest } = data
   await kv.setAll([['record', { ...rest, paths: [] }], ['paths', paths], ['parsed', parsed]])
 }
 export const loadRecord = () => kv.get<Data>('record')
 export const loadRecordPaths = async () => (await kv.get<Path[]>('paths')) ?? []
-export const clearRecord = async () => { await kv.del('record'); await kv.del('paths'); await kv.del('parsed'); await kv.del('places'); await usePhotos.getState().clear() }
+export const clearRecord = async () => { await kv.del('record'); await kv.del('paths'); await kv.del('parsed'); await kv.del('places'); await kv.del(SYNC_KV.stays); await kv.del(SYNC_KV.remote); await usePhotos.getState().clear() }

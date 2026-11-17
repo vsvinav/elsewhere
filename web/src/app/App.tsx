@@ -2,7 +2,7 @@ import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useM
 import { DataContext } from '../data/DataContext'
 import { DataLoadError, loadData, loadPaths } from '../data/load'
 import type { Data } from '../data/types'
-import { clearRecord, ingestFile, loadRecord, rederive } from '../ingest'
+import { clearRecord, ingestFile, loadRecord, recordFromSyncedStays, rederive } from '../ingest'
 import { UsageRow } from '../usage/Meter'
 import { Onboarding } from '../profile/Onboarding'
 import { Viewer } from '../profile/Viewer'
@@ -72,15 +72,26 @@ export function App() {
   const syncReady = acct.loaded && !!acct.session && acct.driveKeyed
   useEffect(() => { if (!acct.loaded) return; void loadSyncStatus().then(() => { if (syncReady) return syncNow() }) }, [acct.loaded, syncReady])
   const staysVersion = useSync((s) => s.staysVersion)
+  const syncing = useSync((s) => s.status.kind === 'syncing')
   const authDone = (r: AuthResult) => { setAuth(null); const a = useAccount.getState(); void a.setWelcomed(true); a.setShowWelcome(false); if (r.restored) setNeedImport(true) }
   const showWelcome = (v: boolean) => useAccount.getState().setShowWelcome(v)
   const adopt = useCallback((d: Data, isMine: boolean) => { useStore.getState().setPlayhead(d.meta.range[0]); useStore.getState().setRange(null); setMine(isMine); setRecord(d) }, [])
   useEffect(() => {
     loadData().then(async (d) => adopt(d, !!(await loadRecord().catch(() => undefined)))).catch((e) => (e instanceof DataLoadError ? setNoDemo(true) : setError(e)))
   }, [adopt])
+  // Nothing imported here but stays pulled from other devices: they are the record, and this device counts as having one.
+  const derivedStays = useRef(0)
+  const settled = !!record || noDemo
+  useEffect(() => {
+    if (mine || !prof || !settled) return
+    let live = true
+    const onStage = (s: string) => { setStage(s); setReady(readyFor(s, 'rederive')) }
+    recordFromSyncedStays(prof, onStage).then((d) => { if (!live) return; setStage(null); if (d) { derivedStays.current = useSync.getState().staysVersion; adopt(d, true) } }).catch((e) => { if (live) { setStage(null); setReady(null); setImportError(e) } })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, !!prof, settled, staysVersion])
   // The record follows the profile: when home or work moves, trips and days are worked out again.
   const homesKey = JSON.stringify([prof?.homes ?? null, prof?.works ?? null])
-  const derivedStays = useRef(0)
   useEffect(() => {
     if (!record || !prof) return
     if (staysVersion === derivedStays.current && JSON.stringify([record.profile.homes ?? null, record.profile.works ?? null]) === homesKey) return
@@ -140,6 +151,8 @@ export function App() {
   if (door === 'auth' && auth) return <AuthFlow key={auth.mode + (auth.token ?? '')} mode={auth.mode} token={auth.token} current={acct.session?.email} onDone={authDone} onClose={() => setAuth(null)} />
   if (door === 'welcome') return <Welcome onSignUp={() => setAuth({ mode: 'signup' })} onLogIn={() => setAuth({ mode: 'login' })} onContinue={() => showWelcome(false)} />
   // The web cannot record: with nothing bundled and nothing imported, point at the phone or take an export.
+  // A pull in flight on a device with no record of its own: the record may be about to arrive.
+  if (!mine && syncing && (needImport || !record)) return <div className="tray">{bar}<Printing /></div>
   if (!record && noDemo) return <>{bar}<Viewer stage={stage} importError={importError} importFile={ctx.importFile} /></>
   if (!record) return <div className="tray">{bar}<Printing /></div>
   // A profile just restored from the vault, with only the demo record here: the front door, open at the import step.

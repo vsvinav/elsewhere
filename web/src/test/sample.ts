@@ -52,10 +52,10 @@ export function sampleTimeline(): string {
   return JSON.stringify({ semanticSegments: segs })
 }
 
-const cities: Cities = { lat: [37.34, 42.36, 48.86, 36.6], lng: [-121.89, -71.06, 2.35, -121.89], name: ['San Jose', 'Boston', 'Paris', 'Monterey'], cc: ['US', 'US', 'FR', 'US'] }
+export const sampleCities: Cities = { lat: [37.34, 42.36, 48.86, 36.6], lng: [-121.89, -71.06, 2.35, -121.89], name: ['San Jose', 'Boston', 'Paris', 'Monterey'], cc: ['US', 'US', 'FR', 'US'] }
 const profile: Profile = { name: 'Sam', units: 'km', homes: [{ ...HOME, city: 'San Jose', cc: 'US', from: 0, to: null }], works: [{ ...WORK, place_id: 'work', from: 0, to: null }] }
 
 /** A full `Data` built through the real import pipeline from `sampleTimeline()`. */
 export function sampleData(): Data {
-  return buildData(parseTimeline(sampleTimeline()), cities, { file: 'sample.json', sha256: 'sample' }, profile)
+  return buildData(parseTimeline(sampleTimeline()), sampleCities, { file: 'sample.json', sha256: 'sample' }, profile)
 }
