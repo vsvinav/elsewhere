@@ -4,7 +4,7 @@ import { settings } from '../ingest/settings'
 import { migrate, profile } from '../profile/profile'
 import { Stamp } from '../world'
 import { AccountError, api, logOut, messageOf, type AccountClient, type AccountInfo } from './client'
-import { clientId, signIn } from './google'
+import { clientId, signIn, warm } from './google'
 import { useAccount } from './store'
 import { markUploaded } from './sync'
 import { deriveKey, newSalt, openVault, passphraseProblem, PASSPHRASE_MIN } from './vault'
@@ -140,6 +140,7 @@ export function AuthFlow({ mode, token, onDone, onClose, current, client, derive
     c.peek(token).then((r) => setLinkEmail(r.email), (err) => { setError(messageOf(err)); setStep('email') }).finally(() => setBusy(''))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => { if (google === signIn) warm() }, [google])
   const linkYes = async () => {
     if (!token) return
     if (current) { setBusy(COPY.finishing); await logOut(c) }

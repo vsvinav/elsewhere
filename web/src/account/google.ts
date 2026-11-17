@@ -41,6 +41,11 @@ function googleButton(g: GoogleIdentity): HTMLElement | null {
   return hidden.querySelector<HTMLElement>('div[role=button]')
 }
 
+/** Fetches the script and draws the hidden button ahead of the tap, so the forwarded click still counts as a gesture. */
+export function warm(): void {
+  load().then(googleButton).catch(() => {})
+}
+
 /** Asks Google who this is; resolves with an ID token for the account service, rejects when no credential comes back. */
 export async function signIn(): Promise<{ idToken: string }> {
   const g = await load()
