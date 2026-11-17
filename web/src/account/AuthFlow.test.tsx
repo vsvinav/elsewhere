@@ -58,7 +58,7 @@ const text = (host: HTMLElement, sel: string) => host.querySelector(sel)?.textCo
 const digit = (host: HTMLElement, i: number) => host.querySelector<HTMLInputElement>(`[aria-label="Digit ${i}"]`)!
 
 afterEach(() => { delete (window as { google?: unknown }).google; vi.unstubAllEnvs() })
-beforeEach(() => { db.store.clear(); resetAccountForTest(); profile.set(null); setKeysForTest(undefined); document.body.innerHTML = ''; settings.set({ relayUrl: 'https://relay.elsewhere.app' }) })
+beforeEach(() => { db.store.clear(); resetAccountForTest(); profile.set(null); setKeysForTest(undefined); document.body.innerHTML = ''; settings.set({ relayUrl: 'https://elsewhere-relay.vinav.workers.dev' }) })
 
 describe('AuthFlow', () => {
   it('offers Continue with Google above the email field when a client ID is set, and not otherwise', async () => {

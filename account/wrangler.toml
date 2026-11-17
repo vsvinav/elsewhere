@@ -8,11 +8,11 @@ compatibility_flags = ["nodejs_compat"]
 
 # The web and Android OAuth client IDs from Google Cloud Console, comma-separated. No client secret is needed.
 [vars]
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "1055778589174-rffhd48tslir3haamis71o6djdibdl68.apps.googleusercontent.com"
 
 [[kv_namespaces]]
 binding = "ACCOUNTS"
-id = "replace-me"
+id = "9b618aa442fe4b49821698d5bf49a229"
 
 [[durable_objects.bindings]]
 name = "LIMITER"

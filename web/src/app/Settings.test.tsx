@@ -43,7 +43,7 @@ const setValue = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
 const okFetch = (async () => Response.json({ choices: [{ message: { content: 'OK' } }] })) as unknown as typeof fetch
 
 beforeEach(() => {
-  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://relay.elsewhere.app' })
+  settings.set({ mapsKey: '', mapId: '', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: { provider: 'openai', key: '', model: '', baseUrl: '' }, relayUrl: 'https://elsewhere-relay.vinav.workers.dev' })
   profile.set({ name: 'V', units: 'km', homes: [], works: [] })
   resetAccountForTest()
   document.body.innerHTML = ''
@@ -65,7 +65,7 @@ describe('Settings', () => {
   it('Relay URL edits land in settings', () => {
     const { host, unmount } = mount()
     const el = input(host, 'st-relay')!
-    expect(el.value).toBe('https://relay.elsewhere.app')
+    expect(el.value).toBe('https://elsewhere-relay.vinav.workers.dev')
     act(() => { el.focus(); setValue(el, ' https://relay.example.org/ '); el.blur() })
     expect(settings.get().relayUrl).toBe('https://relay.example.org')
     unmount()
@@ -77,7 +77,7 @@ describe('Settings', () => {
     act(() => { el.focus(); setValue(el, ' https://acct.example.org/ '); el.blur() })
     expect(settings.get().accountUrl).toBe('https://acct.example.org')
     act(() => { el.focus(); setValue(el, ''); el.blur() })
-    expect(settings.get().accountUrl).toBe('https://account.elsewhere.app')
+    expect(settings.get().accountUrl).toBe('https://elsewhere-account.vinav.workers.dev')
     unmount()
   })
 

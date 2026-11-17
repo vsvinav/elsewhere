@@ -26,7 +26,7 @@ describe('vault format', () => {
     await expect(decryptVault(key, { v: 1, salt: vectors.salt, iv: vectors.iv, ct: b64(bytes) })).rejects.toThrow()
   })
   it('seal/open round-trips a plaintext object with a fresh iv under a passphrase-derived key', async () => {
-    const plain: VaultPlain = { v: 1, signPriv: 'aa'.repeat(32), kxPriv: 'bb'.repeat(32), profile: { name: 'Ada', units: 'km', homes: [], works: [] }, settings: { units: 'km', relayUrl: 'https://relay.elsewhere.app' } }
+    const plain: VaultPlain = { v: 1, signPriv: 'aa'.repeat(32), kxPriv: 'bb'.repeat(32), profile: { name: 'Ada', units: 'km', homes: [], works: [] }, settings: { units: 'km', relayUrl: 'https://elsewhere-relay.vinav.workers.dev' } }
     const salt = unb64(vectors.salt)
     const key = await deriveKey(' pass phrase ok ', salt)
     const body = await sealVault(key, salt, plain)

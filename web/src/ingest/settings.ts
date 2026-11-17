@@ -10,8 +10,8 @@ export type MapProvider = 'auto' | 'google' | 'osm'
 export interface Settings { mapsKey: string; mapId: string; mapProvider: MapProvider; keyOk: boolean | null; mapsOk: boolean | null; keyError: string; limited: boolean; llm: LlmConfig; relayUrl: string; accountUrl: string }
 const LS = 'elsewhere.settings'
 export const DEFAULT_LLM: LlmConfig = { provider: 'openai', key: '', model: '', baseUrl: '' }
-export const DEFAULT_RELAY = 'https://relay.elsewhere.app'
-export const DEFAULT_ACCOUNT = 'https://account.elsewhere.app'
+export const DEFAULT_RELAY = 'https://elsewhere-relay.vinav.workers.dev'
+export const DEFAULT_ACCOUNT = 'https://elsewhere-account.vinav.workers.dev'
 const ENV: Settings = { mapsKey: (import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined) ?? '', mapId: (import.meta.env.VITE_GOOGLE_MAP_ID as string | undefined) ?? '', mapProvider: 'auto', keyOk: null, mapsOk: null, keyError: '', limited: false, llm: DEFAULT_LLM, relayUrl: DEFAULT_RELAY, accountUrl: DEFAULT_ACCOUNT }
 
 const stored = (): Partial<Settings> => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}') } catch { return {} } }

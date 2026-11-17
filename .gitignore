@@ -18,3 +18,4 @@ PRODUCT.md
 .github/agents/impeccable-*
 .github/hooks/impeccable.json
 **/DESIGN.md
+.wrangler/
