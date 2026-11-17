@@ -2,6 +2,7 @@
 // finds it. The access token is handed in by the caller and never stored; the key itself is kept beside the crew keys.
 import { b64, unb64 } from '../crew/keys'
 import { kv } from '../ingest/db'
+import { clearSyncBookkeeping } from '../sync/local'
 import { KEY_BYTES, newSyncKey } from '../sync/wire'
 
 export const KEY_FILE = 'elsewhere.key'
@@ -56,6 +57,8 @@ export async function fetchOrCreateKey(token: string, fetchFn: typeof fetch = fe
     key = newSyncKey()
     await createKey(token, fetchFn, key)
   }
+  // A different key than this device held means another device started fresh: what was pushed under the old one is gone.
+  if ((await kv.get<unknown>(SYNC_KEY_KV)) !== b64(key)) await clearSyncBookkeeping()
   await kv.set(SYNC_KEY_KV, b64(key))
   return key
 }

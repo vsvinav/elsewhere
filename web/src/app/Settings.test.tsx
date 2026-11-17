@@ -12,6 +12,7 @@ vi.hoisted(() => {
   vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
 })
 vi.mock('../ingest/keycheck', async (orig) => ({ ...(await orig<typeof import('../ingest/keycheck')>()), checkKey: async () => ({ ok: true }) }))
+vi.mock('../account/google', async (orig) => ({ ...(await orig<typeof import('../account/google')>()), driveToken: async () => { throw new Error('no drive here') } }))
 vi.mock('@vis.gl/react-google-maps', () => ({ APIProvider: ({ children }: { children: unknown }) => children, Map: () => null, useMap: () => null }))
 vi.mock('../ingest/db', () => {
   const m = new Map<string, unknown>()

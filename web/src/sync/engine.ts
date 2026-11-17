@@ -9,7 +9,7 @@ import { useAccount } from '../account/store'
 import { markUploaded, uploadVault } from '../account/sync'
 import type { Data } from '../data/types'
 import { profile as profileStore, type Home, type Profile } from '../profile/profile'
-import { clearSyncBookkeeping, isSyncVisit, loadLastTs, loadProfileMark, loadPushed, loadRemoteTs, saveLastTs, saveProfileMark, savePushed, saveRemoteTs, upsertSyncedStays } from './local'
+import { clearSyncBookkeeping, isSyncVisit, loadLastTs, loadProfileHash, loadPushed, loadRemoteTs, saveLastTs, saveProfileHash, savePushed, saveRemoteTs, upsertSyncedStays } from './local'
 import { useSync, type SyncErrorKind } from './store'
 import { chunkKey, importSource, monthOf, openBlob, PROFILE_KEY, sealBlob, stayId, SYNC_KEY_RE, type HomeWire, type MonthChunk, type ProfileWire, type Stay, type SyncBlob } from './wire'
 
@@ -20,12 +20,14 @@ export interface EngineDeps {
   record?: () => Data | null
   key?: () => Promise<Uint8Array | null>
   drive?: () => Promise<string>
+  fetchKey?: (token: string) => Promise<Uint8Array>
 }
-const defaults: Required<EngineDeps> = { client: () => api(), now: Date.now, record: () => null, key: loadLocalKey, drive: driveToken }
+const defaults: Required<EngineDeps> = { client: () => api(), now: Date.now, record: () => null, key: loadLocalKey, drive: driveToken, fetchKey: fetchOrCreateKey }
 /** The app tells the engine where the current record is, so a round started from anywhere pushes it. */
 export const setRecordSource = (f: () => Data | null) => { defaults.record = f }
 
 const hashOf = (x: unknown) => bytesToHex(sha256(utf8ToBytes(JSON.stringify(x))))
+const profileHash = (p: Profile) => hashOf([p.name, p.units, p.homes])
 const NAME_MAX = 200
 
 /** The month chunks of this device's own import, keyed as the service stores them. Pulled stays are left out. */
@@ -86,23 +88,30 @@ export async function push(key: Uint8Array, deps: EngineDeps = {}): Promise<void
       const h = hashOf(chunk)
       if (pushed[name] === h) continue
       const ts = d.now()
-      await client.putSync(name, sealBlob(key, name, chunk, ts))
-      pushed[name] = h; remote[name] = ts
+      // A newer copy on the service is as good as pushed; the next pull brings it down.
+      const stored = await putOrStale(client, name, sealBlob(key, name, chunk, ts))
+      pushed[name] = h; remote[name] = stored ?? ts
+      await savePushed(pushed); await saveRemoteTs(remote)
     }
   }
   const prof = profileStore.get()
   if (prof) {
-    const mark = await loadProfileMark()
-    const h = hashOf([prof.name, prof.units, prof.homes])
-    if (mark.hash !== h) {
-      const ts = d.now()
-      try {
-        await client.putSync(PROFILE_KEY, sealBlob(key, PROFILE_KEY, profileToWire(prof, ts), ts))
-        await saveProfileMark(ts, h); remote[PROFILE_KEY] = ts
-      } catch (e) { if (!(e instanceof AccountError && e.status === 409)) throw e }
+    const h = profileHash(prof)
+    if ((await loadProfileHash()) !== h) {
+      const ts = profileStore.editedAt() || d.now()
+      const stored = await putOrStale(client, PROFILE_KEY, sealBlob(key, PROFILE_KEY, profileToWire(prof, ts), ts))
+      if (stored === null) { await saveProfileHash(h); remote[PROFILE_KEY] = ts; await saveRemoteTs(remote) }
     }
   }
-  await savePushed(pushed); await saveRemoteTs(remote)
+}
+/** Null when stored; on a 409 the service's own `ts` for that key, so the caller can mark it seen. */
+async function putOrStale(client: AccountClient, name: string, blob: SyncBlob): Promise<number | null> {
+  try { await client.putSync(name, blob); return null }
+  catch (e) {
+    if (!(e instanceof AccountError && e.status === 409)) throw e
+    const cur = await client.getSync(name)
+    return cur ? cur.ts : blob.ts
+  }
 }
 
 /** Everything newer than what this device has seen comes down; stays are added by id, the profile only if newer. */
@@ -121,13 +130,10 @@ export async function pull(key: Uint8Array, deps: EngineDeps = {}): Promise<void
     let plain: unknown
     try { plain = openBlob(key, e.key, blob) } catch { throw new SyncLockedError() }
     if (e.key === PROFILE_KEY) {
-      if (isProfileWire(plain)) {
-        const mark = await loadProfileMark()
-        if ((mark.ts ?? -1) < plain.ts) {
-          const next = profileFromWire(plain, profileStore.get())
-          profileStore.set(next)
-          await saveProfileMark(plain.ts, hashOf([next.name, next.units, next.homes]))
-        }
+      if (isProfileWire(plain) && plain.ts > profileStore.editedAt()) {
+        const next = profileFromWire(plain, profileStore.get())
+        profileStore.set(next, plain.ts)
+        await saveProfileHash(profileHash(next))
       }
     } else if (!own || !e.key.startsWith(`${own}:`)) {
       if (isChunk(plain)) changed += await upsertSyncedStays(plain.stays)
@@ -150,17 +156,29 @@ async function run(deps: EngineDeps): Promise<void> {
   const s = useSync.getState()
   const a = useAccount.getState()
   if (!a.session || !a.driveKeyed) { s.setStatus({ kind: 'off' }); return }
-  const key = await d.key()
+  s.setStatus({ kind: 'syncing' })
+  // Another device may have started fresh: a missing key, or blobs this key cannot open, get one look in Drive.
+  const refetch = () => d.drive().then(d.fetchKey).catch(() => null)
+  let key = (await d.key()) ?? (await refetch())
   const lastTs = await loadLastTs()
   if (!key) { s.setStatus({ kind: 'error', error: 'locked', lastTs }); return }
-  s.setStatus({ kind: 'syncing' })
   try {
-    await pull(key, d)
-    await push(key, d)
-    const ts = d.now()
-    await saveLastTs(ts)
-    useSync.getState().setStatus({ kind: 'idle', lastTs: ts })
+    try { await round(key, d) }
+    catch (e) {
+      if (!(e instanceof SyncLockedError)) throw e
+      const next = await refetch()
+      if (!next || same(next, key)) throw e
+      await round(next, d)
+    }
   } catch (e) { useSync.getState().setStatus({ kind: 'error', error: kindOf(e), lastTs }) }
+}
+const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i])
+async function round(key: Uint8Array, d: Required<EngineDeps>): Promise<void> {
+  await pull(key, d)
+  await push(key, d)
+  const ts = d.now()
+  await saveLastTs(ts)
+  useSync.getState().setStatus({ kind: 'idle', lastTs: ts })
 }
 
 /** The status a device shows before its first round, from what it remembers. */
@@ -186,7 +204,7 @@ export async function startFresh(deps: EngineDeps = {}): Promise<void> {
     await client.deleteSync()
     await deleteKey(token)
     await clearSyncBookkeeping()
-    await fetchOrCreateKey(token)
+    await d.fetchKey(token)
     markUploaded(null)
     await uploadVault({ client: () => client })
   } catch (e) { useSync.getState().setStatus({ kind: 'error', error: kindOf(e), lastTs: null }); return }

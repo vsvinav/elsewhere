@@ -4,7 +4,7 @@ import { kv } from '../ingest/db'
 import type { PVisit } from '../ingest/parse'
 import type { Stay } from './wire'
 
-export const SYNC_KV = { stays: 'sync:stays', remote: 'sync:remote', pushed: 'sync:pushed', profileTs: 'sync:profileTs', profileHash: 'sync:profileHash', lastTs: 'sync:lastTs' } as const
+export const SYNC_KV = { stays: 'sync:stays', remote: 'sync:remote', pushed: 'sync:pushed', profileHash: 'sync:profileHash', lastTs: 'sync:lastTs' } as const
 /** The marker a pulled stay carries through derivation, so it is drawn like any other visit but never pushed again. */
 export const SYNC_VISIT_TYPE = 'SYNC'
 export const SYNC_PLACE = 'sync:'
@@ -27,13 +27,14 @@ export const saveRemoteTs = (m: Record<string, number>) => kv.set(SYNC_KV.remote
 export const loadPushed = () => record<string>(SYNC_KV.pushed)
 export const savePushed = (m: Record<string, string>) => kv.set(SYNC_KV.pushed, m)
 const num = async (k: string) => { const v = await kv.get<unknown>(k); return typeof v === 'number' ? v : null }
-export const loadProfileMark = async () => ({ ts: await num(SYNC_KV.profileTs), hash: (await kv.get<unknown>(SYNC_KV.profileHash)) as string | undefined ?? null })
-export const saveProfileMark = async (ts: number, hash: string) => { await kv.set(SYNC_KV.profileTs, ts); await kv.set(SYNC_KV.profileHash, hash) }
+/** The hash of the profile as last pushed or pulled; a different one here means an edit to push. */
+export const loadProfileHash = async () => { const v = await kv.get<unknown>(SYNC_KV.profileHash); return typeof v === 'string' ? v : null }
+export const saveProfileHash = (hash: string) => kv.set(SYNC_KV.profileHash, hash)
 export const loadLastTs = () => num(SYNC_KV.lastTs)
 export const saveLastTs = (ts: number) => kv.set(SYNC_KV.lastTs, ts)
 
 /** Start fresh: the cloud bookkeeping goes so everything is pushed again under the new key; the pulled stays stay. */
-export const clearSyncBookkeeping = () => Promise.all([kv.del(SYNC_KV.remote), kv.del(SYNC_KV.pushed), kv.del(SYNC_KV.profileTs), kv.del(SYNC_KV.profileHash), kv.del(SYNC_KV.lastTs)])
+export const clearSyncBookkeeping = () => Promise.all([kv.del(SYNC_KV.remote), kv.del(SYNC_KV.pushed), kv.del(SYNC_KV.profileHash), kv.del(SYNC_KV.lastTs)])
 
 /** A pulled stay as the derivation pipeline reads it; the numeric id is the head of its hash. */
 export const toPVisit = (s: Stay): PVisit => ({ id: parseInt(s.id.slice(0, 12), 16), start: s.start, end: s.end, tz: 0, place_id: SYNC_PLACE + s.id, lat: s.lat, lng: s.lng, type: SYNC_VISIT_TYPE, p: 1, lvl: 0 })

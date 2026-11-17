@@ -3,6 +3,7 @@ const db = vi.hoisted(() => ({ store: new Map<string, unknown>() }))
 vi.mock('../ingest/db', () => ({ kv: { get: async (k: string) => db.store.get(k), set: async (k: string, v: unknown) => { db.store.set(k, v) }, del: async (k: string) => { db.store.delete(k) } } }))
 import { b64 } from '../crew/keys'
 import { clearLocalKey, deleteKey, DriveError, fetchOrCreateKey, KEY_FILE, loadLocalKey, SYNC_KEY_KV } from './driveKey'
+import { SYNC_KV } from '../sync/local'
 
 interface Call { method: string; url: string; body?: string; auth: string | null }
 /** A Drive app folder with whatever files the test seeds; every call is logged. */
@@ -53,6 +54,16 @@ describe('the Drive key', () => {
     expect(await loadLocalKey()).toEqual(key)
     // The upload is the only POST; nothing about the token is written anywhere.
     expect(JSON.stringify([...db.store])).not.toContain('tok')
+  })
+  it('a key other than the one this device held forgets what was pushed, so everything goes up again under it', async () => {
+    db.store.set(SYNC_KEY_KV, K1)
+    db.store.set(SYNC_KV.pushed, { 'i_a:2026-01': 'h' }); db.store.set(SYNC_KV.remote, { profile: 5 }); db.store.set(SYNC_KV.profileHash, 'h'); db.store.set(SYNC_KV.lastTs, 9); db.store.set(SYNC_KV.stays, { x: 1 })
+    await fetchOrCreateKey('tok', fakeDrive([{ id: 'a', createdTime: '2026-01-01T00:00:00Z', content: K1 }]).fetchFn)
+    expect(db.store.get(SYNC_KV.pushed)).toEqual({ 'i_a:2026-01': 'h' })
+    await fetchOrCreateKey('tok', fakeDrive([{ id: 'a', createdTime: '2026-01-01T00:00:00Z', content: K2 }]).fetchFn)
+    expect(db.store.get(SYNC_KEY_KV)).toBe(K2)
+    for (const k of [SYNC_KV.pushed, SYNC_KV.remote, SYNC_KV.profileHash, SYNC_KV.lastTs]) expect(db.store.has(k), k).toBe(false)
+    expect(db.store.get(SYNC_KV.stays)).toEqual({ x: 1 })
   })
   it('reads the one key that is there', async () => {
     const d = fakeDrive([{ id: 'a', createdTime: '2025-05-01T00:00:00Z', content: K1 }])
