@@ -49,13 +49,25 @@ export function grainBounds(data: Data, grain: Grain, now: number): Bounds | nul
   if (grain === 'year') {
     const cur = data.trips.find((t) => t.start <= now && now <= t.end)
     const arcs = cur ? tripArcs({ ...data, trips: [cur] }) : tripArcs(data)
-    return boundsOf(arcs.flatMap((a) => a.path.map(([lng, lat]) => ({ lng, lat }))))
+    return unwrapLng(arcs.flatMap((a) => a.path.map(([lng, lat]) => ({ lng, lat }))))
   }
   if (grain === 'month') {
     const [a, b] = monthOf(now)
-    return boundsOf(data.visits.filter((v) => v.lvl === 0 && v.end >= a && v.start < b))
+    return unwrapLng(data.visits.filter((v) => v.lvl === 0 && v.end >= a && v.start < b))
   }
   return null
+}
+
+/** Bounds with every longitude brought within 180° of the first point, so a hop over the date line frames narrow around ±180 instead of around 0. The maps accept longitudes past ±180 when fitting. */
+export function unwrapLng(pts: LngLat[]): Bounds | null {
+  if (!pts.length) return null
+  const ref = pts[0].lng
+  return boundsOf(pts.map((p) => {
+    let lng = p.lng
+    while (lng - ref > 180) lng -= 360
+    while (ref - lng > 180) lng += 360
+    return { lng, lat: p.lat }
+  }))
 }
 
 /** The UTC calendar month holding `now`, as [start, end) seconds; the HUD and the frame both read the month from here. */

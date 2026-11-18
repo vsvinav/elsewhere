@@ -1,4 +1,4 @@
-import { frameFor, grainBounds } from './frame'
+import { frameFor, grainBounds, unwrapLng } from './frame'
 import { sampleData } from '../test/sample'
 import type { Segment } from '../analytics/position'
 
@@ -37,4 +37,13 @@ test('the year frames the trip under the playhead, or every trip between them; t
   expect(quiet[1][0]).toBeLessThan(-121)
   expect(grainBounds(data, 'day', boston.start)).toBeNull()
   expect(grainBounds({ ...data, trips: [] }, 'year', boston.start)).toBeNull()
+})
+
+test('a hop across the date line is framed narrow around ±180, not across the whole world', () => {
+  const b = unwrapLng([{ lng: 170, lat: 35 }, { lng: 178, lat: 36 }, { lng: -175, lat: 38 }, { lng: -170, lat: 40 }])!
+  expect(b[1][0] - b[0][0]).toBeLessThan(25)
+  expect(Math.abs((b[0][0] + b[1][0]) / 2)).toBeCloseTo(180, 0)
+  // Points that never cross keep their plain longitudes.
+  expect(unwrapLng([{ lng: -122, lat: 37 }, { lng: -71, lat: 42 }])).toEqual([[-122, 37], [-71, 42]])
+  expect(unwrapLng([])).toBeNull()
 })
