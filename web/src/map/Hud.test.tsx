@@ -48,11 +48,11 @@ describe('the strip', () => {
 })
 
 describe('grain chips', () => {
-  it('offers Year, Month and Day on a three-month record with trips, starting at Month', () => {
+  it('offers Year, Month and Day on a three-month record with trips, starting at Day', () => {
     mount()
     const group = screen.getByRole('radiogroup', { name: 'Time grain' })
     expect(group.querySelectorAll('[role=radio]')).toHaveLength(3)
-    expect((screen.getByRole('radio', { name: 'Month' }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('true')
+    expect((screen.getByRole('radio', { name: 'Day' }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('true')
     expect((screen.getByRole('radio', { name: 'Year' }) as HTMLButtonElement).disabled).toBe(false)
   })
   it('disables Year when the record has no trips', () => {

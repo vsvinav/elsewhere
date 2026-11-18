@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { atPlayhead, cumulative, grainOf, resolveGrain } from './timeline'
+import { atPlayhead, cumulative, resolveGrain } from './timeline'
 import type { Data } from '../data/types'
 import { sampleData } from '../test/sample'
 
@@ -78,32 +78,23 @@ describe('milestones', () => {
   })
 })
 
-describe('grainOf', () => {
-  it('picks year over 400 days, month over 21 days, else day', () => {
-    expect(grainOf(401 * D)).toBe('year')
-    expect(grainOf(400 * D)).toBe('month')
-    expect(grainOf(22 * D)).toBe('month')
-    expect(grainOf(21 * D)).toBe('day')
-  })
-})
-
 describe('resolveGrain', () => {
   it('offers only day on a short record', () => {
     const d = tiny()
     d.meta.range = [0, 10 * D]
     expect(resolveGrain(d, 'year')).toEqual({ grain: 'day', allowed: ['day'] })
   })
-  it('offers every grain when there are trips and honours the pick', () => {
+  it('opens on day so the trail plays, and offers every grain when there are trips', () => {
     const d = tiny()
     d.meta.range = [0, 500 * D]
     d.trips = [{ start: 0, end: D, nights: 1, max_dist_from_home_km: 300, total_km_by_mode: {}, anchor_cities: ['Porto'], memory: null }]
-    expect(resolveGrain(d, null)).toEqual({ grain: 'year', allowed: ['year', 'month', 'day'] })
-    expect(resolveGrain(d, 'day').grain).toBe('day')
+    expect(resolveGrain(d, null)).toEqual({ grain: 'day', allowed: ['year', 'month', 'day'] })
+    expect(resolveGrain(d, 'year').grain).toBe('year')
   })
-  it('drops year without trips and falls back to the coarsest allowed', () => {
+  it('drops year without trips and falls back to day', () => {
     const d = tiny()
     d.meta.range = [0, 500 * D]
     d.trips = []
-    expect(resolveGrain(d, 'year')).toEqual({ grain: 'month', allowed: ['month', 'day'] })
+    expect(resolveGrain(d, 'year')).toEqual({ grain: 'day', allowed: ['month', 'day'] })
   })
 })

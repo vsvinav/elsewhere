@@ -70,14 +70,11 @@ export function atPlayhead(c: Cumulative, t: number): Rail {
   return i < 0 ? { km: 0, cities: 0, nightsAway: 0, flights: 0, milestone } : { km: c.km[i], cities: c.cities[i], nightsAway: c.nightsAway[i], flights: c.flights[i], milestone }
 }
 
-export const grainOf = (spanSeconds: number): Grain => spanSeconds > 400 * DAY ? 'year' : spanSeconds > 21 * DAY ? 'month' : 'day'
-
-/** The grain to draw and the ones on offer: short records are day only; year needs trips to draw. */
+/** The grain to draw and the ones on offer. Replay opens on day — the trail — unless a coarser grain is picked; short records are day only; year needs trips to draw. */
 export function resolveGrain(data: Data, picked: Grain | null): { grain: Grain; allowed: Grain[] } {
   const span = data.meta.range[1] - data.meta.range[0]
   const allowed: Grain[] = span <= 21 * DAY ? ['day'] : data.trips.length > 0 ? [...GRAINS] : ['month', 'day']
-  const auto = grainOf(span)
-  const grain = picked && allowed.includes(picked) ? picked : allowed.includes(auto) ? auto : allowed[0]
+  const grain = picked && allowed.includes(picked) ? picked : 'day'
   return { grain, allowed }
 }
 
