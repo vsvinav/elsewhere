@@ -486,6 +486,23 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
 .hud-scrub input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 200px; background: var(--ink); border: 0; }
 .hud-scrub input::-moz-range-thumb { width: 6px; height: 200px; background: var(--ink); border: 0; border-radius: 0; }
 .hud-scrub input:focus-visible { outline-offset: -3px; }
+/* The so-far rail: four figures on an ink block at the map's right edge, printed while a finger holds the strip. */
+.rail { position: fixed; right: var(--gutter); top: 96px; z-index: 5; background: var(--ink); color: var(--stock); padding: 14px 16px 12px; min-width: 150px; display: grid; gap: 8px; pointer-events: none; transition: opacity 0.16s var(--ease), transform 0.16s var(--ease); }
+.rail.hidden { opacity: 0; transform: translateX(12px); visibility: hidden; transition: opacity 0.16s var(--ease), transform 0.16s var(--ease), visibility 0s 0.16s; }
+.rail-row { display: grid; gap: 2px; }
+.rail-k { font: 700 9px/1 var(--body); font-stretch: 85%; letter-spacing: 0.2em; color: var(--mustard); }
+.rail-v { font: 900 32px/0.95 var(--display); font-variant-numeric: tabular-nums; }
+.rail-mile { margin-top: 4px; padding-top: 8px; border-top: 2px dashed var(--ink-3); color: var(--red); font: 600 12px/1.2 var(--body); animation: rail-in 0.22s var(--ease); }
+@keyframes rail-in { from { transform: translateX(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rail, .rail.hidden, .rail-mile { transition: none; animation: none; } }
+/* Phones: the rail takes the where-block's place in the stub instead of covering the map. */
+@media (max-width: 640px) {
+  .rail { position: static; grid-template-columns: repeat(4, auto); justify-content: start; gap: 4px 14px; min-width: 0; padding: 0; transform: none; transition: none; }
+  .rail.hidden { display: none; }
+  .rail:not(.hidden) + .hud-where { display: none; }
+  .rail-v { font-size: 22px; }
+  .rail-mile { grid-column: 1 / -1; margin-top: 0; }
+}
 @media (max-width: 1100px) {
   .hud { grid-template-columns: 1fr; bottom: calc(var(--strip-h) + 12px); }
   .hud-lens { right: -3px; overflow-x: auto; scrollbar-width: none; }
