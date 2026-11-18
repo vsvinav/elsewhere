@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import type { Lens } from '../analytics/lens'
 import type { Cat } from '../analytics/category'
+import type { Grain } from '../analytics/timeline'
 
 export type Tab = 'home' | 'stats' | 'facts' | 'places' | 'trips' | 'flights' | 'map' | 'play' | 'crew'
 export const TABS: Tab[] = ['home', 'stats', 'facts', 'places', 'trips', 'flights', 'map', 'play', 'crew']
@@ -56,6 +57,12 @@ export interface Store {
   /** Date filter applied to every tab; null is the whole record. */
   range: [number, number] | null
   setRange(r: [number, number] | null): void
+  /** Replay: how coarsely time is drawn; null means derived from the range. */
+  grain: Grain | null
+  setGrain(g: Grain | null): void
+  /** A finger is on the scrub strip (or just left it). */
+  scrubbing: boolean
+  setScrubbing(on: boolean): void
   hoverPlace: { id: string; x: number; y: number } | null
   setPlayhead(t: number | null): void
   setPlaying(p: boolean): void
@@ -133,7 +140,11 @@ export const useStore = create<Store>((set, get) => ({
   heat: false,
   setHeat: (heat) => set({ heat }),
   range: null,
-  setRange: (range) => set({ range, playhead: range ? range[0] : null, origin: null, focus: null }),
+  setRange: (range) => set({ range, playhead: range ? range[0] : null, origin: null, focus: null, grain: null }),
+  grain: null,
+  setGrain: (grain) => set({ grain }),
+  scrubbing: false,
+  setScrubbing: (scrubbing) => set({ scrubbing }),
   hoverPlace: null,
   setPlayhead: (playhead) => set({ playhead }),
   setPlaying: (playing) => set(playing ? { playing, follow: true } : { playing }),

@@ -220,3 +220,16 @@ describe('crew as a tab', () => {
     expect(useStore.getState().tab).toBe('stats')
   })
 })
+
+describe('grain', () => {
+  it('is derived until set and forgets itself when the range changes', () => {
+    useStore.getState().setGrain('day')
+    expect(useStore.getState().grain).toBe('day')
+    useStore.getState().setRange([0, 86400 * 500])
+    expect(useStore.getState().grain).toBeNull()
+  })
+  it('scrubbing is a flag', () => {
+    useStore.getState().setScrubbing(true)
+    expect(useStore.getState().scrubbing).toBe(true)
+  })
+})
