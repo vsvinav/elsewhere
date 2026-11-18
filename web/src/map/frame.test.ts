@@ -1,4 +1,5 @@
-import { frameFor } from './frame'
+import { frameFor, grainBounds } from './frame'
+import { sampleData } from '../test/sample'
 import type { Segment } from '../analytics/position'
 
 const A = { lng: -71, lat: 42 }, B = { lng: -122, lat: 37 }
@@ -20,4 +21,20 @@ test('a long stay zooms to town, except its last beat before a flight', () => {
 })
 test('a short stop between legs keeps the wide frame', () => {
   expect(frameFor(blip, flight, A, 300, 600, 1200, 800).zoom).toBeLessThan(8)
+})
+
+test('the year frames the trip under the playhead, or every trip between them; the month frames its visits; the day frames nothing extra', () => {
+  const data = sampleData()
+  const [boston, paris] = data.trips
+  const b = grainBounds(data, 'year', boston.start + 3600)!
+  // Home (San Jose) to Boston: nothing east of Boston.
+  expect(b[1][0]).toBeLessThan(-70); expect(b[1][0]).toBeGreaterThan(-72); expect(b[0][0]).toBeLessThan(-121)
+  const all = grainBounds(data, 'year', boston.end + 86400)!
+  expect(all[1][0]).toBeGreaterThan(2)
+  const m = grainBounds(data, 'month', paris.start + 86400)!
+  expect(m[1][0]).toBeGreaterThan(2); expect(m[0][0]).toBeLessThan(-121)
+  const quiet = grainBounds(data, 'month', data.meta.range[0] + 86400)!
+  expect(quiet[1][0]).toBeLessThan(-121)
+  expect(grainBounds(data, 'day', boston.start)).toBeNull()
+  expect(grainBounds({ ...data, trips: [] }, 'year', boston.start)).toBeNull()
 })

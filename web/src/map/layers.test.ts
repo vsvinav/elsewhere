@@ -1,7 +1,8 @@
 import { vi } from 'vitest'
 import type { IconLayer } from 'deck.gl'
-import { buildTrails, mapLayers, pinLayers, wakeLength } from './layers'
+import { buildTrails, mapLayers, pinLayers, tripArcs, wakeLength } from './layers'
 import type { Data } from '../data/types'
+import { sampleData } from '../test/sample'
 
 test('a leg with a GPS trace is drawn once; an untraced flight gets a synthetic arc', () => {
   const d = {
@@ -80,4 +81,41 @@ test('hiding a kind of stop removes its heat too', () => {
   const layers = pinLayers(pinData(), 10, { hidden: ['other'], selected: null, sizeBy: 'visits', heat: true })
   const heat = layers.find((l) => l.id === 'heat')!.props as unknown as { data: unknown[] }
   expect(heat.data).toHaveLength(0)
+})
+
+describe('grain', () => {
+  const data = sampleData()
+  const now = data.trips[1].end + 3600
+  it('year draws trip arcs, no trail and no live head', () => {
+    const ids = mapLayers(data, now, 1, false, now, 4, 'all', 'year').map((l) => l.id)
+    expect(ids).toContain('trip-arcs')
+    expect(ids).toContain('play-places')
+    expect(ids).not.toContain('trail-head'); expect(ids).not.toContain('trail-long'); expect(ids).not.toContain('record'); expect(ids).not.toContain('here')
+  })
+  it('month draws places and the hairline record, even while playing, but no head or stamp', () => {
+    const ids = mapLayers(data, now, 1, true, now, 4, 'all', 'month').map((l) => l.id)
+    expect(ids).toContain('play-places'); expect(ids).toContain('labels'); expect(ids).toContain('record')
+    expect(ids).not.toContain('trail-head'); expect(ids).not.toContain('trail-long'); expect(ids).not.toContain('here-ring'); expect(ids).not.toContain('trip-arcs')
+  })
+  it('day is the replay as before', () => {
+    const ids = mapLayers(data, now, 1, true, now, 4, 'all', 'day').map((l) => l.id)
+    expect(ids).toContain('trail-head'); expect(ids).toContain('trail-long'); expect(ids).toContain('play-places')
+    expect(ids).not.toContain('trip-arcs')
+    expect(mapLayers(data, now, 1, true, now, 4, 'all').map((l) => l.id)).toEqual(ids)
+  })
+})
+
+describe('tripArcs', () => {
+  const data = sampleData()
+  it('chains home → anchor cities → home for every trip begun by the playhead', () => {
+    const all = tripArcs(data)
+    // Two one-city trips: out and back each.
+    expect(all).toHaveLength(4)
+    expect(all[0].path[0]).toEqual(all[1].path[all[1].path.length - 1])
+    expect(all[0].path.length).toBeGreaterThan(2)
+    expect(all[0].km).toBeGreaterThan(4000)
+    expect(all[0].ts[0]).toBe(data.trips[0].start); expect(all[1].ts[1]).toBe(data.trips[0].end)
+    expect(tripArcs(data, data.trips[0].start + 1)).toHaveLength(2)
+    expect(tripArcs(data, data.trips[0].start - 1)).toHaveLength(0)
+  })
 })

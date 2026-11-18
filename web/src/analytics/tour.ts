@@ -23,19 +23,21 @@ export function nightsIn(v: Pick<Visit, 'start' | 'end' | 'tz'>): number {
   return Math.floor((v.end - first) / 86400) + 1
 }
 
+/** Where home was at `ts`: the declared home for that period, or the record's one derived home. */
+export const homeOf = (data: Data, ts: number): { lat: number; lng: number } => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
+
 /** A night's sleep away from home: a lvl-0 visit that spans at least one local 03:00 and sits off the home radius. */
 export interface Sleep { v: Visit; nights: number }
 
 /** Every visit slept away from home, in record order, with its nights. */
 export function sleptAway(data: Data): { away: Sleep[]; nightsHome: number } {
-  const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
   const away: Sleep[] = []
   let nightsHome = 0
   for (const v of data.visits) {
     if (v.lvl !== 0) continue
     const n = nightsIn(v)
     if (!n) continue
-    if (isHome(data.places[v.place_id]) || distanceKm(homeOf(v.start), v) < 30) { nightsHome += n; continue }
+    if (isHome(data.places[v.place_id]) || distanceKm(homeOf(data, v.start), v) < 30) { nightsHome += n; continue }
     away.push({ v, nights: n })
   }
   return { away, nightsHome }
@@ -43,7 +45,6 @@ export function sleptAway(data: Data): { away: Sleep[]; nightsHome: number } {
 
 /** Where you slept: nights per city away from home, like a tour's dates list. */
 export function tour(data: Data): Tour {
-  const homeOf = (ts: number) => data.profile.homes?.length ? homeAt(data.profile.homes, ts) : data.profile.home
   const byCity = new Map<string, Stop>()
   const beds = new Map<string, Set<string>>()
   const { away, nightsHome } = sleptAway(data)
@@ -60,7 +61,7 @@ export function tour(data: Data): Tour {
     if (!b.has(v.place_id)) { b.add(v.place_id); s.placeIds.push(v.place_id) }
     s.first = Math.min(s.first, v.start); s.last = Math.max(s.last, v.end)
     byCity.set(city, s)
-    const km = distanceKm(homeOf(v.start), v)
+    const km = distanceKm(homeOf(data, v.start), v)
     if (!headline || km > headline.km) headline = { city, country: p?.country_code ?? null, km, nights: n, start: v.start, end: v.end, place_id: v.place_id }
   }
   const stops = [...byCity.values()].sort((a, b) => b.nights - a.nights || b.visits - a.visits)

@@ -8,6 +8,7 @@ import { useData } from '../data/DataContext'
 import { useStore } from '../store/useStore'
 import { positionAt } from '../analytics/position'
 import { mapLayers, pinLayers } from './layers'
+import { resolveGrain } from '../analytics/timeline'
 import { liveCam } from './live'
 import { useSettings } from '../ingest/settings'
 import { useFollow } from './useFollow'
@@ -47,7 +48,7 @@ function useDeck(cam: Cam | null, overlay: Overlay | null) {
       raf = 0
       const s = useStore.getState()
       const now = s.playhead ?? data.meta.range[0]
-      if (s.tab !== 'map') { overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens) }); return }
+      if (s.tab !== 'map') { overlay.setProps({ layers: mapLayers(data, now, s.rate, s.playing, now, cam.zoom(), s.lens, resolveGrain(data, s.grain).grain) }); return }
       const c = useCrew.getState()
       const wall = Date.now()
       overlay.setProps({ layers: [...pinLayers(data, cam.zoom(), { hidden: s.hiddenCats, selected: s.pin, sizeBy: s.pinSize, heat: s.heat }), ...friendLayers(c.fixes, c.friends, wall, c.hit)] })

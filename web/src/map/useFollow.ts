@@ -6,7 +6,8 @@ import { positionAt, segmentAt } from '../analytics/position'
 import { approachZoom, calmFor, dwellZoom, fitZoom, step, zoomCapFor, type Spring } from './camera'
 import { upcomingBig } from './lookahead'
 import { BIG_KM } from './pace'
-import { frameFor } from './frame'
+import { frameFor, frameOf, grainBounds, grainKey, type Bounds } from './frame'
+import { resolveGrain } from '../analytics/timeline'
 
 const POS_PERIOD_S = 1.8
 const ZOOM_PERIOD_S = 2.6
@@ -16,6 +17,8 @@ const LEAD_REAL_S = 3
 const PULL_REAL_S = 1.8
 // Real seconds of recent positions that decide how far in the camera may settle while you linger in one area.
 const DWELL_REAL_S = 6
+// Room for the HUD below and the lens chips above when a grain change fits the map by hand.
+const FIT_PAD = { top: 80, bottom: 260, left: 60, right: 60 }
 
 /**
  * Follow camera: centre springs to where you are; zoom springs to frame the whole current leg
@@ -29,6 +32,7 @@ export function useFollow(map: Cam | null) {
   const zWant = useRef<number | null>(null)
   const recent = useRef<{ t: number; lng: number; lat: number }[]>([])
   const anticip = useRef<{ start: number; k: number } | null>(null)
+  const coarse = useRef<{ key: string; b: Bounds | null }>({ key: '', b: null })
 
   useEffect(() => {
     if (!map) return
@@ -42,6 +46,20 @@ export function useFollow(map: Cam | null) {
     return () => { detach(); div.removeEventListener('wheel', off); div.removeEventListener('touchstart', onTouch) }
   }, [map])
 
+  // A new grain reframes once: the year's trips or the month's stops, even with the camera handed over.
+  useEffect(() => {
+    if (!map) return
+    let grain = resolveGrain(data, useStore.getState().grain).grain
+    return useStore.subscribe((s) => {
+      const g = resolveGrain(data, s.grain).grain
+      if (g === grain) return
+      grain = g
+      spr.current = null
+      const b = grainBounds(data, g, s.playhead ?? data.meta.range[0])
+      if (b && !s.follow) map.fit(b[0], b[1], FIT_PAD)
+    })
+  }, [map, data])
+
   useEffect(() => {
     if (!map) return
     let raf = 0, last = performance.now()
@@ -53,9 +71,22 @@ export function useFollow(map: Cam | null) {
       const now = s.playhead ?? data.meta.range[0]
       const here = positionAt(data, now)
       if (!here) return
+      const div = map.div
+      // At the year or the month the camera holds that span's content and only glides as the content changes.
+      const grain = resolveGrain(data, s.grain).grain
+      const key = grainKey(data, grain, now)
+      if (coarse.current.key !== key) coarse.current = { key, b: grain === 'day' ? null : grainBounds(data, grain, now) }
+      if (coarse.current.b) {
+        const f = frameOf(coarse.current.b, div.clientWidth, div.clientHeight)
+        if (!spr.current) { const c = map.center(); spr.current = { lng: { x: c.lng, v: 0 }, lat: { x: c.lat, v: 0 }, zoom: { x: map.zoom(), v: 0 } } }
+        const sp = spr.current
+        step(sp.lng, f.center.lng, dt, POS_PERIOD_S); step(sp.lat, f.center.lat, dt, POS_PERIOD_S); step(sp.zoom, f.zoom, dt, ZOOM_PERIOD_S)
+        zWant.current = f.zoom; recent.current = []; anticip.current = null
+        if (Math.abs(sp.lng.v) + Math.abs(sp.lat.v) > 1e-7 || Math.abs(sp.zoom.v) > 1e-4 || t - lastTarget.current > 500) { lastTarget.current = t; map.move({ lat: sp.lat.x, lng: sp.lng.x }, sp.zoom.x) }
+        return
+      }
       const seg = segmentAt(data, now)
       const next = segmentAt(data, seg.end + 2)
-      const div = map.div
       const f = frameFor(seg, next.start > seg.start ? next : null, here, now, s.rate, div.clientWidth, div.clientHeight)
       // Faster replay: a calmer camera and a lower zoom ceiling, so the subject is framed rather than chased.
       // The zoom target itself pulls out at once but pushes in slowly, so a brief stop never dives into town.

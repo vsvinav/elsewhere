@@ -1,7 +1,12 @@
 import type { LngLat } from '../analytics/position'
 import type { Segment } from '../analytics/position'
+import type { Data } from '../data/types'
+import type { Grain } from '../analytics/timeline'
+import { boundsOf, type Bounds } from '../analytics/geo'
+export type { Bounds }
 import { fitZoom } from './camera'
 import { realSeconds } from './pace'
+import { tripArcs } from './layers'
 
 export interface Frame { center: LngLat; zoom: number }
 const STAY_ZOOM = 14
@@ -34,4 +39,34 @@ export function frameFor(seg: Segment, next: Segment | null, here: LngLat, now: 
   // Frame the leg; let the dot pull the centre a third of the way so it reads as travel, and land on the destination.
   const pull = prog > 0.85 ? 0.35 + ((prog - 0.85) / 0.15) * 0.65 : 0.35
   return { center: lerp(mid(seg), here, pull), zoom: z }
+}
+
+/**
+ * What a coarser grain should hold in frame at `now`: the year shows the trip under the playhead, or every trip when
+ * none is; the month shows that calendar month's stops. The day frames nothing extra (the follow-cam already does).
+ */
+export function grainBounds(data: Data, grain: Grain, now: number): Bounds | null {
+  if (grain === 'year') {
+    const cur = data.trips.find((t) => t.start <= now && now <= t.end)
+    const arcs = cur ? tripArcs({ ...data, trips: [cur] }) : tripArcs(data)
+    return boundsOf(arcs.flatMap((a) => a.path.map(([lng, lat]) => ({ lng, lat }))))
+  }
+  if (grain === 'month') {
+    const d = new Date(now * 1000)
+    const a = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000, b = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000
+    return boundsOf(data.visits.filter((v) => v.lvl === 0 && v.end >= a && v.start < b))
+  }
+  return null
+}
+
+/** Changes exactly when `grainBounds` would: the trip under the playhead, or the calendar month. */
+export function grainKey(data: Data, grain: Grain, now: number): string {
+  if (grain === 'year') return `year:${data.trips.find((t) => t.start <= now && now <= t.end)?.start ?? 'all'}`
+  if (grain === 'month') { const d = new Date(now * 1000); return `month:${d.getUTCFullYear()}-${d.getUTCMonth()}` }
+  return 'day'
+}
+
+/** The frame that holds `b` in the middle of a viewport of the given size. */
+export function frameOf(b: Bounds, w: number, h: number): Frame {
+  return { center: { lng: (b[0][0] + b[1][0]) / 2, lat: (b[0][1] + b[1][1]) / 2 }, zoom: Math.max(2, Math.min(14, fitZoom({ lng: b[0][0], lat: b[0][1] }, { lng: b[1][0], lat: b[1][1] }, w, h, 0.7))) }
 }

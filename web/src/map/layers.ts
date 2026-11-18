@@ -7,10 +7,12 @@ import { HEAT_INTENSITY, HEAT_RADIUS_PX, HEAT_STOPS, HEAT_THRESHOLD, heatWeight 
 import { degPerPx, simplifyIdx } from './simplify'
 import { paceOf } from './camera'
 import { BIG_KM } from './pace'
-import type { Data, Place } from '../data/types'
-import { segmentAt, whereaboutsAt } from '../analytics/position'
+import type { Data, Place, Trip } from '../data/types'
+import { distanceKm, segmentAt, whereaboutsAt } from '../analytics/position'
 import { LENS_COLOR, lensOf, type Lens } from '../analytics/lens'
-import { legsOf } from '../analytics/legs'
+import { greatCircle, legsOf } from '../analytics/legs'
+import { homeOf } from '../analytics/tour'
+import type { Grain } from '../analytics/timeline'
 import { CAT_COLOR, categoryOf, type Cat } from '../analytics/category'
 import { HeadingEase, iconAngle, stampHeading, type StampKind } from './heading'
 
@@ -235,7 +237,33 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   return layers
 }
 
-export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all'): Layer[] {
+export interface Arc { path: [number, number][]; ts: [number, number]; km: number }
+const ARC_POINTS = 48
+
+/** One great-circle arc per hop of each trip begun by `t`: home → anchor cities in order → home. Each hop takes an equal share of the trip's time. */
+export function tripArcs(data: Data, t = Infinity): Arc[] {
+  const cityPos = new Map<string, [number, number]>()
+  const posOf = (city: string, trip: Trip): [number, number] | undefined => {
+    const v = data.visits.find((v) => v.lvl === 0 && v.start >= trip.start && v.start <= trip.end && data.places[v.place_id]?.city === city)
+    if (v) return [v.lng, v.lat]
+    if (!cityPos.size) for (const p of Object.values(data.places)) if (p.city && !cityPos.has(p.city)) cityPos.set(p.city, [p.lng, p.lat])
+    return cityPos.get(city)
+  }
+  const out: Arc[] = []
+  for (const trip of data.trips) {
+    if (trip.start > t) continue
+    const h = homeOf(data, trip.start), home: [number, number] = [h.lng, h.lat]
+    const stops = [home, ...trip.anchor_cities.map((c) => posOf(c, trip)).filter((x): x is [number, number] => !!x), home]
+    const n = stops.length - 1
+    for (let i = 0; i < n; i++) {
+      const a = trip.start + ((trip.end - trip.start) * i) / n, b = i === n - 1 ? trip.end : trip.start + ((trip.end - trip.start) * (i + 1)) / n
+      out.push({ path: greatCircle(stops[i], stops[i + 1], ARC_POINTS), ts: [a, b], km: distanceKm({ lng: stops[i][0], lat: stops[i][1] }, { lng: stops[i + 1][0], lat: stops[i + 1][1] }) })
+    }
+  }
+  return out
+}
+
+export function mapLayers(data: Data, now: number, rate: number, playing: boolean, reveal = now, zoom = 10, lens: Lens = 'all', grain: Grain = 'day'): Layer[] {
   const c = prepared(data)
   const { dots, labels } = c
   const trails = simplified(c, lens, zoom)
@@ -244,8 +272,16 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
   if (!labelled) labels.set(zb, (labelled = labelDots(dots, zb)))
   const t0 = data.meta.range[0]
   const layers: Layer[] = []
-  if (!playing) {
-    // Paused: the whole record as hairlines, like the strip printed on the pass.
+  if (grain === 'year') {
+    // The year is its trips: finished hops in red ink, the one under way fading in, the rest not yet drawn.
+    const arcs = tripArcs(data, now)
+    layers.push(new PathLayer<Arc>({
+      id: 'trip-arcs', data: arcs, getPath: (d) => d.path,
+      getColor: (d) => [RED[0], RED[1], RED[2], d.ts[1] <= now ? 230 : Math.round(60 + 170 * Math.min(1, Math.max(0, (now - d.ts[0]) / Math.max(1, d.ts[1] - d.ts[0]))))],
+      widthMinPixels: 1.5, widthMaxPixels: 3, capRounded: true, jointRounded: true, updateTriggers: { getColor: now },
+    }))
+  } else if (!playing || grain === 'month') {
+    // Paused, or at the month: the whole record as hairlines, like the strip printed on the pass.
     layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => [d.color[0], d.color[1], d.color[2], d.lens === 'fly' ? 140 : d.guessed ? 50 : 90], widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))
   }
   const trail = (id: string, length: number, color: (d: Trail) => RGBA, width: number, opacity: number, data: Trail[] = trails, dashed = false) => new TripsLayer<Trail>({
@@ -254,12 +290,14 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
     ...(dashed ? { extensions: DASH, getDashArray: [5, 4], dashUnits: 'pixels' as const } : {}),
   })
   const headLen = HEAD_REAL_S * rate, wake = easedWake(rate)
-  const head = activeTrails(c, trails, now - t0 - headLen * 1.6, now - t0)
-  layers.push(
-    // A dotted wake that fades over ~16 s of screen time, then a solid head in the leg's own ink over only the live trails.
-    trail('trail-long', wake, (d) => d.color, 2.5, playing ? 0.8 : 0.4, trails, true),
-    trail('trail-head', headLen, (d) => d.color, 6, 1, head),
-  )
+  if (grain === 'day') {
+    const head = activeTrails(c, trails, now - t0 - headLen * 1.6, now - t0)
+    layers.push(
+      // A dotted wake that fades over ~16 s of screen time, then a solid head in the leg's own ink over only the live trails.
+      trail('trail-long', wake, (d) => d.color, 2.5, playing ? 0.8 : 0.4, trails, true),
+      trail('trail-head', headLen, (d) => d.color, 6, 1, head),
+    )
+  }
   // Only places already visited exist on the map; a fresh one fades in over a second of screen time, labels first without their halo so nothing ghosts.
   const fadeSpan = Math.max(60, rate * 1.2)
   const shownDots = revealed(c, dots, reveal), arriving = labelled.filter((d) => d.first_ts <= reveal && reveal - d.first_ts < fadeSpan), settled = labelled.filter((d) => reveal - d.first_ts >= fadeSpan)
@@ -277,6 +315,7 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
     new TextLayer<Dot>({ id: 'labels', data: settled, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(), getColor: INK, ...font, outlineWidth: 2, outlineColor: [239, 230, 210, 235] }),
     new TextLayer<Dot>({ id: 'labels-in', data: arriving, getPosition: (d) => [d.lng, d.lat], getText: (d) => d.title.toUpperCase(), getColor: (d) => [INK[0], INK[1], INK[2], 255 * alpha(d)], ...font, updateTriggers: { getColor: reveal } }),
   )
+  if (grain !== 'day') return layers
   const at = whereaboutsAt(data, now)
   const w = at && at.mode !== 'STILL' ? { ...at, ...(trailHead(trails, now - t0) ?? {}) } : at
   if (w) {
