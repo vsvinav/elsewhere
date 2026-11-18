@@ -52,11 +52,16 @@ export function grainBounds(data: Data, grain: Grain, now: number): Bounds | nul
     return boundsOf(arcs.flatMap((a) => a.path.map(([lng, lat]) => ({ lng, lat }))))
   }
   if (grain === 'month') {
-    const d = new Date(now * 1000)
-    const a = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000, b = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000
+    const [a, b] = monthOf(now)
     return boundsOf(data.visits.filter((v) => v.lvl === 0 && v.end >= a && v.start < b))
   }
   return null
+}
+
+/** The UTC calendar month holding `now`, as [start, end) seconds; the HUD and the frame both read the month from here. */
+export function monthOf(now: number): [number, number] {
+  const d = new Date(now * 1000)
+  return [Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000, Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000]
 }
 
 /** Changes exactly when `grainBounds` would: the trip under the playhead, or the calendar month. */

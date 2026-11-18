@@ -504,6 +504,8 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
 .rail-mile { margin-top: 4px; padding-top: 8px; border-top: 2px dashed var(--ink-3); color: var(--red); font: 600 12px/1.2 var(--body); animation: rail-in 0.22s var(--ease); }
 @keyframes rail-in { from { transform: translateX(12px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .rail, .rail.hidden, .rail-mile { transition: none; animation: none; } }
+/* The rail and the arrival tags share the right edge; while a finger is on the strip the tags step aside. */
+.hud.scrubbing ~ .arrivals { visibility: hidden; }
 /* Phones: the rail takes the where-block's place in the stub instead of covering the map. */
 @media (max-width: 640px) {
   .rail { position: static; grid-template-columns: repeat(4, auto); justify-content: start; gap: 4px 14px; min-width: 0; padding: 0; transform: none; transition: none; }

@@ -10,6 +10,7 @@ import { atPlayhead, cumulative, GRAINS, GRAIN_LABEL, resolveGrain, type Grain }
 import { bedStrip } from '../analytics/beds'
 import { useScrub, usePinch } from './useScrub'
 import { Rail } from './Rail'
+import { monthOf } from './frame'
 
 const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MONTH = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -22,7 +23,8 @@ export function Hud() {
   const data = useData()
   const [m0, m1] = data.meta.range
   const playhead = useThrottledPlayhead(100) ?? m0
-  const rawPlayhead = useStore((s) => s.playhead) ?? m0
+  // The raw playhead only while a finger is down; playing at 60 fps must not re-render the HUD.
+  const rawPlayhead = useStore((s) => (s.scrubbing ? s.playhead : null))
   const playing = useStore((s) => s.playing)
   const speed = useStore((s) => s.speed)
   const follow = useStore((s) => s.follow)
@@ -36,6 +38,7 @@ export function Hud() {
   const visit = w?.mode === 'STILL' ? data.visits.find((v) => v.lvl === 0 && v.start <= playhead && playhead <= v.end) : null
   const tz = visit?.tz ?? data.activities.find((a) => a.start <= playhead && playhead <= a.end)?.tz ?? 0
   const d = new Date((playhead + tz * 60) * 1000)
+  const um = new Date(monthOf(playhead)[0] * 1000)
   const where = visit ? placeName(data.places[visit.place_id], visit.place_id) : w ? label(w.mode) : '—'
   const sub = visit ? (data.places[visit.place_id]?.city ?? 'city not on record') : w ? 'in motion' : 'no record'
   const years = useMemo(() => {
@@ -58,17 +61,17 @@ export function Hud() {
       return { lab: 'So far', val: plural(data.trips.filter((t) => t.start <= playhead).length, 'trip'), sub: plural(countries, 'country').replace('countrys', 'countries') }
     }
     if (grain === 'month') {
-      const a = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000, b = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000
+      const [a, b] = monthOf(playhead)
       const cities = new Set<string>()
       for (const v of data.visits) { if (v.lvl !== 0 || v.end < a || v.start >= b) continue; const c = data.places[v.place_id]?.city; if (c) cities.add(c) }
-      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
-      return { lab: 'This month', val: plural(cities.size, 'city').replace('citys', 'cities'), sub: plural(nights.filter((n) => n.date.startsWith(ym)).length, 'night away') }
+      const ym = new Date(a * 1000).toISOString().slice(0, 7)
+      return { lab: 'This month', val: plural(cities.size, 'city').replace('citys', 'cities'), sub: plural(nights.filter((n) => n.date.startsWith(ym)).length, 'night') }
     }
     return null
-  }, [grain, playhead, data, countryFirst, nights, d.getUTCFullYear(), d.getUTCMonth()])
+  }, [grain, playhead, data, countryFirst, nights])
 
   const cum = useMemo(() => cumulative(data), [data])
-  const rail = atPlayhead(cum, scrubbing ? rawPlayhead : playhead)
+  const rail = atPlayhead(cum, rawPlayhead ?? playhead)
   const noHome = !data.profile.homes?.length && !Object.values(data.places).some((p) => p.role === 'home')
 
   const stripRef = useRef<HTMLDivElement>(null)
@@ -93,7 +96,7 @@ export function Hud() {
   }, [])
 
   return (
-    <div className="hud">
+    <div className={scrubbing ? 'hud scrubbing' : 'hud'}>
       <div className="hud-lens" role="radiogroup" aria-label="Kind of movement">
         {LENSES.map((l) => <button key={l} role="radio" aria-checked={l === lens} className={l === lens ? 'on' : ''} onClick={() => setLens(l)}>{l !== 'all' && <i className="ink" style={{ background: LENS_COLOR[l] }} />}{LENS_LABEL[l]}</button>)}
       </div>
@@ -108,7 +111,7 @@ export function Hud() {
         ) : (
           <div className="hud-date coarse">
             <span className="dow">{GRAIN_LABEL[grain]}</span>
-            <span className="big">{grain === 'year' ? d.getUTCFullYear() : `${MONTH_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()}`}</span>
+            <span className="big">{grain === 'year' ? d.getUTCFullYear() : `${MONTH_LONG[um.getUTCMonth()]} ${um.getUTCFullYear()}`}</span>
           </div>
         )}
         <Rail rail={rail} visible={scrubbing} noHome={noHome} />

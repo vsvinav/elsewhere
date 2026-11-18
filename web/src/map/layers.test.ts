@@ -88,9 +88,7 @@ describe('grain', () => {
   const now = data.trips[1].end + 3600
   it('year draws trip arcs, no trail and no live head', () => {
     const ids = mapLayers(data, now, 1, false, now, 4, 'all', 'year').map((l) => l.id)
-    expect(ids).toContain('trip-arcs')
-    expect(ids).toContain('play-places')
-    expect(ids).not.toContain('trail-head'); expect(ids).not.toContain('trail-long'); expect(ids).not.toContain('record'); expect(ids).not.toContain('here')
+    expect(ids).toEqual(['trip-arcs'])
   })
   it('month draws places and the hairline record, even while playing, but no head or stamp', () => {
     const ids = mapLayers(data, now, 1, true, now, 4, 'all', 'month').map((l) => l.id)
@@ -117,5 +115,10 @@ describe('tripArcs', () => {
     expect(all[0].ts[0]).toBe(data.trips[0].start); expect(all[1].ts[1]).toBe(data.trips[0].end)
     expect(tripArcs(data, data.trips[0].start + 1)).toHaveLength(2)
     expect(tripArcs(data, data.trips[0].start - 1)).toHaveLength(0)
+  })
+  it('hands back the same array while the begun trips are unchanged', () => {
+    const t = data.trips[0].start + 1
+    expect(tripArcs(data, t)).toBe(tripArcs(data, t + 3600))
+    expect(tripArcs(data)).toBe(tripArcs(data, Infinity))
   })
 })

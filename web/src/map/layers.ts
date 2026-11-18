@@ -237,11 +237,24 @@ export function pinLayers(data: Data, zoom: number, o: PinOpts): Layer[] {
   return layers
 }
 
-export interface Arc { path: [number, number][]; ts: [number, number]; km: number }
+export interface Arc { path: [number, number][]; ts: [number, number]; km: number; /** when the trip it belongs to began */ trip: number }
 const ARC_POINTS = 48
+const ARCS = new WeakMap<Data, Arc[]>()
+// Same array back while the set of begun trips is unchanged, so deck does not re-upload the arcs every frame.
+let arcsShown: { all: Arc[]; n: number; out: Arc[] } | null = null
 
 /** One great-circle arc per hop of each trip begun by `t`: home → anchor cities in order → home. Each hop takes an equal share of the trip's time. */
 export function tripArcs(data: Data, t = Infinity): Arc[] {
+  let all = ARCS.get(data)
+  if (!all) ARCS.set(data, (all = allArcs(data)))
+  let n = 0
+  while (n < all.length && all[n].trip <= t) n++
+  if (n === all.length) return all
+  if (!arcsShown || arcsShown.all !== all || arcsShown.n !== n) arcsShown = { all, n, out: all.slice(0, n) }
+  return arcsShown.out
+}
+
+function allArcs(data: Data): Arc[] {
   const cityPos = new Map<string, [number, number]>()
   const posOf = (city: string, trip: Trip): [number, number] | undefined => {
     const v = data.visits.find((v) => v.lvl === 0 && v.start >= trip.start && v.start <= trip.end && data.places[v.place_id]?.city === city)
@@ -250,14 +263,13 @@ export function tripArcs(data: Data, t = Infinity): Arc[] {
     return cityPos.get(city)
   }
   const out: Arc[] = []
-  for (const trip of data.trips) {
-    if (trip.start > t) continue
+  for (const trip of [...data.trips].sort((a, b) => a.start - b.start)) {
     const h = homeOf(data, trip.start), home: [number, number] = [h.lng, h.lat]
     const stops = [home, ...trip.anchor_cities.map((c) => posOf(c, trip)).filter((x): x is [number, number] => !!x), home]
     const n = stops.length - 1
     for (let i = 0; i < n; i++) {
       const a = trip.start + ((trip.end - trip.start) * i) / n, b = i === n - 1 ? trip.end : trip.start + ((trip.end - trip.start) * (i + 1)) / n
-      out.push({ path: greatCircle(stops[i], stops[i + 1], ARC_POINTS), ts: [a, b], km: distanceKm({ lng: stops[i][0], lat: stops[i][1] }, { lng: stops[i + 1][0], lat: stops[i + 1][1] }) })
+      out.push({ path: greatCircle(stops[i], stops[i + 1], ARC_POINTS), ts: [a, b], trip: trip.start, km: distanceKm({ lng: stops[i][0], lat: stops[i][1] }, { lng: stops[i + 1][0], lat: stops[i + 1][1] }) })
     }
   }
   return out
@@ -280,6 +292,7 @@ export function mapLayers(data: Data, now: number, rate: number, playing: boolea
       getColor: (d) => [RED[0], RED[1], RED[2], d.ts[1] <= now ? 230 : Math.round(60 + 170 * Math.min(1, Math.max(0, (now - d.ts[0]) / Math.max(1, d.ts[1] - d.ts[0]))))],
       widthMinPixels: 1.5, widthMaxPixels: 3, capRounded: true, jointRounded: true, updateTriggers: { getColor: now },
     }))
+    return layers
   } else if (!playing || grain === 'month') {
     // Paused, or at the month: the whole record as hairlines, like the strip printed on the pass.
     layers.push(new PathLayer<Trail>({ id: 'record', data: trails, getPath: (d) => d.path, getColor: (d) => [d.color[0], d.color[1], d.color[2], d.lens === 'fly' ? 140 : d.guessed ? 50 : 90], widthMinPixels: 1.2, widthMaxPixels: 2.5, opacity: 1 }))

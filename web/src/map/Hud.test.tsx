@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { Profiler } from 'react'
 import { DataContext } from '../data/DataContext'
 import { sampleData } from '../test/sample'
 import { useStore } from '../store/useStore'
@@ -93,6 +94,27 @@ describe('headline', () => {
     act(() => useStore.setState({ grain: 'day' }))
     expect(screen.getByText('MAR 2024')).toBeTruthy()
     expect(screen.getByText('10')).toBeTruthy()
+  })
+})
+
+describe('while playing', () => {
+  it('does not re-render for every playhead tick; the rail reads the raw playhead only while scrubbing', () => {
+    let renders = 0
+    render(<DataContext.Provider value={data}><Profiler id="hud" onRender={() => { renders++ }}><Hud /></Profiler></DataContext.Provider>)
+    const before = renders
+    expect(before).toBeGreaterThan(0)
+    const sub = vi.fn()
+    const off = useStore.subscribe(sub)
+    for (let i = 1; i <= 30; i++) act(() => useStore.setState({ playhead: m0 + i * 60 }))
+    off()
+    expect(sub).toHaveBeenCalledTimes(30)
+    // The HUD only follows the 100 ms throttle (fake timers never fire it here), so the store ticks reach no render.
+    expect(screen.getByLabelText('Timeline position').getAttribute('value')).toBe(String(m0))
+    expect(renders).toBe(before)
+    act(() => useStore.setState({ scrubbing: true }))
+    const after = renders
+    act(() => useStore.setState({ playhead: data.trips[1].end + 3600 }))
+    expect(renders).toBeGreaterThan(after)
   })
 })
 
