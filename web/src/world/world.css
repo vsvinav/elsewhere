@@ -480,9 +480,18 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
 .hud-controls .play { width: 44px; display: grid; place-items: center; background: var(--red); color: var(--stock); border-color: var(--red); padding: 0; }
 .hud-controls .play:hover { background: var(--red-2); border-color: var(--red-2); }
 .hud-scrub { position: relative; background: var(--stock); min-height: 100%; }
+/* The strip is the drag surface; the range input beneath it keeps the keyboard and the thumb, and never takes the pointer itself. */
+.hud-strip { position: absolute; inset: 0; touch-action: none; cursor: ew-resize; user-select: none; }
+.hud-grain { position: absolute; left: 0; bottom: 0; z-index: 2; display: flex; }
+.hud-grain button { font: 800 11px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; padding: 7px 10px 6px; border: 2px solid var(--ink); border-bottom: 0; border-left: 0; background: var(--stock); color: var(--ink-2); }
+.hud-grain button:hover { color: var(--ink); }
+.hud-grain button.on { background: var(--ink); color: var(--stock); }
+.hud-grain button:disabled { color: var(--ghost); cursor: default; }
+.hud-grain button:focus-visible { outline-offset: -4px; }
+.hud-date.coarse .big { font: 900 44px/0.9 var(--display); text-transform: uppercase; letter-spacing: 0.02em; grid-column: 1 / span 2; white-space: nowrap; }
 .hud-scrub .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--red); pointer-events: none; }
 .hud-scrub .year { position: absolute; top: 0; bottom: 0; border-left: 2px dashed var(--ink); padding: 10px 0 0 6px; font: 800 11px/1 var(--display); letter-spacing: 0.12em; color: var(--ink); pointer-events: none; mix-blend-mode: multiply; }
-.hud-scrub input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.hud-scrub input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; }
 .hud-scrub input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 200px; background: var(--ink); border: 0; }
 .hud-scrub input::-moz-range-thumb { width: 6px; height: 200px; background: var(--ink); border: 0; border-radius: 0; }
 .hud-scrub input:focus-visible { outline-offset: -3px; }
@@ -512,9 +521,10 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
   .hud-where { border-left: 0; padding-left: 0; }
   .hud-controls { grid-column: 1 / span 2; }
   .hud-controls button:not(.play):not(.on) { display: none; }
-  .hud-scrub { height: 32px; min-height: 0; border-top: 3px solid var(--ink); overflow: hidden; }
-  .hud-scrub input::-webkit-slider-thumb { height: 32px; width: 10px; }
-  .hud-scrub input::-moz-range-thumb { height: 32px; width: 10px; }
+  .hud-scrub { height: 56px; min-height: 0; border-top: 3px solid var(--ink); overflow: hidden; }
+  .hud-scrub input::-webkit-slider-thumb { height: 56px; width: 10px; }
+  .hud-scrub input::-moz-range-thumb { height: 56px; width: 10px; }
+  .hud-date.coarse .big { font-size: 36px; }
   .hud-scrub .year { padding-top: 9px; font-size: 11px; }
 }
 /* On phones the range bar moves to the bottom; the HUDs sit on top of it (44px + 2px borders + 12px gap). */
@@ -523,6 +533,7 @@ label.btn:has(input:focus-visible) { outline: 3px solid var(--red); outline-offs
   .hud-cats button, .pins-size button, .pins-heat, .pins-fit { min-height: 44px; }
   .pins-find input { min-height: 44px; }
   .hud-lens button { min-height: 44px; }
+  .hud-grain button { min-height: 36px; }
 }
 /* Three compact tags stack above the HUD; the box is clipped so a tall viewport never lets one cover the scrubber. */
 .arrivals { position: absolute; top: 96px; right: var(--gutter); bottom: 252px; width: 176px; display: flex; flex-direction: column; gap: 10px; z-index: 4; pointer-events: none; overflow: hidden; }
