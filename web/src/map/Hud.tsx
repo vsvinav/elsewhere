@@ -95,6 +95,7 @@ export function Hud() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  const pct = (100 * (playhead - m0)) / (m1 - m0)
   return (
     <div className={scrubbing ? 'hud scrubbing' : 'hud'}>
       <div className="hud-lens" role="radiogroup" aria-label="Kind of movement">
@@ -140,8 +141,8 @@ export function Hud() {
       </div>
       <div className="hud-scrub">
         <div className="hud-strip" ref={stripRef} data-testid="scrub">
-          {years.map((y) => <span key={y.y} className="year" style={{ left: `${y.pct}%` }}>{y.y}</span>)}
-          <div className="fill" style={{ width: `${(100 * (playhead - m0)) / (m1 - m0)}%` }} />
+          <div className="fill" style={{ width: `${pct}%` }} />
+          {years.map((y) => <span key={y.y} className={y.pct <= pct ? 'year past' : 'year'} style={{ left: `${y.pct}%` }}>{y.y}</span>)}
           <input type="range" min={m0} max={m1} step={600} value={playhead} aria-label="Timeline position"
             onChange={(e) => { setPlayhead(+e.target.value); setFollow(true) }} />
         </div>
