@@ -17,30 +17,45 @@ const LINGER_MS = 600
 
 /** Attaches drag-to-scrub to an element: down pauses, move sets the playhead, up clears `scrubbing` after a moment. */
 export function useScrub(ref: React.RefObject<HTMLElement | null>, range: [number, number]) {
-  const last = useRef<{ x: number; t: number } | null>(null)
+  const last = useRef<{ id: number; x: number; t: number } | null>(null)
   useEffect(() => {
     const el = ref.current; if (!el) return
     let linger = 0
     const rect = () => el.getBoundingClientRect()
+    const stop = () => {
+      if (last.current && el.hasPointerCapture?.(last.current.id)) el.releasePointerCapture(last.current.id)
+      last.current = null
+      window.clearTimeout(linger)
+      useStore.getState().setScrubbing(false)
+    }
     const down = (e: PointerEvent) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return
+      // A second finger is a pinch, not a scrub.
+      if (last.current && last.current.id !== e.pointerId) { stop(); return }
       el.setPointerCapture(e.pointerId)
       const r = rect(); const s = useStore.getState()
       const t = scrubDelta({ from: range[0], dx: e.clientX - r.left, y: 0, width: r.width, height: r.height, range })
       window.clearTimeout(linger)
       s.setPlaying(false); s.setScrubbing(true); s.setPlayhead(t)
-      last.current = { x: e.clientX, t }
+      last.current = { id: e.pointerId, x: e.clientX, t }
     }
     const move = (e: PointerEvent) => {
-      if (!last.current) return
+      if (!last.current || last.current.id !== e.pointerId) return
       const r = rect()
       const t = scrubDelta({ from: last.current.t, dx: e.clientX - last.current.x, y: e.clientY - r.top, width: r.width, height: r.height, range })
       useStore.getState().setPlayhead(t)
-      last.current = { x: e.clientX, t }
+      last.current = { id: e.pointerId, x: e.clientX, t }
     }
-    const up = () => { if (!last.current) return; last.current = null; linger = window.setTimeout(() => useStore.getState().setScrubbing(false), LINGER_MS) }
+    const up = (e: PointerEvent) => {
+      if (!last.current || last.current.id !== e.pointerId) return
+      last.current = null
+      linger = window.setTimeout(() => useStore.getState().setScrubbing(false), LINGER_MS)
+    }
     el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
-    return () => { window.clearTimeout(linger); el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up) }
+    return () => {
+      stop()
+      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
+    }
   }, [ref, range[0], range[1]])
 }
 

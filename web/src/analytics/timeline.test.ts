@@ -47,7 +47,17 @@ describe('cumulative', () => {
   })
   it('counts away nights from the beds strip', () => {
     const c = cumulative(tiny())
-    expect(atPlayhead(c, T('2024-01-11T00:00:00Z')).nightsAway).toBe(5) // 5,6 Porto · 7,8,9 Paris
+    // Nights of Jan 5→6, 6→7 in Porto and 7→8, 8→9, 9→10 in Paris, each counted at the midnight it crosses.
+    expect(atPlayhead(c, T('2024-01-05T23:00:00Z')).nightsAway).toBe(0)
+    expect(atPlayhead(c, T('2024-01-06T00:00:00Z')).nightsAway).toBe(1)
+    expect(atPlayhead(c, T('2024-01-10T00:00:00Z')).nightsAway).toBe(5)
+    expect(atPlayhead(c, T('2024-01-10T23:00:00Z')).nightsAway).toBe(5)
+  })
+  it('emits every 10,000 km mark a single long leg crosses', () => {
+    const d = tiny()
+    d.activities = [{ ...d.activities[1], m: 21_000_000 }]
+    const c = cumulative(d)
+    expect(c.milestones.filter((m) => m.text.endsWith('km so far')).map((m) => m.text)).toEqual(['10,000 km so far', '20,000 km so far'])
   })
   it('is built once per record', () => {
     const d = tiny()

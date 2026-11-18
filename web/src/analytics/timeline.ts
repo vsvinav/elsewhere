@@ -43,14 +43,14 @@ export function cumulative(data: Data): Cumulative {
     const city = data.places[v.place_id]?.city
     if (city) evs.push({ ts: v.start, city })
   }
-  for (const n of bedStrip(data)) if (n.kind === 'new' || n.kind === 'repeat') evs.push({ ts: Date.parse(n.date) / 1000 + DAY, night: true })
+  for (const n of bedStrip(data)) if (n.kind === 'new' || n.kind === 'repeat') evs.push({ ts: Date.parse(n.date) / 1000, night: true })
   evs.sort((a, b) => a.ts - b.ts)
 
   const out: Cumulative = { ts: [], km: [], cities: [], nightsAway: [], flights: [], milestones: [], span: data.meta.range[1] - data.meta.range[0] }
   const seen = new Set<string>()
   let km = 0, cities = 0, nights = 0, flights = 0, kmMark = KM_EVERY
   for (const e of evs) {
-    if (e.km) { km += e.km; if (km >= kmMark) { out.milestones.push({ ts: e.ts, text: `${kmMark.toLocaleString('en-US')} km so far` }); kmMark += KM_EVERY } }
+    if (e.km) { km += e.km; while (km >= kmMark) { out.milestones.push({ ts: e.ts, text: `${kmMark.toLocaleString('en-US')} km so far` }); kmMark += KM_EVERY } }
     if (e.flight) { flights++; if (FLIGHT_MARKS.includes(flights)) out.milestones.push({ ts: e.ts, text: `your ${ORD(flights)} flight` }) }
     if (e.city && !seen.has(e.city)) { seen.add(e.city); cities++; if (CITY_MARKS.includes(cities)) out.milestones.push({ ts: e.ts, text: cities === 1 ? 'your first city' : `…and that's your ${ORD(cities)} city` }) }
     if (e.night) { nights++; if (NIGHT_MARKS.includes(nights)) out.milestones.push({ ts: e.ts, text: `${nights} nights away` }) }

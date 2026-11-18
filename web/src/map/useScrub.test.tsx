@@ -30,6 +30,7 @@ describe('pinchStep', () => {
   })
 })
 
+let unmount = () => {}
 const RANGE: [number, number] = [0, 10_000]
 function Strip({ onStep }: { onStep?: (dir: 1 | -1) => void }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -38,7 +39,9 @@ function Strip({ onStep }: { onStep?: (dir: 1 | -1) => void }) {
   return <div ref={ref} data-testid="strip" />
 }
 const strip = () => {
-  const el = render(<Strip />).getByTestId('strip')
+  const r = render(<Strip />)
+  const el = r.getByTestId('strip')
+  unmount = r.unmount
   el.getBoundingClientRect = () => ({ left: 0, top: 100, width: 100, height: 56, right: 100, bottom: 156, x: 0, y: 100, toJSON: () => ({}) })
   el.setPointerCapture = () => {}
   el.releasePointerCapture = () => {}
@@ -73,6 +76,21 @@ describe('useScrub', () => {
     expect(useStore.getState().scrubbing).toBe(true)
     fireEvent.pointerUp(el, { pointerId: 1 })
     act(() => { vi.advanceTimersByTime(600) })
+    expect(useStore.getState().scrubbing).toBe(false)
+  })
+  it('a second finger ends the scrub so a pinch never moves the playhead', () => {
+    const el = strip()
+    fireEvent.pointerDown(el, { clientX: 25, clientY: 120, button: 0, pointerId: 1, pointerType: 'touch' })
+    fireEvent.pointerDown(el, { clientX: 75, clientY: 120, button: 0, pointerId: 2, pointerType: 'touch' })
+    fireEvent.pointerMove(el, { clientX: 95, clientY: 120, pointerId: 2 })
+    fireEvent.pointerMove(el, { clientX: 45, clientY: 120, pointerId: 1 })
+    expect(useStore.getState()).toMatchObject({ playhead: 2500, scrubbing: false })
+  })
+  it('going away mid-linger does not leave scrubbing stuck on', () => {
+    const el = strip()
+    fireEvent.pointerDown(el, { clientX: 25, clientY: 120, button: 0, pointerId: 1 })
+    fireEvent.pointerUp(el, { pointerId: 1 })
+    act(() => unmount())
     expect(useStore.getState().scrubbing).toBe(false)
   })
 })
